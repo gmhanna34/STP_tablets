@@ -1,0 +1,363 @@
+# =============================================================================
+# STP Macro & Button Configuration
+# =============================================================================
+# This file defines:
+#   1. macros   — Named sequences of steps (the logic)
+#   2. buttons  — Page-specific button layouts (the UI)
+#
+# STEP TYPES:
+#   ha_check      Check a Home Assistant entity state
+#   ha_service    Call a Home Assistant service
+#   moip_switch   Switch a single video TX → RX
+#   moip_ir       Send an IR code via MoIP receiver
+#   moip_scene    Execute a pre-defined MoIP scene (from devices.json)
+#   epson_power   Control a single projector (on/off)
+#   epson_all     Control all projectors (on/off)
+#   x32_scene     Load an X32 mixer scene
+#   x32_mute      Mute/unmute an X32 channel
+#   obs_emit      Trigger an OBS action (StartStream, StopStream, etc.)
+#   ptz_preset    Recall a PTZ camera preset
+#   delay         Wait N seconds (with optional progress message)
+#   macro         Call another macro (nesting, max depth 5)
+#   condition     If/then/else branching based on a check
+#   notify        Broadcast a message to all tablets
+#
+# ON_FAIL OPTIONS (per step):
+#   abort         Stop the macro and report failure (default)
+#   skip          Log a warning, continue to the next step
+#   retry:N       Retry the step N times (1s between attempts)
+# =============================================================================
+
+
+macros:
+
+  # ---------------------------------------------------------------------------
+  # CHAPEL
+  # ---------------------------------------------------------------------------
+
+  chapel_tv_on:
+    label: "Chapel TVs On"
+    icon: "tv"
+    description: "Check battery power, send IR power-on, set HDMI input"
+    steps:
+      - type: ha_check
+        entity: "switch.bat_chapeltv_1_ac_enabled"
+        expect: "on"
+        on_fail: abort
+        message: "Chapel TV 1 EcoFlow AC power is off — charge battery first"
+
+      - type: ha_check
+        entity: "switch.bat_chapeltv_2_ac_enabled"
+        expect: "on"
+        on_fail: skip
+        message: "Chapel TV 2 EcoFlow AC power is off (non-critical)"
+
+      - type: moip_ir
+        receiver: 5
+        code: "IRPowerOn"
+        message: "Sending power-on to Chapel TV 1"
+
+      - type: moip_ir
+        receiver: 6
+        code: "IRPowerOn"
+        message: "Sending power-on to Chapel TV 2"
+
+      - type: delay
+        seconds: 5
+        message: "Waiting for TVs to initialize"
+
+      - type: moip_ir
+        receiver: 5
+        code: "IRSourceHDMI1"
+        message: "Setting Chapel TV 1 to HDMI 1"
+
+      - type: moip_ir
+        receiver: 6
+        code: "IRSourceHDMI1"
+        message: "Setting Chapel TV 2 to HDMI 1"
+
+  chapel_tv_off:
+    label: "Chapel TVs Off"
+    icon: "tv_off"
+    confirm: "Turn off all Chapel TVs?"
+    steps:
+      - type: moip_ir
+        receiver: 5
+        code: "IRPowerOff"
+        message: "Powering off Chapel TV 1"
+
+      - type: moip_ir
+        receiver: 6
+        code: "IRPowerOff"
+        message: "Powering off Chapel TV 2"
+
+      - type: notify
+        message: "Chapel TVs powered off"
+
+  chapel_audio_on:
+    label: "Chapel Audio On"
+    icon: "mic"
+    description: "Turn on chapel audio via Home Assistant"
+    steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.chapel_audio_power" }
+        on_fail: abort
+        message: "Failed to turn on chapel audio power"
+
+  chapel_audio_off:
+    label: "Chapel Audio Off"
+    icon: "mic_off"
+    confirm: "Turn off Chapel audio?"
+    steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.chapel_audio_power" }
+
+  chapel_ac_on:
+    label: "Chapel A/C On"
+    icon: "thermostat"
+    steps:
+      - type: ha_service
+        domain: "climate"
+        service: "turn_on"
+        data: { entity_id: "climate.chapel_thermostat" }
+
+  chapel_ac_off:
+    label: "Chapel A/C Off"
+    icon: "thermostat"
+    confirm: "Turn off Chapel A/C?"
+    steps:
+      - type: ha_service
+        domain: "climate"
+        service: "turn_off"
+        data: { entity_id: "climate.chapel_thermostat" }
+
+  chapel_source_appletv:
+    label: "Chapel Apple TV"
+    icon: "cast"
+    steps:
+      - type: moip_switch
+        tx: 14
+        rx: 5
+      - type: moip_switch
+        tx: 14
+        rx: 6
+
+  chapel_source_livestream:
+    label: "Chapel Live Stream"
+    icon: "live_tv"
+    steps:
+      - type: moip_switch
+        tx: 8
+        rx: 5
+      - type: moip_switch
+        tx: 8
+        rx: 6
+
+  chapel_source_logo:
+    label: "Chapel LOGO"
+    icon: "image"
+    steps:
+      - type: moip_switch
+        tx: 16
+        rx: 5
+      - type: moip_switch
+        tx: 16
+        rx: 6
+
+  chapel_source_announcements:
+    label: "Chapel Announcements"
+    icon: "announcement"
+    steps:
+      - type: moip_switch
+        tx: 9
+        rx: 5
+      - type: moip_switch
+        tx: 9
+        rx: 6
+
+  # --- Nested macro: full chapel setup ---
+  chapel_full_setup:
+    label: "Chapel Full Setup"
+    icon: "play_circle"
+    confirm: "Run full Chapel AV setup (TVs, audio, A/C)?"
+    steps:
+      - type: macro
+        macro: "chapel_tv_on"
+        message: "Setting up Chapel TVs"
+      - type: macro
+        macro: "chapel_audio_on"
+        message: "Setting up Chapel audio"
+      - type: macro
+        macro: "chapel_ac_on"
+        message: "Setting up Chapel A/C"
+      - type: macro
+        macro: "chapel_source_logo"
+        message: "Setting Chapel source to LOGO"
+      - type: notify
+        message: "Chapel full setup complete"
+
+  chapel_full_teardown:
+    label: "Chapel Teardown"
+    icon: "power_settings_new"
+    confirm: "Shut down all Chapel AV systems?"
+    steps:
+      - type: macro
+        macro: "chapel_tv_off"
+      - type: macro
+        macro: "chapel_audio_off"
+      - type: macro
+        macro: "chapel_ac_off"
+      - type: notify
+        message: "Chapel fully shut down"
+
+  # ---------------------------------------------------------------------------
+  # MAIN CHURCH (examples — expand as needed)
+  # ---------------------------------------------------------------------------
+
+  main_video_on:
+    label: "Video System On"
+    icon: "tv"
+    description: "Power on all projectors and lower screens"
+    steps:
+      - type: epson_all
+        state: "on"
+        message: "Powering on all projectors"
+      - type: notify
+        message: "Main church video system turning on"
+
+  main_video_off:
+    label: "Video System Off"
+    icon: "tv_off"
+    confirm: "Turn OFF the entire video system (all projectors + screens)?"
+    steps:
+      - type: epson_all
+        state: "off"
+        message: "Powering off all projectors"
+      - type: notify
+        message: "Main church video system powered off"
+
+  main_audio_on:
+    label: "Audio System On"
+    icon: "mic"
+    steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.wattbox_outlet_1" }
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.wattbox_outlet_2" }
+
+  main_audio_off:
+    label: "Audio System Off"
+    icon: "mic_off"
+    confirm: "Turn OFF the audio system?"
+    steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.wattbox_outlet_1" }
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.wattbox_outlet_2" }
+
+
+# =============================================================================
+# BUTTON LAYOUT
+# =============================================================================
+# Defines which buttons appear on each page. Each button has:
+#   label    — Display text
+#   icon     — Material Icons name
+#   action   — What happens when pressed:
+#                { type: macro, macro: "key" }       Run a macro
+#                { type: moip_switch, tx: N, rx: N } Direct single switch
+#                { type: navigate, page: "name" }    Navigate to a page
+#                { type: ha_service, domain, service, data }  Direct HA call
+#   style    — Visual style: "default", "danger", "large", "success"
+#              (can combine: "large danger")
+#   span     — Grid column span (default 1)
+#   confirm  — Optional confirmation message (overrides macro-level confirm)
+#   state    — Optional live state binding:
+#                source   — "ha", "obs", "x32", "moip", "projectors"
+#                entity   — HA entity_id (for ha source)
+#                field    — Dot-path into cached state (for other sources)
+#                on_value — Value that means "active"
+#                on_style — CSS class when active: "active", "live", "recording"
+# =============================================================================
+
+buttons:
+
+  chapel:
+    - section: "System"
+      items:
+        - label: "Full Setup"
+          icon: "play_circle"
+          action: { type: macro, macro: chapel_full_setup }
+          style: "large success"
+          span: 2
+        - label: "Full Teardown"
+          icon: "power_settings_new"
+          action: { type: macro, macro: chapel_full_teardown }
+          style: "large danger"
+          span: 2
+
+    - section: "Video"
+      items:
+        - label: "TVs On"
+          icon: "tv"
+          action: { type: macro, macro: chapel_tv_on }
+          state:
+            source: ha
+            entity: "switch.bat_chapeltv_1_ac_enabled"
+            on_value: "on"
+            on_style: "active"
+        - label: "TVs Off"
+          icon: "tv_off"
+          action: { type: macro, macro: chapel_tv_off }
+          style: "danger"
+
+    - section: "Audio"
+      items:
+        - label: "Audio On"
+          icon: "mic"
+          action: { type: macro, macro: chapel_audio_on }
+          state:
+            source: ha
+            entity: "switch.chapel_audio_power"
+            on_value: "on"
+            on_style: "active"
+        - label: "Audio Off"
+          icon: "mic_off"
+          action: { type: macro, macro: chapel_audio_off }
+          style: "danger"
+
+    - section: "A/C"
+      items:
+        - label: "A/C On"
+          icon: "thermostat"
+          action: { type: macro, macro: chapel_ac_on }
+        - label: "A/C Off"
+          icon: "thermostat"
+          action: { type: macro, macro: chapel_ac_off }
+          style: "danger"
+
+    - section: "Video Sources"
+      items:
+        - label: "Apple TV"
+          icon: "cast"
+          action: { type: macro, macro: chapel_source_appletv }
+        - label: "Live Stream"
+          icon: "live_tv"
+          action: { type: macro, macro: chapel_source_livestream }
+        - label: "LOGO"
+          icon: "image"
+          action: { type: macro, macro: chapel_source_logo }
+        - label: "Announcements"
+          icon: "announcement"
+          action: { type: macro, macro: chapel_source_announcements }

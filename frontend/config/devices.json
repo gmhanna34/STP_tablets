@@ -1,0 +1,149 @@
+{
+  "moip": {
+    "transmitters": [
+      { "id": 1,  "name": "Laptop" },
+      { "id": 2,  "name": "SocialHall Center Camera" },
+      { "id": 3,  "name": "SocialHall Side Camera" },
+      { "id": 4,  "name": "Security Grid" },
+      { "id": 5,  "name": "Conference Room" },
+      { "id": 6,  "name": "SocialHall Apple TV" },
+      { "id": 7,  "name": "A Hall Audio Rack" },
+      { "id": 8,  "name": "Live Stream View" },
+      { "id": 9,  "name": "Announcements" },
+      { "id": 10, "name": "Gym Camera" },
+      { "id": 11, "name": "Chapel Side Camera" },
+      { "id": 12, "name": "Chapel Rear Camera" },
+      { "id": 13, "name": "A X32 Output" },
+      { "id": 14, "name": "Chapel AppleTV" },
+      { "id": 15, "name": "Windows Display Adapter" },
+      { "id": 16, "name": "Unifi Connect (LOGO)" },
+      { "id": 17, "name": "MainChurch Rear Camera" },
+      { "id": 18, "name": "MainChurch Altar Camera" },
+      { "id": 19, "name": "MainChurch Left Camera" },
+      { "id": 20, "name": "MainChurch Right Camera" },
+      { "id": 21, "name": "BaptismRoom Camera" },
+      { "id": 22, "name": "MainChurch Podium Left" },
+      { "id": 23, "name": "MainChurch Podium Right" },
+      { "id": 24, "name": "MainChurch AppleTV" },
+      { "id": 25, "name": "Google Streamer" },
+      { "id": 26, "name": "AppleTV PictureInPicture" },
+      { "id": 27, "name": "ATEM Output" },
+      { "id": 28, "name": "SPARE" }
+    ],
+    "receivers": [
+      { "id": 1,  "name": "Receiver 1", "location": "MainChurch" },
+      { "id": 2,  "name": "Receiver 2", "location": "MainChurch" },
+      { "id": 3,  "name": "Receiver 3", "location": "MainChurch" },
+      { "id": 4,  "name": "Receiver 4", "location": "MainChurch" },
+      { "id": 5,  "name": "Receiver 5", "location": "Chapel" },
+      { "id": 6,  "name": "Receiver 6", "location": "Chapel" },
+      { "id": 7,  "name": "Receiver 7", "location": "SocialHall" },
+      { "id": 8,  "name": "Receiver 8", "location": "SocialHall" },
+      { "id": 9,  "name": "Receiver 9", "location": "Gym" },
+      { "id": 10, "name": "Receiver 10", "location": "ConferenceRoom" },
+      { "id": 11, "name": "Receiver 11", "location": "Lobby" },
+      { "id": 12, "name": "Receiver 12", "location": "Lobby" },
+      { "id": 13, "name": "Receiver 13", "location": "Lobby" },
+      { "id": 14, "name": "Receiver 14", "location": "CryRoom" },
+      { "id": 15, "name": "Receiver 15", "location": "CryRoom" },
+      { "id": 16, "name": "Receiver 16", "location": "MainChurch" },
+      { "id": 17, "name": "Receiver 17", "location": "MainChurch" },
+      { "id": 18, "name": "Receiver 18", "location": "MainChurch" },
+      { "id": 19, "name": "Receiver 19", "location": "MainChurch" },
+      { "id": 20, "name": "Receiver 20", "location": "MainChurch" },
+      { "id": 21, "name": "Receiver 21", "location": "MainChurch" },
+      { "id": 22, "name": "Receiver 22", "location": "MainChurch" },
+      { "id": 23, "name": "Receiver 23", "location": "SocialHall" },
+      { "id": 24, "name": "Receiver 24", "location": "SocialHall" },
+      { "id": 25, "name": "Receiver 25", "location": "SocialHall" },
+      { "id": 26, "name": "Receiver 26", "location": "BaptismRoom" },
+      { "id": 27, "name": "Receiver 27", "location": "Gym" },
+      { "id": 28, "name": "Receiver 28", "location": "Office" }
+    ],
+    "scenes": {
+      "MainChurch_LeftPodium": {
+        "label": "Left Podium",
+        "mappings": [
+          { "tx": 22, "rx": 47 }, { "tx": 22, "rx": 34 }, { "tx": 22, "rx": 36 },
+          { "tx": 22, "rx": 37 }, { "tx": 22, "rx": 38 }, { "tx": 22, "rx": 39 },
+          { "tx": 22, "rx": 22 }, { "tx": 22, "rx": 10 }, { "tx": 22, "rx": 19 },
+          { "tx": 8, "rx": 26 }, { "tx": 8, "rx": 35 }, { "tx": 22, "rx": 32 }
+        ]
+      },
+      "MainChurch_RightPodium": {
+        "label": "Right Podium",
+        "mappings": [
+          { "tx": 23, "rx": 34 }, { "tx": 23, "rx": 36 }, { "tx": 23, "rx": 37 },
+          { "tx": 23, "rx": 38 }, { "tx": 23, "rx": 39 }, { "tx": 23, "rx": 22 },
+          { "tx": 23, "rx": 10 }, { "tx": 23, "rx": 19 }, { "tx": 23, "rx": 47 },
+          { "tx": 8, "rx": 26 }, { "tx": 8, "rx": 35 }, { "tx": 23, "rx": 32 }
+        ]
+      },
+      "MainChurch_Announcements": {
+        "label": "Announcements",
+        "mappings": [
+          { "tx": 9, "rx": 34 }, { "tx": 9, "rx": 36 }, { "tx": 9, "rx": 37 },
+          { "tx": 9, "rx": 38 }, { "tx": 9, "rx": 39 }, { "tx": 9, "rx": 22 },
+          { "tx": 9, "rx": 10 }, { "tx": 9, "rx": 19 }, { "tx": 9, "rx": 47 },
+          { "tx": 8, "rx": 26 }, { "tx": 8, "rx": 35 }, { "tx": 9, "rx": 32 }
+        ]
+      },
+      "MainChurch_LOGO": {
+        "label": "LOGO",
+        "mappings": [
+          { "tx": 16, "rx": 34 }, { "tx": 16, "rx": 36 }, { "tx": 16, "rx": 37 },
+          { "tx": 16, "rx": 38 }, { "tx": 16, "rx": 39 }, { "tx": 16, "rx": 22 },
+          { "tx": 16, "rx": 10 }, { "tx": 16, "rx": 19 }, { "tx": 16, "rx": 47 },
+          { "tx": 8, "rx": 26 }, { "tx": 8, "rx": 35 }, { "tx": 16, "rx": 32 }
+        ]
+      },
+      "MainChurch_LiveStream": {
+        "label": "Live Stream",
+        "mappings": [
+          { "tx": 8, "rx": 34 }, { "tx": 8, "rx": 36 }, { "tx": 8, "rx": 37 },
+          { "tx": 8, "rx": 38 }, { "tx": 8, "rx": 39 }, { "tx": 8, "rx": 22 },
+          { "tx": 8, "rx": 10 }, { "tx": 8, "rx": 19 }, { "tx": 8, "rx": 47 },
+          { "tx": 8, "rx": 26 }, { "tx": 8, "rx": 35 }, { "tx": 8, "rx": 32 }
+        ]
+      },
+      "MainChurch_AppleTV": {
+        "label": "Apple TV",
+        "mappings": [
+          { "tx": 24, "rx": 34 }, { "tx": 24, "rx": 36 }, { "tx": 24, "rx": 37 },
+          { "tx": 24, "rx": 38 }, { "tx": 24, "rx": 39 }, { "tx": 24, "rx": 22 },
+          { "tx": 24, "rx": 10 }, { "tx": 24, "rx": 19 }, { "tx": 24, "rx": 47 },
+          { "tx": 8, "rx": 26 }, { "tx": 8, "rx": 35 }, { "tx": 24, "rx": 32 }
+        ]
+      },
+      "MainChurch_GoogleStreamer": {
+        "label": "Google Streamer",
+        "mappings": [
+          { "tx": 25, "rx": 34 }, { "tx": 25, "rx": 36 }, { "tx": 25, "rx": 37 },
+          { "tx": 25, "rx": 38 }, { "tx": 25, "rx": 39 }, { "tx": 25, "rx": 22 },
+          { "tx": 25, "rx": 10 }, { "tx": 25, "rx": 19 }, { "tx": 25, "rx": 47 },
+          { "tx": 8, "rx": 26 }, { "tx": 8, "rx": 35 }, { "tx": 25, "rx": 32 }
+        ]
+      }
+    },
+    "irCodes": {
+      "IRPowerOn": "0000 006D 0022 0000 00AC 00AC 0015 0040 0015 0040 0015 0040 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0040 0015 0040 0015 0040 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0040 0015 0015 0015 0015 0015 0040 0015 0040 0015 0015 0015 0015 0015 0040 0015 0015 0015 0040 0015 0040 0015 0015 0015 0015 0015 0040 0015 0040 0015 0015 0015 0689",
+      "IRPowerOff": "0000 006D 0022 0000 00AC 00AC 0015 0040 0015 0040 0015 0040 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0040 0015 0040 0015 0040 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0040 0015 0040 0015 0015 0015 0015 0015 0040 0015 0040 0015 0040 0015 0040 0015 0015 0015 0015 0015 0040 0015 0040 0015 0015 0015 0689",
+      "IRSourceHDMI1": "0000 006D 0000 0022 00AB 00AB 0015 003F 0015 003F 0015 003F 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 003F 0015 003F 0015 003F 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 003F 0015 0015 0015 0015 0015 003F 0015 0015 0015 003F 0015 003F 0015 003F 0015 0015 0015 003F 0015 003F 0015 0015 0015 003F 0015 0015 0015 0015 0015 0015 0015 071C",
+      "IRSourceHDMI2": "0000 006D 0000 0022 00AC 00AB 0015 0041 0015 0041 0015 0041 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0041 0015 0041 0015 0041 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0041 0015 0041 0015 0041 0015 0041 0015 0041 0015 0016 0015 0041 0015 0041 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0041 0015 0016 0015 0689"
+    }
+  },
+  "scenes": {
+    "SC_MainChurch_TurnProjectorsOn": { "label": "Turn Projectors On", "location": "MainChurch" },
+    "SC_MainChurch_TurnProjectorsOff": { "label": "Turn Projectors Off", "location": "MainChurch" },
+    "SC_MainChurch_ScreensAndShelfDown": { "label": "Screens & Shelf Down", "location": "MainChurch" },
+    "SC_MainChurch_ScreensAndShelfUp": { "label": "Screens & Shelf Up", "location": "MainChurch" },
+    "SC_MainChurch_AudioOn": { "label": "Audio On", "location": "MainChurch" },
+    "SC_MainChurch_AudioOff": { "label": "Audio Off", "location": "MainChurch" },
+    "SC_MainChurch_TurnCryRoomOn": { "label": "Cry Room On", "location": "MainChurch" },
+    "SC_MainChurch_TurnCryRoomOff": { "label": "Cry Room Off", "location": "MainChurch" },
+    "SC_MainChurch_TurnPortablesOn": { "label": "Portables On", "location": "MainChurch" },
+    "SC_MainChurch_TurnPortablesOff": { "label": "Portables Off", "location": "MainChurch" },
+    "SC_RestartAppleTVMainChurch": { "label": "Restart AppleTV", "location": "MainChurch" },
+    "SC_RestartMoIPController": { "label": "Restart MoIP Controller", "location": "System" }
+  }
+}

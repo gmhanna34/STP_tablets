@@ -1,0 +1,111 @@
+{
+  "locations": {
+    "Tablet_Mainchurch": {
+      "displayName": "Main Church (Full Access)",
+      "permissions": {
+        "home": true,
+        "main": true,
+        "chapel": true,
+        "social": true,
+        "gym": true,
+        "confroom": true,
+        "stream": true,
+        "source": true,
+        "security": true,
+        "settings": true
+      }
+    },
+    "Tablet_Chapel": {
+      "displayName": "Chapel",
+      "permissions": {
+        "home": true,
+        "main": false,
+        "chapel": true,
+        "social": false,
+        "gym": false,
+        "confroom": false,
+        "stream": true,
+        "source": true,
+        "security": false,
+        "settings": true
+      }
+    },
+    "Tablet_SocialHall": {
+      "displayName": "Social Hall",
+      "permissions": {
+        "home": true,
+        "main": false,
+        "chapel": false,
+        "social": true,
+        "gym": false,
+        "confroom": false,
+        "stream": true,
+        "source": true,
+        "security": false,
+        "settings": true
+      }
+    },
+    "Tablet_ConferenceRoom": {
+      "displayName": "Conference Room",
+      "permissions": {
+        "home": true,
+        "main": false,
+        "chapel": false,
+        "social": false,
+        "gym": false,
+        "confroom": true,
+        "stream": false,
+        "source": true,
+        "security": false,
+        "settings": true
+      }
+    },
+    "Tablet_Gym": {
+      "displayName": "Gym",
+      "permissions": {
+        "home": true,
+        "main": false,
+        "chapel": false,
+        "social": false,
+        "gym": true,
+        "confroom": false,
+        "stream": false,
+        "source": true,
+        "security": false,
+        "settings": true
+      }
+    },
+    "Tablet_Lobby": {
+      "displayName": "Lobby",
+      "permissions": {
+        "home": true,
+        "main": false,
+        "chapel": false,
+        "social": false,
+        "gym": false,
+        "confroom": false,
+        "stream": false,
+        "source": true,
+        "security": false,
+        "settings": true
+      }
+    },
+    "Tablet_Office": {
+      "displayName": "Offices",
+      "permissions": {
+        "home": true,
+        "main": false,
+        "chapel": false,
+        "social": false,
+        "gym": false,
+        "confroom": true,
+        "stream": false,
+        "source": true,
+        "security": true,
+        "settings": true
+      }
+    }
+  },
+  "defaultLocation": "Tablet_Mainchurch",
+  "settingsPIN": "1234"
+}

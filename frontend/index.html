@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>St. Paul Coptic Orthodox Church — AV Control</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- =========================================================
+       STATUS BAR
+       ========================================================= -->
+  <header id="status-bar">
+    <div id="status-version" class="status-section">
+      <span id="version-label">v1.0.0</span>
+    </div>
+
+    <div id="status-identity" class="status-section">
+      <span id="tablet-name">Tablet</span>
+      <span id="connection-status" class="status-indicator">Connecting…</span>
+    </div>
+
+    <div id="status-health" class="status-section">
+      <span class="health-badge health-down" id="health-down-count" title="Down">0</span>
+      <span class="health-badge health-warning" id="health-warning-count" title="Warning">0</span>
+      <span class="health-badge health-healthy" id="health-healthy-count" title="Healthy">0</span>
+    </div>
+
+    <div id="status-clock" class="status-section">
+      <span id="clock"></span>
+    </div>
+  </header>
+
+  <!-- =========================================================
+       MAIN CONTENT AREA
+       ========================================================= -->
+  <main id="page-content"></main>
+
+  <!-- =========================================================
+       PIN ENTRY OVERLAY
+       ========================================================= -->
+  <div id="pin-overlay" class="overlay hidden">
+    <div id="pin-modal" class="modal">
+      <button id="pin-close" class="modal-close" aria-label="Close">
+        <span class="material-icons">close</span>
+      </button>
+
+      <h2 id="pin-title">Enter PIN</h2>
+
+      <div id="pin-display">
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+      </div>
+
+      <div id="pin-keypad">
+        <button class="pin-key" data-key="1">1</button>
+        <button class="pin-key" data-key="2">2</button>
+        <button class="pin-key" data-key="3">3</button>
+        <button class="pin-key" data-key="4">4</button>
+        <button class="pin-key" data-key="5">5</button>
+        <button class="pin-key" data-key="6">6</button>
+        <button class="pin-key" data-key="7">7</button>
+        <button class="pin-key" data-key="8">8</button>
+        <button class="pin-key" data-key="9">9</button>
+        <button class="pin-key pin-action" data-key="clear">Clear</button>
+        <button class="pin-key" data-key="0">0</button>
+        <button class="pin-key pin-action" data-key="enter">Enter</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       BOTTOM NAVIGATION BAR
+       ========================================================= -->
+  <nav id="nav-bar">
+    <button class="nav-item active" data-page="home">
+      <span class="material-icons">home</span>
+      <span class="nav-label">HOME</span>
+    </button>
+
+    <button class="nav-item" data-page="main">
+      <span class="material-icons">account_balance</span>
+      <span class="nav-label">MAIN</span>
+    </button>
+
+    <button class="nav-item" data-page="chapel">
+      <span class="material-icons">temple_buddhist</span>
+      <span class="nav-label">CHAPEL</span>
+    </button>
+
+    <button class="nav-item" data-page="social">
+      <span class="material-icons">groups</span>
+      <span class="nav-label">SOCIAL</span>
+    </button>
+
+    <button class="nav-item" data-page="gym">
+      <span class="material-icons">fitness_center</span>
+      <span class="nav-label">GYM</span>
+    </button>
+
+    <div id="nav-logo">
+      <img src="assets/images/church-seal.svg" alt="Church Seal" id="church-seal" onerror="this.style.display='none'">
+    </div>
+
+    <button class="nav-item" data-page="confroom">
+      <span class="material-icons">meeting_room</span>
+      <span class="nav-label">CONF. RM</span>
+    </button>
+
+    <button class="nav-item" data-page="stream">
+      <span class="material-icons">cast</span>
+      <span class="nav-label">STREAM</span>
+    </button>
+
+    <button class="nav-item" data-page="source">
+      <span class="material-icons">settings_input_hdmi</span>
+      <span class="nav-label">SOURCE</span>
+    </button>
+
+    <button class="nav-item" data-page="security">
+      <span class="material-icons">security</span>
+      <span class="nav-label">SECURITY</span>
+    </button>
+
+    <button class="nav-item" data-page="settings">
+      <span class="material-icons">settings</span>
+      <span class="nav-label">SETTINGS</span>
+    </button>
+  </nav>
+
+  <!-- =========================================================
+       JAVASCRIPT MODULES
+       ========================================================= -->
+  <!-- Socket.IO client (served by Flask-SocketIO from gateway) -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <!-- API layer -->
+  <script src="js/api/obs.js"></script>
+  <script src="js/api/x32.js"></script>
+  <script src="js/api/moip.js"></script>
+  <script src="js/api/wattbox.js"></script>
+  <script src="js/api/ptz.js"></script>
+  <script src="js/api/epson.js"></script>
+  <script src="js/api/health.js"></script>
+  <script src="js/api/macro.js"></script>
+
+  <!-- Core -->
+  <script src="js/auth.js"></script>
+  <script src="js/router.js"></script>
+
+  <!-- Pages -->
+  <script src="js/pages/home.js"></script>
+  <script src="js/pages/main.js"></script>
+  <script src="js/pages/chapel.js"></script>
+  <script src="js/pages/social.js"></script>
+  <script src="js/pages/gym.js"></script>
+  <script src="js/pages/confroom.js"></script>
+  <script src="js/pages/stream.js"></script>
+  <script src="js/pages/source.js"></script>
+  <script src="js/pages/security.js"></script>
+  <script src="js/pages/settings.js"></script>
+
+  <!-- App entry point -->
+  <script src="js/app.js"></script>
+
+</body>
+</html>

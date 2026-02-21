@@ -1,0 +1,85 @@
+# =============================================================================
+# STP Gateway Configuration
+# =============================================================================
+# All secrets and device IPs in one place. The gateway reads this at startup.
+# On the church server, edit the values below to match your network.
+# =============================================================================
+
+gateway:
+  host: "0.0.0.0"
+  port: 8080
+  debug: false
+  # Path to the frontend directory (served as static files)
+  # Adjust this path based on your server's directory layout
+  static_dir: "../frontend"
+
+# --- Middleware services (unchanged, running alongside) ----------------------
+middleware:
+  moip:
+    url: "http://127.0.0.1:5002"
+    api_key: "moip-key-234lkj234lkj2345;lkj234@53"
+    timeout: 5
+  x32:
+    url: "http://127.0.0.1:3400"
+    api_key: "x32-key-your-secret-key-here"
+    timeout: 5
+  obs:
+    url: "http://127.0.0.1:4456"
+    api_key: ""            # obs-flask has no API key by default
+    timeout: 10
+
+# --- PTZ cameras (server-side control, replaces browser-direct no-cors) ------
+ptz_cameras:
+  MainChurch_Rear:    { ip: "192.168.1.201", name: "Cam1921681201" }
+  MainChurch_Altar:   { ip: "192.168.1.202", name: "Cam1921681202" }
+  MainChurch_Right:   { ip: "192.168.1.203", name: "Cam1921681203" }
+  MainChurch_Left:    { ip: "192.168.1.204", name: "Cam1921681204" }
+  Chapel_Rear:        { ip: "192.168.1.205", name: "Cam1921681205" }
+  Chapel_Side:        { ip: "192.168.1.206", name: "Cam1921681206" }
+  BaptismRoom:        { ip: "192.168.1.207", name: "Cam1921681207" }
+  SocialHall_Rear:    { ip: "192.168.1.208", name: "Cam1921681208" }
+  SocialHall_Side:    { ip: "192.168.1.209", name: "Cam1921681209" }
+  Gym:                { ip: "192.168.1.210", name: "Cam1921681210" }
+
+# --- Epson projectors (server-side control) -----------------------------------
+projectors:
+  epson1: { ip: "192.168.1.111", name: "PRJ_FrontLeft" }
+  epson2: { ip: "192.168.1.112", name: "PRJ_FrontRight" }
+  epson3: { ip: "192.168.1.113", name: "PRJ_RearLeft" }
+  epson4: { ip: "192.168.1.114", name: "PRJ_RearRight" }
+
+# --- Home Assistant proxy -----------------------------------------------------
+home_assistant:
+  url: "https://kvakvzhbshejxozsdlo6yyl2l7ugbibc.ui.nabu.casa"
+  token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2YmI4NDEwNTBmN2I0M2RjOGVhYmI1MTM0NmVhY2RlNyIsImlhdCI6MTc2ODg0MDY3NCwiZXhwIjoyMDg0MjAwNjc0fQ.Nl3drftaCITH1bSpaH9gPp9vckYoRGW22HNAhox20d8"
+  timeout: 10
+
+# --- Security -----------------------------------------------------------------
+security:
+  # IP prefix allowlist (same as existing middleware)
+  allowed_ips:
+    - "192.168.1."
+    - "10.100."
+    - "10.10."
+    - "172.16."
+    - "127.0.0.1"
+    - "47.150."
+  settings_pin: "1234"
+
+# --- State polling intervals (seconds) ----------------------------------------
+polling:
+  moip: 10
+  x32: 5
+  obs: 3
+  projectors: 30
+
+# --- Audit logging (SQLite) ---------------------------------------------------
+database:
+  path: "stp_gateway.db"
+
+# --- Logging ------------------------------------------------------------------
+logging:
+  path: "logs/stp-gateway.log"
+  level: "INFO"
+  max_bytes: 5242880    # 5 MB
+  backup_count: 5
