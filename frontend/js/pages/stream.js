@@ -57,6 +57,15 @@ const StreamPage = {
 
       <div class="control-section">
         <div class="section-title">Camera Controls</div>
+        <div id="camera-preview-wrap" style="max-width:640px;margin:0 auto 16px;">
+          <div class="camera-card">
+            <div class="camera-header" id="camera-label">No active camera</div>
+            <div class="camera-feed" id="camera-feed">
+              <span class="material-icons">videocam</span>
+              <div style="font-size:12px;margin-top:4px;">Waiting for scene...</div>
+            </div>
+          </div>
+        </div>
         <div style="display:flex;gap:20px;flex-wrap:wrap;justify-content:center;">
           <div>
             <div class="text-center" style="margin-bottom:8px;font-size:14px;opacity:0.7;">Pan / Tilt</div>
@@ -173,6 +182,9 @@ const StreamPage = {
         if (camKey) PtzAPI.callPreset(camKey, preset);
       });
     });
+
+    // Camera feed preview
+    this._startCameraFeed();
   },
 
   getCurrentCameraKey() {
@@ -183,6 +195,64 @@ const StreamPage = {
       return keys.find(k => scene.includes(k) || k === scene) || null;
     }
     return null;
+  },
+
+  // Camera feed snapshot chaining: load → wait → load next
+  _activeCamKey: null,
+  _feedTimeout: null,
+
+  _startCameraFeed() {
+    this._refreshCameraFeed();
+  },
+
+  _stopCameraFeed() {
+    clearTimeout(this._feedTimeout);
+    this._feedTimeout = null;
+    this._activeCamKey = null;
+  },
+
+  _refreshCameraFeed() {
+    const camKey = this.getCurrentCameraKey();
+    const feedEl = document.getElementById('camera-feed');
+    const labelEl = document.getElementById('camera-label');
+    if (!feedEl) return;
+
+    // No camera mapped to current scene
+    if (!camKey) {
+      if (this._activeCamKey) {
+        feedEl.innerHTML = `<span class="material-icons">videocam</span>
+          <div style="font-size:12px;margin-top:4px;">Waiting for scene...</div>`;
+        this._activeCamKey = null;
+      }
+      if (labelEl) labelEl.textContent = 'No active camera';
+      this._feedTimeout = setTimeout(() => this._refreshCameraFeed(), 2000);
+      return;
+    }
+
+    // Camera changed — swap to img element
+    if (camKey !== this._activeCamKey) {
+      this._activeCamKey = camKey;
+      const img = document.createElement('img');
+      img.id = 'camera-feed-img';
+      img.alt = 'Camera feed';
+      img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
+      feedEl.innerHTML = '';
+      feedEl.appendChild(img);
+      if (labelEl) labelEl.textContent = camKey.replace(/_/g, ' ');
+    }
+
+    const img = document.getElementById('camera-feed-img');
+    if (!img) return;
+
+    const nextImg = new Image();
+    nextImg.onload = () => {
+      if (img.isConnected) img.src = nextImg.src;
+      this._feedTimeout = setTimeout(() => this._refreshCameraFeed(), 500);
+    };
+    nextImg.onerror = () => {
+      this._feedTimeout = setTimeout(() => this._refreshCameraFeed(), 2000);
+    };
+    nextImg.src = `/api/ptz/${camKey}/snapshot?t=${Date.now()}`;
   },
 
   async updateStatus() {
@@ -236,5 +306,6 @@ const StreamPage = {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
+    this._stopCameraFeed();
   }
 };

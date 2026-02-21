@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional
 
 import requests as http_requests
 import yaml
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_file, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
 # =============================================================================
@@ -737,6 +737,35 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             }), 200
         except Exception as e:
             return jsonify({"error": str(e), "camera": camera_key}), 503
+
+    @app.route("/api/ptz/<camera_key>/snapshot")
+    def ptz_snapshot(camera_key: str):
+        """Proxy a JPEG snapshot from a PTZ camera."""
+        cameras = cfg.get("ptz_cameras", {})
+        cam = cameras.get(camera_key)
+        if not cam:
+            return jsonify({"error": f"Unknown camera: {camera_key}"}), 404
+
+        if mock_mode:
+            # Return a 1x1 transparent JPEG placeholder
+            from io import BytesIO
+            return send_file(BytesIO(b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01'
+                                     b'\x00\x00\x01\x00\x01\x00\x00\xff\xd9'),
+                             mimetype="image/jpeg")
+
+        snapshot_path = cam.get("snapshot_path", "/cgi-bin/snapshot.cgi")
+        url = f"http://{cam['ip']}{snapshot_path}"
+        try:
+            resp = http_requests.get(url, timeout=3)
+            if resp.status_code != 200:
+                return "Camera returned non-200", 502
+            ct = resp.headers.get("Content-Type", "image/jpeg")
+            return Response(resp.content, content_type=ct,
+                            headers={"Cache-Control": "no-store"})
+        except http_requests.Timeout:
+            return "Camera timeout", 504
+        except http_requests.ConnectionError:
+            return "Camera unreachable", 503
 
     # -------------------------------------------------------------------------
     # EPSON PROJECTOR CONTROL (server-side)
