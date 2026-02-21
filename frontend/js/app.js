@@ -9,6 +9,9 @@ const App = {
   async init() {
     console.log('St. Paul Control Panel - Initializing...');
 
+    // Apply saved theme before anything renders
+    this.initTheme();
+
     // Load configuration from gateway
     try {
       const configResp = await fetch('/api/config');
@@ -356,6 +359,33 @@ const App = {
       toast.style.transition = 'opacity 0.3s';
       setTimeout(() => toast.remove(), 300);
     }, duration);
+  },
+
+  // -----------------------------------------------------------------------
+  // Confirmation dialog for destructive operations
+  // -----------------------------------------------------------------------
+
+  // -----------------------------------------------------------------------
+  // Theme toggle (light / dark)
+  // -----------------------------------------------------------------------
+
+  initTheme() {
+    const saved = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', saved);
+    this._updateThemeIcon(saved);
+
+    document.getElementById('theme-toggle')?.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      const next = current === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+      this._updateThemeIcon(next);
+    });
+  },
+
+  _updateThemeIcon(theme) {
+    const icon = document.querySelector('#theme-toggle .material-icons');
+    if (icon) icon.textContent = theme === 'light' ? 'dark_mode' : 'light_mode';
   },
 
   // -----------------------------------------------------------------------
