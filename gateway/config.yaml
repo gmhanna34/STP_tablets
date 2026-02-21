@@ -43,10 +43,10 @@ ptz_cameras:
 
 # --- Epson projectors (server-side control) -----------------------------------
 projectors:
-  epson1: { ip: "192.168.1.111", name: "PRJ_FrontLeft" }
-  epson2: { ip: "192.168.1.112", name: "PRJ_FrontRight" }
-  epson3: { ip: "192.168.1.113", name: "PRJ_RearLeft" }
-  epson4: { ip: "192.168.1.114", name: "PRJ_RearRight" }
+  epson1: { ip: "192.168.1.233", name: "PRJ_FrontLeft" }
+  epson2: { ip: "192.168.1.234", name: "PRJ_FrontRight" }
+  epson3: { ip: "192.168.1.236", name: "PRJ_RearLeft" }
+  epson4: { ip: "192.168.1.235", name: "PRJ_RearRight" }
 
 # --- Home Assistant proxy -----------------------------------------------------
 home_assistant:
