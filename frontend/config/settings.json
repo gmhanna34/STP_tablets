@@ -5,78 +5,8 @@
     "church": "St. Paul American Coptic Orthodox Church",
     "idleTimeout": 60
   },
-  "obs": {
-    "internal": { "host": "192.168.1.100", "port": 4455 },
-    "external": { "host": "external.stpauloc.org", "port": 4455 },
-    "internalTimeout": 2000,
-    "externalTimeout": 15000,
-    "pollingInterval": 2500
-  },
-  "x32": {
-    "internal": { "host": "192.168.1.100", "port": 5000 },
-    "external": { "host": "external.stpauloc.org", "port": 20850 },
-    "apiKey": "x32-key-your-secret-key-here",
-    "internalTimeout": 1000,
-    "externalTimeout": 5000,
-    "pollingInterval": 5000
-  },
-  "moip": {
-    "internal": { "host": "192.168.1.100", "port": 5001 },
-    "external": { "host": "external.stpauloc.org", "port": 20851 },
-    "apiKey": "moip-key-234lkj234lkj2345;lkj234@53",
-    "internalTimeout": 1000,
-    "externalTimeout": 5000,
-    "pollingInterval": 10000,
-    "transmitterCount": 28,
-    "receiverCount": 28
-  },
-  "wattbox": {
-    "internal": { "host": "192.168.1.100", "port": 23 },
-    "external": { "host": "external.stpauloc.org", "port": 20852 },
-    "username": "admin",
-    "password": "",
-    "pollingInterval": 3000
-  },
-  "projectors": {
-    "epson1": {
-      "internal": { "host": "192.168.1.111" },
-      "external": { "host": "external.stpauloc.org", "port": 20861 },
-      "displayName": "PRJ_FrontLeft"
-    },
-    "epson2": {
-      "internal": { "host": "192.168.1.112" },
-      "external": { "host": "external.stpauloc.org", "port": 20862 },
-      "displayName": "PRJ_FrontRight"
-    },
-    "epson3": {
-      "internal": { "host": "192.168.1.113" },
-      "external": { "host": "external.stpauloc.org", "port": 20863 },
-      "displayName": "PRJ_RearLeft"
-    },
-    "epson4": {
-      "internal": { "host": "192.168.1.114" },
-      "external": { "host": "external.stpauloc.org", "port": 20864 },
-      "displayName": "PRJ_RearRight"
-    }
-  },
-  "ptzCameras": {
-    "MainChurch_Rear":   { "ip": "192.168.1.201", "externalPort": 201, "name": "Cam1921681201" },
-    "MainChurch_Altar":  { "ip": "192.168.1.202", "externalPort": 202, "name": "Cam1921681202" },
-    "MainChurch_Right":  { "ip": "192.168.1.203", "externalPort": 203, "name": "Cam1921681203" },
-    "MainChurch_Left":   { "ip": "192.168.1.204", "externalPort": 204, "name": "Cam1921681204" },
-    "Chapel_Rear":       { "ip": "192.168.1.205", "externalPort": 205, "name": "Cam1921681205" },
-    "Chapel_Side":       { "ip": "192.168.1.206", "externalPort": 206, "name": "Cam1921681206" },
-    "BaptismRoom":       { "ip": "192.168.1.207", "externalPort": 207, "name": "Cam1921681207" },
-    "SocialHall_Rear":   { "ip": "192.168.1.208", "externalPort": 208, "name": "Cam1921681208" },
-    "SocialHall_Side":   { "ip": "192.168.1.209", "externalPort": 209, "name": "Cam1921681209" },
-    "Gym":               { "ip": "192.168.1.210", "externalPort": 210, "name": "Cam1921681210" }
-  },
   "healthCheck": {
     "url": "external.stpauloc.org:20855",
     "pollingInterval": 30000
-  },
-  "fullyKiosk": {
-    "password": "",
-    "pollingInterval": 60000
   }
 }

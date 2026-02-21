@@ -478,7 +478,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         API keys and secrets are stripped — this is safe to serve to browsers."""
         safe_settings = {
             "app": settings_data.get("app", {}),
-            "ptzCameras": {k: {"name": v.get("name", k)} for k, v in cfg.get("ptz_cameras", {}).items()},
+            "ptzCameras": {k: {"name": v.get("name", k), "ip": v.get("ip", "")} for k, v in cfg.get("ptz_cameras", {}).items()},
             "projectors": {k: {"displayName": v.get("name", k)} for k, v in cfg.get("projectors", {}).items()},
             "healthCheck": settings_data.get("healthCheck", {}),
         }
