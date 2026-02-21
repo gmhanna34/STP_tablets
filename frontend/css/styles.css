@@ -95,10 +95,12 @@ body {
 
 #page-content {
   flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 20px;
   scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 #page-content > .page {

@@ -1612,13 +1612,21 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                     logger.warning(f"Poller {name} error: {e}")
                 time.sleep(interval)
 
+        def _poll_headers(service: str) -> dict:
+            """Build headers for background poll requests (API key + gateway ID)."""
+            h = {"X-Tablet-ID": "Gateway"}
+            key = mw_cfg.get(service, {}).get("api_key", "")
+            if key:
+                h["X-API-Key"] = key
+            return h
+
         def poll_x32():
             if mock_mode:
                 return MockBackend.X32_STATUS
             try:
                 resp = http_requests.get(
                     f"{mw_cfg['x32']['url']}/status",
-                    headers={"X-API-Key": mw_cfg["x32"].get("api_key", "")},
+                    headers=_poll_headers("x32"),
                     timeout=5,
                 )
                 return resp.json()
@@ -1631,7 +1639,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             try:
                 resp = http_requests.get(
                     f"{mw_cfg['moip']['url']}/receivers",
-                    headers={"X-API-Key": mw_cfg["moip"].get("api_key", "")},
+                    headers=_poll_headers("moip"),
                     timeout=5,
                 )
                 return resp.json()
@@ -1644,7 +1652,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             try:
                 resp = http_requests.get(
                     f"{mw_cfg['obs']['url']}/status",
-                    headers={"X-API-Key": mw_cfg["obs"].get("api_key", "")} if mw_cfg["obs"].get("api_key") else {},
+                    headers=_poll_headers("obs"),
                     timeout=5,
                 )
                 return resp.json()
