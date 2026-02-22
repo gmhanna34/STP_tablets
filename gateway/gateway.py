@@ -1121,197 +1121,6 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return jsonify({"error": str(e)}), 503
 
     # -------------------------------------------------------------------------
-    # SERVER-SIDE SCENE ENGINE
-    # -------------------------------------------------------------------------
-    # Moves scene execution from the browser to the gateway. Benefits:
-    # - Retry on failure (browser can't retry no-cors requests)
-    # - Rollback: if step N fails, undo steps 1..N-1
-    # - Progress broadcast via SocketIO (other tablets see it happening)
-    # - Audit trail for every step
-    # - Tablet can disconnect mid-scene without leaving partial state
-
-    @app.route("/api/scene/list")
-    def scene_list():
-        """Return all available MoIP video scenes from devices config."""
-        moip_scenes = devices_data.get("moip", {}).get("scenes", {})
-        result = {}
-        for key, scene in moip_scenes.items():
-            result[key] = {
-                "label": scene.get("label", key),
-                "steps": len(scene.get("mappings", [])),
-            }
-        return jsonify(result), 200
-
-    @app.route("/api/scene/execute", methods=["POST"])
-    def scene_execute():
-        """Execute a MoIP scene server-side with retry, rollback, and progress."""
-        data = request.get_json(silent=True) or {}
-        scene_key = data.get("scene", "")
-        tablet = _tablet_id()
-
-        perm_err = _check_permission(tablet, "source")
-        if perm_err:
-            return perm_err
-
-        moip_scenes = devices_data.get("moip", {}).get("scenes", {})
-        scene = moip_scenes.get(scene_key)
-        if not scene:
-            return jsonify({"error": f"Unknown scene: {scene_key}"}), 404
-
-        mappings = scene.get("mappings", [])
-        label = scene.get("label", scene_key)
-        max_retries = 2
-        step_delay = 0.15  # 150ms between switches to avoid overwhelming the matrix
-
-        if mock_mode:
-            return jsonify({
-                "success": True,
-                "scene": scene_key,
-                "label": label,
-                "steps_completed": len(mappings),
-                "steps_total": len(mappings),
-                "mock": True,
-            }), 200
-
-        logger.info(f"[{tablet}] Scene execute: {scene_key} ({label}) — {len(mappings)} steps")
-
-        # Broadcast: scene starting
-        socketio.emit("scene:progress", {
-            "scene": scene_key,
-            "label": label,
-            "status": "started",
-            "tablet": tablet,
-            "steps_total": len(mappings),
-            "steps_completed": 0,
-        }, room="moip")
-
-        completed = []
-        failed_step = None
-        overall_start = time.time()
-
-        for i, mapping in enumerate(mappings):
-            tx = str(mapping.get("tx", ""))
-            rx = str(mapping.get("rx", ""))
-            step_ok = False
-
-            for attempt in range(1, max_retries + 1):
-                try:
-                    result, status = _proxy_request(
-                        "moip", "/switch", "POST",
-                        {"transmitter": tx, "receiver": rx},
-                        timeout=3,
-                    )
-                    if status < 400:
-                        step_ok = True
-                        break
-                    else:
-                        logger.warning(
-                            f"Scene {scene_key} step {i+1}/{len(mappings)} "
-                            f"(TX{tx}→RX{rx}) attempt {attempt} failed: status={status}"
-                        )
-                except Exception as e:
-                    logger.warning(
-                        f"Scene {scene_key} step {i+1}/{len(mappings)} "
-                        f"(TX{tx}→RX{rx}) attempt {attempt} error: {e}"
-                    )
-
-                if attempt < max_retries:
-                    time.sleep(0.3)  # brief pause before retry
-
-            if step_ok:
-                completed.append(mapping)
-                # Broadcast progress
-                socketio.emit("scene:progress", {
-                    "scene": scene_key,
-                    "label": label,
-                    "status": "in_progress",
-                    "tablet": tablet,
-                    "steps_total": len(mappings),
-                    "steps_completed": len(completed),
-                    "last_step": f"TX{tx}→RX{rx}",
-                }, room="moip")
-            else:
-                failed_step = {"index": i, "tx": tx, "rx": rx}
-                logger.error(
-                    f"Scene {scene_key} FAILED at step {i+1}/{len(mappings)} "
-                    f"(TX{tx}→RX{rx}) after {max_retries} attempts"
-                )
-                break
-
-            if step_delay > 0 and i < len(mappings) - 1:
-                time.sleep(step_delay)
-
-        overall_ms = (time.time() - overall_start) * 1000
-
-        if failed_step is not None:
-            # Rollback: attempt to restore previously completed switches
-            # We don't know the previous TX for each RX, so we log the partial
-            # state and notify the user. A full rollback would require querying
-            # current receiver state first (future enhancement).
-            socketio.emit("scene:progress", {
-                "scene": scene_key,
-                "label": label,
-                "status": "failed",
-                "tablet": tablet,
-                "steps_total": len(mappings),
-                "steps_completed": len(completed),
-                "failed_step": failed_step,
-                "error": f"Step {failed_step['index']+1} failed: TX{failed_step['tx']}→RX{failed_step['rx']}",
-            }, room="moip")
-
-            db.log_action(tablet, "scene:execute", scene_key,
-                          json.dumps({"label": label, "steps": len(mappings)}),
-                          f"FAILED at step {failed_step['index']+1}/{len(mappings)}",
-                          overall_ms)
-
-            # Notify other tablets
-            socketio.emit("notification", {
-                "message": f"{tablet.replace('Tablet_', '')} scene '{label}' failed at step {failed_step['index']+1}",
-            })
-
-            return jsonify({
-                "success": False,
-                "scene": scene_key,
-                "label": label,
-                "steps_completed": len(completed),
-                "steps_total": len(mappings),
-                "failed_step": failed_step,
-                "latency_ms": round(overall_ms, 1),
-            }), 500
-
-        # Success
-        socketio.emit("scene:progress", {
-            "scene": scene_key,
-            "label": label,
-            "status": "completed",
-            "tablet": tablet,
-            "steps_total": len(mappings),
-            "steps_completed": len(completed),
-        }, room="moip")
-
-        # Notify other tablets of the source change
-        socketio.emit("notification", {
-            "message": f"{tablet.replace('Tablet_', '')} changed source to {label}",
-        })
-
-        db.log_action(tablet, "scene:execute", scene_key,
-                      json.dumps({"label": label, "steps": len(mappings)}),
-                      f"OK {len(completed)}/{len(mappings)} steps",
-                      overall_ms)
-
-        # Trigger immediate MoIP state refresh
-        socketio.emit("state:moip", {"event": "scene_completed", "scene": scene_key}, room="moip")
-
-        return jsonify({
-            "success": True,
-            "scene": scene_key,
-            "label": label,
-            "steps_completed": len(completed),
-            "steps_total": len(mappings),
-            "latency_ms": round(overall_ms, 1),
-        }), 200
-
-    # -------------------------------------------------------------------------
     # AUDIT LOG ENDPOINT (admin only)
     # -------------------------------------------------------------------------
 
@@ -1349,8 +1158,14 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 if st and st.get("source") == "ha" and st.get("entity"):
                     ha_state_entities.add(st["entity"])
 
-    def _execute_macro(macro_key: str, tablet: str, depth: int = 0) -> dict:
-        """Execute a macro by key. Returns {success, steps_completed, steps_total, error}."""
+    def _execute_macro(macro_key: str, tablet: str, depth: int = 0,
+                       skip_steps: set = None, prefix: str = "") -> dict:
+        """Execute a macro by key. Returns {success, steps_completed, steps_total, error}.
+        skip_steps: set of dot-notation indices to skip (e.g., {"0", "1.2", "3"}).
+        prefix: current nesting path (e.g., "0." for first nested macro).
+        """
+        if skip_steps is None:
+            skip_steps = set()
         if depth > 5:
             return {"success": False, "error": "Max nesting depth (5) exceeded"}
 
@@ -1378,9 +1193,16 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         overall_start = time.time()
 
         for i, step in enumerate(steps):
+            step_path = f"{prefix}{i}"
             step_type = step.get("type", "")
             step_msg = step.get("message", "")
             on_fail = step.get("on_fail", "abort")
+
+            # Check if this step should be skipped
+            if step_path in skip_steps:
+                logger.info(f"Macro {macro_key} step {i+1} skipped by user (path={step_path})")
+                completed += 1
+                continue
 
             # Broadcast: step starting
             socketio.emit("macro:progress", {
@@ -1393,7 +1215,14 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 "current_step": step_msg or f"Step {i+1}: {step_type}",
             })
 
-            result = _execute_step(step, tablet, depth)
+            # For nested macros, pass down the skip_steps with adjusted prefix
+            if step_type == "macro":
+                child_key = step.get("macro", "")
+                child_prefix = f"{step_path}."
+                result = _execute_macro(child_key, tablet, depth + 1,
+                                        skip_steps=skip_steps, prefix=child_prefix)
+            else:
+                result = _execute_step(step, tablet, depth)
 
             if result["success"]:
                 completed += 1
@@ -1483,8 +1312,6 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 return _step_moip_switch(step, tablet)
             elif step_type == "moip_ir":
                 return _step_moip_ir(step, tablet)
-            elif step_type == "moip_scene":
-                return _step_moip_scene(step, tablet)
             elif step_type == "epson_power":
                 return _step_epson_power(step, tablet)
             elif step_type == "epson_all":
@@ -1582,24 +1409,6 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         result, status = _proxy_request("moip", "/ir", "POST",
                                          {"tx": "0", "rx": rx, "code": code}, timeout=3)
         return {"success": status < 400, "error": "" if status < 400 else f"IR failed: status={status}"}
-
-    def _step_moip_scene(step: dict, tablet: str) -> dict:
-        scene_key = step.get("scene", "")
-        moip_scenes = devices_data.get("moip", {}).get("scenes", {})
-        scene = moip_scenes.get(scene_key)
-        if not scene:
-            return {"success": False, "error": f"Unknown MoIP scene: {scene_key}"}
-        # Execute using the existing scene engine logic inline
-        mappings = scene.get("mappings", [])
-        for mapping in mappings:
-            tx = str(mapping.get("tx", ""))
-            rx = str(mapping.get("rx", ""))
-            result, status = _proxy_request("moip", "/switch", "POST",
-                                             {"transmitter": tx, "receiver": rx}, timeout=3)
-            if status >= 400:
-                return {"success": False, "error": f"Scene switch TX{tx}→RX{rx} failed"}
-            time.sleep(0.15)
-        return {"success": True}
 
     def _step_epson_power(step: dict, tablet: str) -> dict:
         key = step.get("projector", "")
@@ -1714,21 +1523,85 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
 
     @app.route("/api/macro/execute", methods=["POST"])
     def api_macro_execute():
-        """Execute a macro by key."""
+        """Execute a macro by key, optionally skipping selected steps."""
         data = request.get_json(silent=True) or {}
         macro_key = data.get("macro", "")
+        skip_steps = set(data.get("skip_steps", []))
         tablet = _tablet_id()
 
         if not macro_key or macro_key not in macro_defs:
             return jsonify({"success": False, "error": f"Unknown macro: {macro_key}"}), 404
 
-        # Check confirmation (client should have already prompted, but log it)
-        logger.info(f"[{tablet}] Macro execute: {macro_key}")
+        logger.info(f"[{tablet}] Macro execute: {macro_key}"
+                     + (f" (skipping {len(skip_steps)} steps)" if skip_steps else ""))
 
-        result = _execute_macro(macro_key, tablet)
+        result = _execute_macro(macro_key, tablet, skip_steps=skip_steps)
 
         status_code = 200 if result.get("success") else 500
         return jsonify(result), status_code
+
+    @app.route("/api/macro/expand/<macro_key>")
+    def api_macro_expand(macro_key: str):
+        """Return the full step tree for a macro, recursively resolving nested macros."""
+        if macro_key not in macro_defs:
+            return jsonify({"error": f"Unknown macro: {macro_key}"}), 404
+
+        def _expand(key: str, depth: int = 0) -> dict:
+            if depth > 5:
+                return {"macro": key, "label": key, "steps": [], "error": "Max depth exceeded"}
+            macro = macro_defs.get(key, {})
+            label = macro.get("label", key)
+            steps = macro.get("steps", [])
+            expanded = []
+            for i, step in enumerate(steps):
+                step_type = step.get("type", "")
+                step_label = step.get("message", "") or _step_summary(step)
+                entry = {
+                    "index": i,
+                    "type": step_type,
+                    "label": step_label,
+                }
+                if step_type == "macro":
+                    child_key = step.get("macro", "")
+                    child = _expand(child_key, depth + 1)
+                    entry["children"] = child.get("steps", [])
+                    entry["child_macro"] = child_key
+                    entry["child_label"] = child.get("label", child_key)
+                expanded.append(entry)
+            return {"macro": key, "label": label, "steps": expanded}
+
+        def _step_summary(step: dict) -> str:
+            """Generate a human-readable summary for a step."""
+            t = step.get("type", "")
+            if t == "ha_check":
+                return f"Check {step.get('entity', '')} == {step.get('expect', '')}"
+            elif t == "ha_service":
+                return f"HA {step.get('domain', '')}.{step.get('service', '')} ({step.get('data', {}).get('entity_id', '')})"
+            elif t == "moip_switch":
+                return f"Switch TX {step.get('tx', '')} → RX {step.get('rx', '')}"
+            elif t == "moip_ir":
+                return f"IR {step.get('code', '')} → RX {step.get('receiver', '')}"
+            elif t == "epson_power":
+                return f"Projector {step.get('projector', '')} {step.get('state', '')}"
+            elif t == "epson_all":
+                return f"All projectors {step.get('state', '')}"
+            elif t == "x32_scene":
+                return f"X32 scene {step.get('scene', '')}"
+            elif t == "x32_mute":
+                return f"X32 mute ch{step.get('channel', '')} {step.get('state', '')}"
+            elif t == "obs_emit":
+                return f"OBS {step.get('request_type', '')}"
+            elif t == "ptz_preset":
+                return f"PTZ {step.get('camera', '')} preset {step.get('preset', '')}"
+            elif t == "delay":
+                return f"Wait {step.get('seconds', 0)}s"
+            elif t == "notify":
+                return f"Notify: {step.get('message', '')}"
+            elif t == "condition":
+                return f"Condition: check {step.get('check', {}).get('entity', '')}"
+            return f"{t}"
+
+        return jsonify(_expand(macro_key)), 200
 
     @app.route("/api/macro/state")
     def api_macro_state():

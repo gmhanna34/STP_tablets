@@ -60,71 +60,6 @@
       { "id": 27, "name": "Receiver 27", "location": "Gym" },
       { "id": 28, "name": "Receiver 28", "location": "Office" }
     ],
-    "scenes": {
-      "MainChurch_LeftPodium": {
-        "label": "Left Podium",
-        "mappings": [
-          { "tx": 22, "rx": 47 }, { "tx": 22, "rx": 34 }, { "tx": 22, "rx": 36 },
-          { "tx": 22, "rx": 37 }, { "tx": 22, "rx": 38 }, { "tx": 22, "rx": 39 },
-          { "tx": 22, "rx": 22 }, { "tx": 22, "rx": 10 }, { "tx": 22, "rx": 19 },
-          { "tx": 8, "rx": 26 }, { "tx": 8, "rx": 35 }, { "tx": 22, "rx": 32 }
-        ]
-      },
-      "MainChurch_RightPodium": {
-        "label": "Right Podium",
-        "mappings": [
-          { "tx": 23, "rx": 34 }, { "tx": 23, "rx": 36 }, { "tx": 23, "rx": 37 },
-          { "tx": 23, "rx": 38 }, { "tx": 23, "rx": 39 }, { "tx": 23, "rx": 22 },
-          { "tx": 23, "rx": 10 }, { "tx": 23, "rx": 19 }, { "tx": 23, "rx": 47 },
-          { "tx": 8, "rx": 26 }, { "tx": 8, "rx": 35 }, { "tx": 23, "rx": 32 }
-        ]
-      },
-      "MainChurch_Announcements": {
-        "label": "Announcements",
-        "mappings": [
-          { "tx": 9, "rx": 34 }, { "tx": 9, "rx": 36 }, { "tx": 9, "rx": 37 },
-          { "tx": 9, "rx": 38 }, { "tx": 9, "rx": 39 }, { "tx": 9, "rx": 22 },
-          { "tx": 9, "rx": 10 }, { "tx": 9, "rx": 19 }, { "tx": 9, "rx": 47 },
-          { "tx": 8, "rx": 26 }, { "tx": 8, "rx": 35 }, { "tx": 9, "rx": 32 }
-        ]
-      },
-      "MainChurch_LOGO": {
-        "label": "LOGO",
-        "mappings": [
-          { "tx": 16, "rx": 34 }, { "tx": 16, "rx": 36 }, { "tx": 16, "rx": 37 },
-          { "tx": 16, "rx": 38 }, { "tx": 16, "rx": 39 }, { "tx": 16, "rx": 22 },
-          { "tx": 16, "rx": 10 }, { "tx": 16, "rx": 19 }, { "tx": 16, "rx": 47 },
-          { "tx": 8, "rx": 26 }, { "tx": 8, "rx": 35 }, { "tx": 16, "rx": 32 }
-        ]
-      },
-      "MainChurch_LiveStream": {
-        "label": "Live Stream",
-        "mappings": [
-          { "tx": 8, "rx": 34 }, { "tx": 8, "rx": 36 }, { "tx": 8, "rx": 37 },
-          { "tx": 8, "rx": 38 }, { "tx": 8, "rx": 39 }, { "tx": 8, "rx": 22 },
-          { "tx": 8, "rx": 10 }, { "tx": 8, "rx": 19 }, { "tx": 8, "rx": 47 },
-          { "tx": 8, "rx": 26 }, { "tx": 8, "rx": 35 }, { "tx": 8, "rx": 32 }
-        ]
-      },
-      "MainChurch_AppleTV": {
-        "label": "Apple TV",
-        "mappings": [
-          { "tx": 24, "rx": 34 }, { "tx": 24, "rx": 36 }, { "tx": 24, "rx": 37 },
-          { "tx": 24, "rx": 38 }, { "tx": 24, "rx": 39 }, { "tx": 24, "rx": 22 },
-          { "tx": 24, "rx": 10 }, { "tx": 24, "rx": 19 }, { "tx": 24, "rx": 47 },
-          { "tx": 8, "rx": 26 }, { "tx": 8, "rx": 35 }, { "tx": 24, "rx": 32 }
-        ]
-      },
-      "MainChurch_GoogleStreamer": {
-        "label": "Google Streamer",
-        "mappings": [
-          { "tx": 25, "rx": 34 }, { "tx": 25, "rx": 36 }, { "tx": 25, "rx": 37 },
-          { "tx": 25, "rx": 38 }, { "tx": 25, "rx": 39 }, { "tx": 25, "rx": 22 },
-          { "tx": 25, "rx": 10 }, { "tx": 25, "rx": 19 }, { "tx": 25, "rx": 47 },
-          { "tx": 8, "rx": 26 }, { "tx": 8, "rx": 35 }, { "tx": 25, "rx": 32 }
-        ]
-      }
-    },
     "irCodes": {
 		"IRPowerOn":          "0000 006D 0022 0000 00AC 00AC 0015 0040 0015 0040 0015 0040 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0040 0015 0040 0015 0040 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0040 0015 0015 0015 0015 0015 0040 0015 0040 0015 0015 0015 0015 0015 0040 0015 0015 0015 0040 0015 0040 0015 0015 0015 0015 0015 0040 0015 0040 0015 0015 0015 0689",
 		"IRPowerOff":         "0000 006D 0022 0000 00AC 00AC 0015 0040 0015 0040 0015 0040 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0040 0015 0040 0015 0040 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0040 0015 0040 0015 0015 0015 0015 0015 0040 0015 0040 0015 0040 0015 0040 0015 0015 0015 0015 0015 0040 0015 0040 0015 0015 0015 0689",
@@ -140,19 +75,5 @@
 		"IRPowerOnEpson":     "0000 006C 0000 003C 0159 00AA 0016 0040 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0040 0016 0040 0016 0040 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0040 0016 0040 0016 0040 0016 0040 0016 0040 0016 0040 0016 0040 0016 0040 0016 0015 0016 0015 0016 0015 0016 0015 0016 068F 0158 00AA 0016 0040 0016 0040 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0040 0016 0040 0016 0015 0016 0040 0016 0015 0016 0040 0016 0015 0016 0040 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0040 0016 0015 0016 0015 0016 0040 000A 0ED8",
 		"IRPowerOffEpson":    "0000 006D 0022 0002 0157 00AC 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0041 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0041 0015 0041 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0041 0015 0041 0015 0041 0015 0041 0015 0041 0015 0041 0015 0689 0157 0056 0015 0E94"
     }
-  },
-  "scenes": {
-    "SC_MainChurch_TurnProjectorsOn": { "label": "Turn Projectors On", "location": "MainChurch" },
-    "SC_MainChurch_TurnProjectorsOff": { "label": "Turn Projectors Off", "location": "MainChurch" },
-    "SC_MainChurch_ScreensAndShelfDown": { "label": "Screens & Shelf Down", "location": "MainChurch" },
-    "SC_MainChurch_ScreensAndShelfUp": { "label": "Screens & Shelf Up", "location": "MainChurch" },
-    "SC_MainChurch_AudioOn": { "label": "Audio On", "location": "MainChurch" },
-    "SC_MainChurch_AudioOff": { "label": "Audio Off", "location": "MainChurch" },
-    "SC_MainChurch_TurnCryRoomOn": { "label": "Cry Room On", "location": "MainChurch" },
-    "SC_MainChurch_TurnCryRoomOff": { "label": "Cry Room Off", "location": "MainChurch" },
-    "SC_MainChurch_TurnPortablesOn": { "label": "Portables On", "location": "MainChurch" },
-    "SC_MainChurch_TurnPortablesOff": { "label": "Portables Off", "location": "MainChurch" },
-    "SC_RestartAppleTVMainChurch": { "label": "Restart AppleTV", "location": "MainChurch" },
-    "SC_RestartMoIPController": { "label": "Restart MoIP Controller", "location": "System" }
   }
 }
