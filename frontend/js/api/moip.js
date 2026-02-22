@@ -41,30 +41,6 @@ const MoIPAPI = {
     return await this.sendCommand('/ir', 'POST', { tx: String(tx), rx: String(rx), code: codeKey });
   },
 
-  async applyScene(mappings) {
-    for (const m of mappings) {
-      await this.switchSource(String(m.tx), String(m.rx));
-    }
-  },
-
-  async executeScene(sceneKey) {
-    try {
-      const resp = await fetch('/api/scene/execute', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Tablet-ID': this.tabletId,
-        },
-        body: JSON.stringify({ scene: sceneKey }),
-        signal: AbortSignal.timeout(15000),
-      });
-      return await resp.json();
-    } catch (e) {
-      console.error('MoIP executeScene:', e);
-      return null;
-    }
-  },
-
   async sendOSD(text) {
     return await this.sendCommand('/osd', 'POST', { text });
   },
