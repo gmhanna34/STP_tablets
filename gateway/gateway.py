@@ -300,6 +300,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
 
     gateway_cfg = cfg.get("gateway", {})
     static_dir = os.path.abspath(gateway_cfg.get("static_dir", "../frontend"))
+    sec_cfg = cfg.get("security", {})
 
     app = Flask(__name__, static_folder=None)
     app.config["SECRET_KEY"] = sec_cfg.get("secret_key", os.urandom(24).hex())
@@ -311,7 +312,6 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     state_cache = StateCache()
 
     mw_cfg = cfg.get("middleware", {})
-    sec_cfg = cfg.get("security", {})
     allowed_ips = sec_cfg.get("allowed_ips", ["127.0.0.1"])
     settings_pin = sec_cfg.get("settings_pin", "1234")
     remote_auth = sec_cfg.get("remote_auth", {})
