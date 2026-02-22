@@ -31,7 +31,7 @@
       { "id": 28, "name": "SPARE" }
     ],
     "receivers": [
-      { "id": 1,  "name": "Receiver 1", "location": "MainChurch" },
+      { "id": 1,  "name": "Hall_VideoWallLeftP1", "location": "MainChurch" },
       { "id": 2,  "name": "Receiver 2", "location": "MainChurch" },
       { "id": 3,  "name": "Receiver 3", "location": "MainChurch" },
       { "id": 4,  "name": "Receiver 4", "location": "MainChurch" },
