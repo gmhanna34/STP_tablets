@@ -65,6 +65,10 @@ security:
     - "127.0.0.1"
     - "47.150."
   settings_pin: "1234"
+  # HTTP Basic Auth for access from outside the allowed IP ranges
+  remote_auth:
+    username: "admin"
+    password: "stpaul"
 
 # --- State polling intervals (seconds) ----------------------------------------
 polling:

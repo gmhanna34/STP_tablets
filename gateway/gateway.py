@@ -314,6 +314,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     sec_cfg = cfg.get("security", {})
     allowed_ips = sec_cfg.get("allowed_ips", ["127.0.0.1"])
     settings_pin = sec_cfg.get("settings_pin", "1234")
+    remote_auth = sec_cfg.get("remote_auth", {})
 
     # Load permissions from frontend config
     permissions_path = os.path.join(static_dir, "config", "permissions.json")
@@ -410,11 +411,26 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return None
 
         client_ip = request.remote_addr or ""
-        if not _ip_allowed(client_ip):
-            logger.warning(f"BLOCKED ip={client_ip} path={request.path}")
-            return jsonify({"error": "Unauthorized - Invalid IP"}), 403
+        if _ip_allowed(client_ip):
+            return None
 
-        return None
+        # External IP — require HTTP Basic Auth if remote_auth is configured
+        if remote_auth.get("username") and remote_auth.get("password"):
+            auth = request.authorization
+            if (auth
+                    and auth.type == "basic"
+                    and auth.username == remote_auth["username"]
+                    and auth.password == remote_auth["password"]):
+                return None
+            logger.warning(f"AUTH_REQUIRED ip={client_ip} path={request.path}")
+            return Response(
+                "Authentication required",
+                401,
+                {"WWW-Authenticate": 'Basic realm="St. Paul Control Panel"'},
+            )
+
+        logger.warning(f"BLOCKED ip={client_ip} path={request.path}")
+        return jsonify({"error": "Unauthorized - Invalid IP"}), 403
 
     @app.after_request
     def log_response(resp):
