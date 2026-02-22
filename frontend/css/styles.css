@@ -301,6 +301,38 @@ body {
   padding-bottom: 8px;
 }
 
+/* ── Collapsible Sections ─────────────────────────────────── */
+
+.section-title-toggle {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.section-title-toggle:hover {
+  opacity: 0.8;
+}
+
+.section-toggle-icon {
+  font-size: 20px;
+  transition: transform 0.2s;
+}
+
+.control-section.collapsed .section-toggle-icon {
+  transform: rotate(0deg);
+}
+
+.control-section:not(.collapsed) .section-toggle-icon {
+  transform: rotate(180deg);
+}
+
+.section-content-collapsed {
+  display: none !important;
+}
+
 /* ── Control Grid ─────────────────────────────────────────── */
 
 .control-grid {
@@ -1096,6 +1128,101 @@ body {
 }
 
 .confirm-buttons .btn-danger:hover {
+  filter: brightness(1.1);
+}
+
+/* ── Step Confirmation Modal ─────────────────────────────── */
+
+.step-confirm-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 360px;
+  max-width: 520px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-md);
+}
+
+.step-confirm-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  text-align: center;
+  color: var(--text);
+}
+
+.step-confirm-list {
+  overflow-y: auto;
+  max-height: 50vh;
+  margin-bottom: 16px;
+  padding-right: 4px;
+}
+
+.step-group {
+  margin-bottom: 8px;
+}
+
+.step-parent,
+.step-child,
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+  user-select: none;
+}
+
+.step-parent:hover,
+.step-child:hover,
+.step-item:hover {
+  background: var(--surface-alt);
+}
+
+.step-children {
+  padding-left: 28px;
+  border-left: 2px solid var(--border);
+  margin-left: 14px;
+}
+
+.step-type-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  min-width: 50px;
+  text-align: center;
+}
+
+.step-confirm-modal input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--ok);
+}
+
+.step-confirm-modal .confirm-buttons {
+  margin-top: 8px;
+}
+
+.confirm-buttons .btn-success {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #fff;
+}
+
+.confirm-buttons .btn-success:hover {
   filter: brightness(1.1);
 }
 

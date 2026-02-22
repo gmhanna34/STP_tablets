@@ -41,7 +41,7 @@ const App = {
     ObsAPI.init(this.settings);
     X32API.init();
     MoIPAPI.init();
-    WattBoxAPI.init();
+    // WattBoxAPI removed — WattBox controls are now macros with ha_service actions
     PtzAPI.init();
     EpsonAPI.init();
     HealthAPI.init(this.settings);
@@ -287,9 +287,10 @@ const App = {
           // Auth.login is now async (server-side PIN verification)
           const success = await Auth.login(this.pinBuffer);
           if (success) {
+            const dest = this.pinDestination;
             this.hidePINEntry();
-            if (this.pinDestination) {
-              Router.navigate(this.pinDestination);
+            if (dest) {
+              Router.navigate(dest);
             }
           } else {
             this.pinBuffer = '';

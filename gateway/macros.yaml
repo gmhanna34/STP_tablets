@@ -10,7 +10,7 @@
 #   ha_service    Call a Home Assistant service
 #   moip_switch   Switch a single video TX → RX
 #   moip_ir       Send an IR code via MoIP receiver
-#   moip_scene    Execute a pre-defined MoIP scene (from devices.json)
+#   moip_scene    Execute a pre-defined MoIP scene (DEPRECATED — use moip_switch)
 #   epson_power   Control a single projector (on/off)
 #   epson_all     Control all projectors (on/off)
 #   x32_scene     Load an X32 mixer scene
@@ -267,6 +267,803 @@ macros:
         service: "turn_off"
         data: { entity_id: "switch.wattbox_outlet_2" }
 
+  main_proj_only_on:
+    label: "Projectors Only On"
+    icon: "tv"
+    steps:
+      - type: epson_all
+        state: "on"
+        message: "Powering on all projectors"
+
+  main_proj_only_off:
+    label: "Projectors Only Off"
+    icon: "tv_off"
+    confirm: "Turn OFF all projectors?"
+    steps:
+      - type: epson_all
+        state: "off"
+        message: "Powering off all projectors"
+
+  main_port_only_on:
+    label: "Portables Only On"
+    icon: "speaker"
+    description: "Turn on portable displays"
+    steps:
+      # TODO: Replace with actual HA entity for portable displays
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.TODO_main_portables_power" }
+        on_fail: skip
+        message: "Portables power entity not configured yet"
+
+  main_port_only_off:
+    label: "Portables Only Off"
+    icon: "speaker"
+    confirm: "Turn OFF all portables?"
+    steps:
+      # TODO: Replace with actual HA entity for portable displays
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.TODO_main_portables_power" }
+        on_fail: skip
+        message: "Portables power entity not configured yet"
+
+  main_ac_on:
+    label: "Main Church A/C On"
+    icon: "thermostat"
+    steps:
+      # TODO: Replace with actual HA entity for Main Church thermostat
+      - type: ha_service
+        domain: "climate"
+        service: "turn_on"
+        data: { entity_id: "climate.TODO_main_thermostat" }
+        on_fail: skip
+        message: "Main Church thermostat entity not configured yet"
+
+  main_ac_off:
+    label: "Main Church A/C Off"
+    icon: "thermostat"
+    confirm: "Turn off Main Church A/C?"
+    steps:
+      # TODO: Replace with actual HA entity for Main Church thermostat
+      - type: ha_service
+        domain: "climate"
+        service: "turn_off"
+        data: { entity_id: "climate.TODO_main_thermostat" }
+        on_fail: skip
+        message: "Main Church thermostat entity not configured yet"
+
+  main_appletv_restart:
+    label: "Restart AppleTV"
+    icon: "restart_alt"
+    confirm: "Restart the Main Church AppleTV?"
+    steps:
+      # TODO: Replace with actual HA entity for AppleTV restart
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.TODO_main_appletv_power" }
+        on_fail: skip
+        message: "AppleTV power entity not configured yet"
+      - type: delay
+        seconds: 5
+        message: "Waiting for power cycle"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.TODO_main_appletv_power" }
+        on_fail: skip
+
+  # --- Main Church video source macros (inline MoIP switches) ---
+
+  main_source_left_podium:
+    label: "Left Podium"
+    icon: "computer"
+    description: "Route Left Podium (TX 22) to all Main Church displays"
+    steps:
+      - type: moip_switch
+        tx: 22
+        rx: 47
+      - type: moip_switch
+        tx: 22
+        rx: 34
+      - type: moip_switch
+        tx: 22
+        rx: 36
+      - type: moip_switch
+        tx: 22
+        rx: 37
+      - type: moip_switch
+        tx: 22
+        rx: 38
+      - type: moip_switch
+        tx: 22
+        rx: 39
+      - type: moip_switch
+        tx: 22
+        rx: 22
+      - type: moip_switch
+        tx: 22
+        rx: 10
+      - type: moip_switch
+        tx: 22
+        rx: 19
+      - type: moip_switch
+        tx: 8
+        rx: 26
+      - type: moip_switch
+        tx: 8
+        rx: 35
+      - type: moip_switch
+        tx: 22
+        rx: 32
+
+  main_source_right_podium:
+    label: "Right Podium"
+    icon: "computer"
+    description: "Route Right Podium (TX 23) to all Main Church displays"
+    steps:
+      - type: moip_switch
+        tx: 23
+        rx: 34
+      - type: moip_switch
+        tx: 23
+        rx: 36
+      - type: moip_switch
+        tx: 23
+        rx: 37
+      - type: moip_switch
+        tx: 23
+        rx: 38
+      - type: moip_switch
+        tx: 23
+        rx: 39
+      - type: moip_switch
+        tx: 23
+        rx: 22
+      - type: moip_switch
+        tx: 23
+        rx: 10
+      - type: moip_switch
+        tx: 23
+        rx: 19
+      - type: moip_switch
+        tx: 23
+        rx: 47
+      - type: moip_switch
+        tx: 8
+        rx: 26
+      - type: moip_switch
+        tx: 8
+        rx: 35
+      - type: moip_switch
+        tx: 23
+        rx: 32
+
+  main_source_announcements:
+    label: "Announcements"
+    icon: "announcement"
+    description: "Route Announcements (TX 9) to all Main Church displays"
+    steps:
+      - type: moip_switch
+        tx: 9
+        rx: 34
+      - type: moip_switch
+        tx: 9
+        rx: 36
+      - type: moip_switch
+        tx: 9
+        rx: 37
+      - type: moip_switch
+        tx: 9
+        rx: 38
+      - type: moip_switch
+        tx: 9
+        rx: 39
+      - type: moip_switch
+        tx: 9
+        rx: 22
+      - type: moip_switch
+        tx: 9
+        rx: 10
+      - type: moip_switch
+        tx: 9
+        rx: 19
+      - type: moip_switch
+        tx: 9
+        rx: 47
+      - type: moip_switch
+        tx: 8
+        rx: 26
+      - type: moip_switch
+        tx: 8
+        rx: 35
+      - type: moip_switch
+        tx: 9
+        rx: 32
+
+  main_source_logo:
+    label: "LOGO"
+    icon: "image"
+    description: "Route LOGO (TX 16) to all Main Church displays"
+    steps:
+      - type: moip_switch
+        tx: 16
+        rx: 34
+      - type: moip_switch
+        tx: 16
+        rx: 36
+      - type: moip_switch
+        tx: 16
+        rx: 37
+      - type: moip_switch
+        tx: 16
+        rx: 38
+      - type: moip_switch
+        tx: 16
+        rx: 39
+      - type: moip_switch
+        tx: 16
+        rx: 22
+      - type: moip_switch
+        tx: 16
+        rx: 10
+      - type: moip_switch
+        tx: 16
+        rx: 19
+      - type: moip_switch
+        tx: 16
+        rx: 47
+      - type: moip_switch
+        tx: 8
+        rx: 26
+      - type: moip_switch
+        tx: 8
+        rx: 35
+      - type: moip_switch
+        tx: 16
+        rx: 32
+
+  main_source_livestream:
+    label: "Live Stream"
+    icon: "live_tv"
+    description: "Route Live Stream (TX 8) to all Main Church displays"
+    steps:
+      - type: moip_switch
+        tx: 8
+        rx: 34
+      - type: moip_switch
+        tx: 8
+        rx: 36
+      - type: moip_switch
+        tx: 8
+        rx: 37
+      - type: moip_switch
+        tx: 8
+        rx: 38
+      - type: moip_switch
+        tx: 8
+        rx: 39
+      - type: moip_switch
+        tx: 8
+        rx: 22
+      - type: moip_switch
+        tx: 8
+        rx: 10
+      - type: moip_switch
+        tx: 8
+        rx: 19
+      - type: moip_switch
+        tx: 8
+        rx: 47
+      - type: moip_switch
+        tx: 8
+        rx: 26
+      - type: moip_switch
+        tx: 8
+        rx: 35
+      - type: moip_switch
+        tx: 8
+        rx: 32
+
+  main_source_appletv:
+    label: "Apple TV"
+    icon: "cast"
+    description: "Route Apple TV (TX 24) to all Main Church displays"
+    steps:
+      - type: moip_switch
+        tx: 24
+        rx: 34
+      - type: moip_switch
+        tx: 24
+        rx: 36
+      - type: moip_switch
+        tx: 24
+        rx: 37
+      - type: moip_switch
+        tx: 24
+        rx: 38
+      - type: moip_switch
+        tx: 24
+        rx: 39
+      - type: moip_switch
+        tx: 24
+        rx: 22
+      - type: moip_switch
+        tx: 24
+        rx: 10
+      - type: moip_switch
+        tx: 24
+        rx: 19
+      - type: moip_switch
+        tx: 24
+        rx: 47
+      - type: moip_switch
+        tx: 8
+        rx: 26
+      - type: moip_switch
+        tx: 8
+        rx: 35
+      - type: moip_switch
+        tx: 24
+        rx: 32
+
+  main_source_google_streamer:
+    label: "Google Streamer"
+    icon: "cast_connected"
+    description: "Route Google Streamer (TX 25) to all Main Church displays"
+    steps:
+      - type: moip_switch
+        tx: 25
+        rx: 34
+      - type: moip_switch
+        tx: 25
+        rx: 36
+      - type: moip_switch
+        tx: 25
+        rx: 37
+      - type: moip_switch
+        tx: 25
+        rx: 38
+      - type: moip_switch
+        tx: 25
+        rx: 39
+      - type: moip_switch
+        tx: 25
+        rx: 22
+      - type: moip_switch
+        tx: 25
+        rx: 10
+      - type: moip_switch
+        tx: 25
+        rx: 19
+      - type: moip_switch
+        tx: 25
+        rx: 47
+      - type: moip_switch
+        tx: 8
+        rx: 26
+      - type: moip_switch
+        tx: 8
+        rx: 35
+      - type: moip_switch
+        tx: 25
+        rx: 32
+
+  # --- Main Church individual projector macros ---
+
+  main_epson1_on:
+    label: "PRJ Front Left ON"
+    icon: "tv"
+    steps:
+      - type: epson_power
+        projector: "epson1"
+        state: "on"
+
+  main_epson1_off:
+    label: "PRJ Front Left OFF"
+    icon: "tv_off"
+    steps:
+      - type: epson_power
+        projector: "epson1"
+        state: "off"
+
+  main_epson2_on:
+    label: "PRJ Front Right ON"
+    icon: "tv"
+    steps:
+      - type: epson_power
+        projector: "epson2"
+        state: "on"
+
+  main_epson2_off:
+    label: "PRJ Front Right OFF"
+    icon: "tv_off"
+    steps:
+      - type: epson_power
+        projector: "epson2"
+        state: "off"
+
+  main_epson3_on:
+    label: "PRJ Rear Left ON"
+    icon: "tv"
+    steps:
+      - type: epson_power
+        projector: "epson3"
+        state: "on"
+
+  main_epson3_off:
+    label: "PRJ Rear Left OFF"
+    icon: "tv_off"
+    steps:
+      - type: epson_power
+        projector: "epson3"
+        state: "off"
+
+  main_epson4_on:
+    label: "PRJ Rear Right ON"
+    icon: "tv"
+    steps:
+      - type: epson_power
+        projector: "epson4"
+        state: "on"
+
+  main_epson4_off:
+    label: "PRJ Rear Right OFF"
+    icon: "tv_off"
+    steps:
+      - type: epson_power
+        projector: "epson4"
+        state: "off"
+
+  # --- Main Church WattBox macros ---
+
+  main_wattbox1_on:
+    label: "WattBox 1 ON"
+    icon: "power"
+    steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.wattbox_outlet_1" }
+
+  main_wattbox1_off:
+    label: "WattBox 1 OFF"
+    icon: "power_off"
+    steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.wattbox_outlet_1" }
+
+  main_wattbox2_on:
+    label: "WattBox 2 ON"
+    icon: "power"
+    steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.wattbox_outlet_2" }
+
+  main_wattbox2_off:
+    label: "WattBox 2 OFF"
+    icon: "power_off"
+    steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.wattbox_outlet_2" }
+
+  # --- Main Church baptism camera ---
+
+  main_baptism_camera:
+    label: "Baptism Camera View"
+    icon: "videocam"
+    description: "Route Baptism Room camera to Main Church displays"
+    steps:
+      - type: moip_switch
+        tx: 21
+        rx: 47
+      - type: moip_switch
+        tx: 21
+        rx: 34
+
+  # ---------------------------------------------------------------------------
+  # SOCIAL HALL
+  # ---------------------------------------------------------------------------
+
+  social_video_on:
+    label: "Social Hall Video On"
+    icon: "tv"
+    steps:
+      # TODO: Replace with actual HA entity for Social Hall video/TV power
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.TODO_social_video_power" }
+        on_fail: skip
+        message: "Social Hall video entity not configured yet"
+
+  social_video_off:
+    label: "Social Hall Video Off"
+    icon: "tv_off"
+    confirm: "Turn off Social Hall video?"
+    steps:
+      # TODO: Replace with actual HA entity for Social Hall video/TV power
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.TODO_social_video_power" }
+        on_fail: skip
+        message: "Social Hall video entity not configured yet"
+
+  social_audio_on:
+    label: "Social Hall Audio On"
+    icon: "mic"
+    steps:
+      # TODO: Replace with actual HA entity for Social Hall audio power
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.TODO_social_audio_power" }
+        on_fail: skip
+        message: "Social Hall audio entity not configured yet"
+
+  social_audio_off:
+    label: "Social Hall Audio Off"
+    icon: "mic_off"
+    confirm: "Turn off Social Hall audio?"
+    steps:
+      # TODO: Replace with actual HA entity for Social Hall audio power
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.TODO_social_audio_power" }
+        on_fail: skip
+        message: "Social Hall audio entity not configured yet"
+
+  social_ac_on:
+    label: "Social Hall A/C On"
+    icon: "thermostat"
+    steps:
+      # TODO: Replace with actual HA entity for Social Hall thermostat
+      - type: ha_service
+        domain: "climate"
+        service: "turn_on"
+        data: { entity_id: "climate.TODO_social_thermostat" }
+        on_fail: skip
+        message: "Social Hall thermostat entity not configured yet"
+
+  social_ac_off:
+    label: "Social Hall A/C Off"
+    icon: "thermostat"
+    confirm: "Turn off Social Hall A/C?"
+    steps:
+      # TODO: Replace with actual HA entity for Social Hall thermostat
+      - type: ha_service
+        domain: "climate"
+        service: "turn_off"
+        data: { entity_id: "climate.TODO_social_thermostat" }
+        on_fail: skip
+        message: "Social Hall thermostat entity not configured yet"
+
+  social_source_appletv:
+    label: "Social Hall Apple TV"
+    icon: "cast"
+    steps:
+      - type: moip_switch
+        tx: 6
+        rx: 7
+      - type: moip_switch
+        tx: 6
+        rx: 8
+
+  social_source_livestream:
+    label: "Social Hall Live Stream"
+    icon: "live_tv"
+    steps:
+      - type: moip_switch
+        tx: 8
+        rx: 7
+      - type: moip_switch
+        tx: 8
+        rx: 8
+
+  social_source_logo:
+    label: "Social Hall LOGO"
+    icon: "image"
+    steps:
+      - type: moip_switch
+        tx: 16
+        rx: 7
+      - type: moip_switch
+        tx: 16
+        rx: 8
+
+  social_source_announcements:
+    label: "Social Hall Announcements"
+    icon: "announcement"
+    steps:
+      - type: moip_switch
+        tx: 9
+        rx: 7
+      - type: moip_switch
+        tx: 9
+        rx: 8
+
+  social_source_camera:
+    label: "Social Hall Camera"
+    icon: "videocam"
+    steps:
+      - type: moip_switch
+        tx: 2
+        rx: 7
+      - type: moip_switch
+        tx: 2
+        rx: 8
+
+  # ---------------------------------------------------------------------------
+  # GYM
+  # ---------------------------------------------------------------------------
+
+  gym_video_on:
+    label: "Gym Video On"
+    icon: "tv"
+    steps:
+      # TODO: Replace with actual HA entity for Gym video/TV power
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.TODO_gym_video_power" }
+        on_fail: skip
+        message: "Gym video entity not configured yet"
+
+  gym_video_off:
+    label: "Gym Video Off"
+    icon: "tv_off"
+    confirm: "Turn off Gym video?"
+    steps:
+      # TODO: Replace with actual HA entity for Gym video/TV power
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.TODO_gym_video_power" }
+        on_fail: skip
+        message: "Gym video entity not configured yet"
+
+  gym_audio_on:
+    label: "Gym Audio On"
+    icon: "mic"
+    steps:
+      # TODO: Replace with actual HA entity for Gym audio power
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.TODO_gym_audio_power" }
+        on_fail: skip
+        message: "Gym audio entity not configured yet"
+
+  gym_audio_off:
+    label: "Gym Audio Off"
+    icon: "mic_off"
+    confirm: "Turn off Gym audio?"
+    steps:
+      # TODO: Replace with actual HA entity for Gym audio power
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.TODO_gym_audio_power" }
+        on_fail: skip
+        message: "Gym audio entity not configured yet"
+
+  gym_source_livestream:
+    label: "Gym Live Stream"
+    icon: "live_tv"
+    steps:
+      - type: moip_switch
+        tx: 8
+        rx: 9
+      - type: moip_switch
+        tx: 8
+        rx: 27
+
+  gym_source_logo:
+    label: "Gym LOGO"
+    icon: "image"
+    steps:
+      - type: moip_switch
+        tx: 16
+        rx: 9
+      - type: moip_switch
+        tx: 16
+        rx: 27
+
+  gym_source_announcements:
+    label: "Gym Announcements"
+    icon: "announcement"
+    steps:
+      - type: moip_switch
+        tx: 9
+        rx: 9
+      - type: moip_switch
+        tx: 9
+        rx: 27
+
+  # ---------------------------------------------------------------------------
+  # CONFERENCE ROOM
+  # ---------------------------------------------------------------------------
+
+  confroom_tv_on:
+    label: "Conference Room TV On"
+    icon: "tv"
+    steps:
+      - type: moip_ir
+        receiver: 10
+        code: "IRPowerOn"
+        message: "Sending power-on to Conference Room TV"
+
+  confroom_tv_off:
+    label: "Conference Room TV Off"
+    icon: "tv_off"
+    confirm: "Turn off Conference Room TV?"
+    steps:
+      - type: moip_ir
+        receiver: 10
+        code: "IRPowerOff"
+        message: "Powering off Conference Room TV"
+
+  confroom_hdmi1:
+    label: "HDMI 1"
+    icon: "settings_input_hdmi"
+    steps:
+      - type: moip_ir
+        receiver: 10
+        code: "IRSourceHDMI1"
+        message: "Setting Conference Room TV to HDMI 1"
+
+  confroom_hdmi2:
+    label: "HDMI 2"
+    icon: "settings_input_hdmi"
+    steps:
+      - type: moip_ir
+        receiver: 10
+        code: "IRSourceHDMI2"
+        message: "Setting Conference Room TV to HDMI 2"
+
+  confroom_source_laptop:
+    label: "Conference Room Laptop"
+    icon: "computer"
+    steps:
+      - type: moip_switch
+        tx: 5
+        rx: 10
+
+  confroom_source_livestream:
+    label: "Conference Room Live Stream"
+    icon: "live_tv"
+    steps:
+      - type: moip_switch
+        tx: 8
+        rx: 10
+
+  confroom_source_logo:
+    label: "Conference Room LOGO"
+    icon: "image"
+    steps:
+      - type: moip_switch
+        tx: 16
+        rx: 10
+
+  confroom_source_announcements:
+    label: "Conference Room Announcements"
+    icon: "announcement"
+    steps:
+      - type: moip_switch
+        tx: 9
+        rx: 10
+
 
 # =============================================================================
 # BUTTON LAYOUT
@@ -283,12 +1080,14 @@ macros:
 #              (can combine: "large danger")
 #   span     — Grid column span (default 1)
 #   confirm  — Optional confirmation message (overrides macro-level confirm)
+#   confirm_steps — Show expanded step list as checkboxes before executing
 #   state    — Optional live state binding:
 #                source   — "ha", "obs", "x32", "moip", "projectors"
 #                entity   — HA entity_id (for ha source)
 #                field    — Dot-path into cached state (for other sources)
 #                on_value — Value that means "active"
 #                on_style — CSS class when active: "active", "live", "recording"
+#   collapsed — If true, section starts collapsed (click title to expand)
 # =============================================================================
 
 buttons:
@@ -301,11 +1100,13 @@ buttons:
           action: { type: macro, macro: chapel_full_setup }
           style: "large success"
           span: 2
+          confirm_steps: true
         - label: "Full Teardown"
           icon: "power_settings_new"
           action: { type: macro, macro: chapel_full_teardown }
           style: "large danger"
           span: 2
+          confirm_steps: true
 
     - section: "Video"
       items:
@@ -361,3 +1162,238 @@ buttons:
         - label: "Announcements"
           icon: "announcement"
           action: { type: macro, macro: chapel_source_announcements }
+
+  main:
+    - section: "Video"
+      items:
+        - label: "On / Down"
+          icon: "tv"
+          action: { type: macro, macro: main_video_on }
+          style: "large"
+        - label: "Off / Up"
+          icon: "close"
+          action: { type: macro, macro: main_video_off }
+          style: "large danger"
+        - label: "Projectors Only On"
+          action: { type: macro, macro: main_proj_only_on }
+        - label: "Projectors Only Off"
+          action: { type: macro, macro: main_proj_only_off }
+        - label: "Portables Only On"
+          action: { type: macro, macro: main_port_only_on }
+        - label: "Portables Only Off"
+          action: { type: macro, macro: main_port_only_off }
+
+    - section: "Audio System"
+      items:
+        - label: "On"
+          icon: "mic"
+          action: { type: macro, macro: main_audio_on }
+          style: "large"
+          state:
+            source: ha
+            entity: "switch.wattbox_outlet_1"
+            on_value: "on"
+            on_style: "active"
+        - label: "Off"
+          icon: "close"
+          action: { type: macro, macro: main_audio_off }
+          style: "large danger"
+        - label: "AppleTV Restart"
+          action: { type: macro, macro: main_appletv_restart }
+
+    - section: "A/C"
+      items:
+        - label: "On"
+          icon: "thermostat"
+          action: { type: macro, macro: main_ac_on }
+          style: "large"
+        - label: "Off"
+          icon: "close"
+          action: { type: macro, macro: main_ac_off }
+          style: "large danger"
+
+    - section: "Video Sources"
+      items:
+        - label: "Left Podium"
+          icon: "computer"
+          action: { type: macro, macro: main_source_left_podium }
+        - label: "Right Podium"
+          icon: "computer"
+          action: { type: macro, macro: main_source_right_podium }
+        - label: "Announcements"
+          icon: "announcement"
+          action: { type: macro, macro: main_source_announcements }
+        - label: "LOGO"
+          icon: "image"
+          action: { type: macro, macro: main_source_logo }
+        - label: "Live Stream"
+          icon: "live_tv"
+          action: { type: macro, macro: main_source_livestream }
+        - label: "Apple TV"
+          icon: "cast"
+          action: { type: macro, macro: main_source_appletv }
+        - label: "Google Streamer"
+          icon: "cast_connected"
+          action: { type: macro, macro: main_source_google_streamer }
+
+    - section: "Advanced Display Settings"
+      collapsed: true
+      items:
+        - label: "PRJ Front Left ON"
+          action: { type: macro, macro: main_epson1_on }
+        - label: "PRJ Front Left OFF"
+          action: { type: macro, macro: main_epson1_off }
+        - label: "PRJ Front Right ON"
+          action: { type: macro, macro: main_epson2_on }
+        - label: "PRJ Front Right OFF"
+          action: { type: macro, macro: main_epson2_off }
+        - label: "PRJ Rear Left ON"
+          action: { type: macro, macro: main_epson3_on }
+        - label: "PRJ Rear Left OFF"
+          action: { type: macro, macro: main_epson3_off }
+        - label: "PRJ Rear Right ON"
+          action: { type: macro, macro: main_epson4_on }
+        - label: "PRJ Rear Right OFF"
+          action: { type: macro, macro: main_epson4_off }
+
+    - section: "Advanced Power Settings"
+      collapsed: true
+      items:
+        - label: "WattBox 1 ON"
+          action: { type: macro, macro: main_wattbox1_on }
+        - label: "WattBox 1 OFF"
+          action: { type: macro, macro: main_wattbox1_off }
+        - label: "WattBox 2 ON"
+          action: { type: macro, macro: main_wattbox2_on }
+        - label: "WattBox 2 OFF"
+          action: { type: macro, macro: main_wattbox2_off }
+
+    - section: "Baptism / Wedding"
+      collapsed: true
+      items:
+        - label: "Baptism Camera View"
+          icon: "videocam"
+          action: { type: macro, macro: main_baptism_camera }
+
+  social:
+    - section: "Video"
+      items:
+        - label: "On"
+          icon: "tv"
+          action: { type: macro, macro: social_video_on }
+          style: "large"
+        - label: "Off"
+          icon: "close"
+          action: { type: macro, macro: social_video_off }
+          style: "large danger"
+
+    - section: "Audio System"
+      items:
+        - label: "On"
+          icon: "mic"
+          action: { type: macro, macro: social_audio_on }
+          style: "large"
+        - label: "Off"
+          icon: "close"
+          action: { type: macro, macro: social_audio_off }
+          style: "large danger"
+
+    - section: "A/C"
+      items:
+        - label: "On"
+          icon: "thermostat"
+          action: { type: macro, macro: social_ac_on }
+          style: "large"
+        - label: "Off"
+          icon: "close"
+          action: { type: macro, macro: social_ac_off }
+          style: "large danger"
+
+    - section: "Video Sources"
+      items:
+        - label: "Apple TV"
+          icon: "cast"
+          action: { type: macro, macro: social_source_appletv }
+        - label: "Live Stream"
+          icon: "live_tv"
+          action: { type: macro, macro: social_source_livestream }
+        - label: "LOGO"
+          icon: "image"
+          action: { type: macro, macro: social_source_logo }
+        - label: "Announcements"
+          icon: "announcement"
+          action: { type: macro, macro: social_source_announcements }
+        - label: "Camera"
+          icon: "videocam"
+          action: { type: macro, macro: social_source_camera }
+
+  gym:
+    - section: "Video"
+      items:
+        - label: "On"
+          icon: "tv"
+          action: { type: macro, macro: gym_video_on }
+          style: "large"
+        - label: "Off"
+          icon: "close"
+          action: { type: macro, macro: gym_video_off }
+          style: "large danger"
+
+    - section: "Audio"
+      items:
+        - label: "On"
+          icon: "mic"
+          action: { type: macro, macro: gym_audio_on }
+          style: "large"
+        - label: "Off"
+          icon: "close"
+          action: { type: macro, macro: gym_audio_off }
+          style: "large danger"
+
+    - section: "Video Sources"
+      items:
+        - label: "Live Stream"
+          icon: "live_tv"
+          action: { type: macro, macro: gym_source_livestream }
+        - label: "LOGO"
+          icon: "image"
+          action: { type: macro, macro: gym_source_logo }
+        - label: "Announcements"
+          icon: "announcement"
+          action: { type: macro, macro: gym_source_announcements }
+
+  confroom:
+    - section: "TV Power"
+      items:
+        - label: "TV On"
+          icon: "tv"
+          action: { type: macro, macro: confroom_tv_on }
+          style: "large"
+        - label: "TV Off"
+          icon: "close"
+          action: { type: macro, macro: confroom_tv_off }
+          style: "large danger"
+
+    - section: "TV Input"
+      items:
+        - label: "HDMI 1"
+          icon: "settings_input_hdmi"
+          action: { type: macro, macro: confroom_hdmi1 }
+        - label: "HDMI 2"
+          icon: "settings_input_hdmi"
+          action: { type: macro, macro: confroom_hdmi2 }
+
+    - section: "Video Sources"
+      items:
+        - label: "Laptop"
+          icon: "computer"
+          action: { type: macro, macro: confroom_source_laptop }
+        - label: "Live Stream"
+          icon: "live_tv"
+          action: { type: macro, macro: confroom_source_livestream }
+        - label: "LOGO"
+          icon: "image"
+          action: { type: macro, macro: confroom_source_logo }
+        - label: "Announcements"
+          icon: "announcement"
+          action: { type: macro, macro: confroom_source_announcements }
