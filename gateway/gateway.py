@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional
 
 import requests as http_requests
 import yaml
-from flask import Flask, Response, jsonify, request, send_file, send_from_directory
+from flask import Flask, Response, jsonify, redirect, request, send_file, send_from_directory, session, url_for
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
 # =============================================================================
@@ -302,7 +302,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     static_dir = os.path.abspath(gateway_cfg.get("static_dir", "../frontend"))
 
     app = Flask(__name__, static_folder=None)
-    app.config["SECRET_KEY"] = os.urandom(24).hex()
+    app.config["SECRET_KEY"] = sec_cfg.get("secret_key", os.urandom(24).hex())
 
     socketio = SocketIO(app, async_mode="eventlet", cors_allowed_origins="*")
 
@@ -401,47 +401,236 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return {"error": str(e)}, 500
 
     # -------------------------------------------------------------------------
-    # SECURITY MIDDLEWARE
+    # SECURITY MIDDLEWARE (session-based, matches HealthDash pattern)
     # -------------------------------------------------------------------------
+
+    session_timeout = int(sec_cfg.get("session_timeout_minutes", 480))
+
+    def _session_is_authed() -> bool:
+        exp = session.get("auth_exp")
+        if not exp:
+            return False
+        if time.time() > float(exp):
+            session.clear()
+            return False
+        return bool(session.get("authed"))
+
+    def _is_authed() -> bool:
+        return _ip_allowed(request.remote_addr or "") or _session_is_authed()
 
     @app.before_request
     def security_check():
-        # Skip IP check for SocketIO polling (handled by SocketIO events)
+        # Skip auth for SocketIO, login page, and its static assets
         if request.path.startswith("/socket.io"):
+            return None
+        if request.path in ("/login", "/logout"):
+            return None
+
+        if _is_authed():
             return None
 
         client_ip = request.remote_addr or ""
-        if _ip_allowed(client_ip):
-            return None
 
-        # External IP — require HTTP Basic Auth if remote_auth is configured
-        if remote_auth.get("username") and remote_auth.get("password"):
-            auth = request.authorization
-            if (auth
-                    and auth.type == "basic"
-                    and auth.username == remote_auth["username"]
-                    and auth.password == remote_auth["password"]):
-                return None
-            logger.warning(f"AUTH_REQUIRED ip={client_ip} path={request.path}")
-            return Response(
-                "Authentication required",
-                401,
-                {"WWW-Authenticate": 'Basic realm="St. Paul Control Panel"'},
-            )
+        # If remote_auth is configured, redirect browsers / return 401 for API
+        if remote_auth.get("password"):
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Authentication required"}), 401
+            logger.info(f"AUTH_REDIRECT ip={client_ip} path={request.path}")
+            return redirect(url_for("login_page", next=request.path))
 
         logger.warning(f"BLOCKED ip={client_ip} path={request.path}")
         return jsonify({"error": "Unauthorized - Invalid IP"}), 403
 
     @app.after_request
     def log_response(resp):
-        # Don't log static file requests or socket.io polling
-        if request.path.startswith("/socket.io") or not request.path.startswith("/api/"):
+        # Don't log static file requests, login page, or socket.io polling
+        if request.path.startswith("/socket.io") or request.path == "/login":
+            return resp
+        if not request.path.startswith("/api/"):
             return resp
         client_ip = request.remote_addr or ""
         logger.info(
             f"[{_tablet_id()}] ip={client_ip} {request.method} {request.path} -> {resp.status_code}"
         )
         return resp
+
+    # -------------------------------------------------------------------------
+    # LOGIN / LOGOUT
+    # -------------------------------------------------------------------------
+
+    LOGIN_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In — St. Paul Control Panel</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+  <style>
+    :root {
+      --sp-dark: #343B3D;
+      --sp-light: #B4B0A5;
+      --sp-bg: #f4f3f1;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--sp-bg);
+      color: var(--sp-dark);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    nav {
+      background: var(--sp-dark);
+      color: #fff;
+      padding: 12px 20px;
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    nav img { height: 28px; width: auto; border-radius: 50%; }
+    .container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 32px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .card h1 { font-size: 22px; margin-bottom: 8px; }
+    .card .hint {
+      font-size: 14px;
+      color: #7b7f75;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    .alert {
+      background: #f8d7da;
+      color: #842029;
+      border: 1px solid #f5c2c7;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    input {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 16px;
+      border: 1px solid #d1cdc4;
+      border-radius: 6px;
+      background: #fff;
+      color: var(--sp-dark);
+      margin-bottom: 16px;
+      font-family: inherit;
+    }
+    input:focus {
+      outline: none;
+      border-color: var(--sp-dark);
+      box-shadow: 0 0 0 2px rgba(52,59,61,0.15);
+    }
+    button[type="submit"] {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      background: var(--sp-dark);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    button[type="submit"]:hover { filter: brightness(1.15); }
+    .tip {
+      font-size: 13px;
+      color: #7b7f75;
+      margin-top: 16px;
+      line-height: 1.5;
+    }
+    .tip code {
+      background: #eceae6;
+      padding: 2px 5px;
+      border-radius: 3px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <img src="/assets/images/church-seal.svg" alt="" onerror="this.style.display='none'">
+    <span>St. Paul Control Panel</span>
+  </nav>
+  <div class="container">
+    <div class="card">
+      <h1>Sign in</h1>
+      <p class="hint">
+        This network is not on the trusted IP whitelist.<br>
+        Enter your credentials to continue.
+      </p>
+      {{ERROR}}
+      <form method="post" autocomplete="on">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username"
+               autocomplete="username" autocapitalize="none" required>
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password"
+               autocomplete="current-password" required>
+        <button type="submit">Login</button>
+      </form>
+      <div class="tip">
+        Tip: add your home IP prefix to <code>allowed_ips</code> in config.yaml
+        for passwordless access.
+      </div>
+    </div>
+  </div>
+</body>
+</html>"""
+
+    @app.route("/login", methods=["GET", "POST"])
+    def login_page():
+        # Already authenticated — go straight to the app
+        if _is_authed():
+            return redirect(request.args.get("next") or "/")
+
+        error_html = ""
+        if request.method == "POST":
+            pw = request.form.get("password", "")
+            configured_pw = remote_auth.get("password", "")
+
+            if pw and pw == configured_pw:
+                session["authed"] = True
+                session["auth_exp"] = time.time() + session_timeout * 60
+                logger.info(f"LOGIN_OK ip={request.remote_addr}")
+                return redirect(request.args.get("next") or "/")
+
+            logger.warning(f"LOGIN_FAIL ip={request.remote_addr}")
+            error_html = '<div class="alert">Invalid password</div>'
+
+        return Response(
+            LOGIN_HTML.replace("{{ERROR}}", error_html),
+            content_type="text/html",
+        )
+
+    @app.route("/logout")
+    def logout():
+        session.clear()
+        return redirect("/login")
 
     # -------------------------------------------------------------------------
     # PERMISSION ENFORCEMENT
@@ -492,11 +681,13 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     def api_config():
         """Returns merged config for the frontend (devices, permissions, settings).
         API keys and secrets are stripped — this is safe to serve to browsers."""
+        obs_cfg = cfg.get("obs", {})
         safe_settings = {
             "app": settings_data.get("app", {}),
             "ptzCameras": {k: {"name": v.get("name", k), "ip": v.get("ip", "")} for k, v in cfg.get("ptz_cameras", {}).items()},
             "projectors": {k: {"displayName": v.get("name", k)} for k, v in cfg.get("projectors", {}).items()},
             "healthCheck": settings_data.get("healthCheck", {}),
+            "obs": {"maxScenes": obs_cfg.get("max_scenes", 10)},
         }
         return jsonify({
             "settings": safe_settings,
