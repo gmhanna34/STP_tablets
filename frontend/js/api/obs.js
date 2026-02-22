@@ -13,6 +13,7 @@ const ObsAPI = {
 
   init(config) {
     this.cameraMap = config?.ptzCameras || {};
+    this.maxScenes = config?.obs?.maxScenes || 10;
     this.tabletId = localStorage.getItem('tabletId') || 'WebApp';
   },
 
@@ -67,7 +68,7 @@ const ObsAPI = {
       if (sceneList?.requestResult) {
         const scenes = sceneList.requestResult.responseData.scenes;
         scenes.reverse();
-        this.state.scenes = scenes.slice(0, 16).map((s, i) => ({ index: i + 1, name: s.sceneName }));
+        this.state.scenes = scenes.slice(0, this.maxScenes).map((s, i) => ({ index: i + 1, name: s.sceneName }));
         this.scenesLoaded = true;
       }
     }

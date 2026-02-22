@@ -65,10 +65,16 @@ security:
     - "127.0.0.1"
     - "47.150."
   settings_pin: "1234"
-  # HTTP Basic Auth for access from outside the allowed IP ranges
+  secret_key: "change-me-to-a-long-random-string"
+  session_timeout_minutes: 480
+  # Login credentials for access from outside the allowed IP ranges
   remote_auth:
     username: "admin"
     password: "stpaul"
+
+# --- OBS settings -------------------------------------------------------------
+obs:
+  max_scenes: 10    # Only show the first N scenes from OBS
 
 # --- State polling intervals (seconds) ----------------------------------------
 polling:

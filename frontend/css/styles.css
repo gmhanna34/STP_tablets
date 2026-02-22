@@ -23,14 +23,14 @@
   --accent: #ff8c00;
   --info: #4fc3f7;
 
-  /* Light theme (default — matches HealthDash) */
+  /* Light theme (default) */
   --bg: var(--sp-bg);
   --surface: var(--sp-card);
   --surface-alt: #eceae6;
-  --nav-bg: var(--sp-dark);
+  --nav-bg: var(--sp-light);
   --text: var(--sp-dark);
   --text-secondary: var(--sp-muted);
-  --text-on-dark: #ffffff;
+  --text-on-nav: var(--sp-dark);
   --border: #d1cdc4;
   --border-heavy: var(--sp-light);
   --btn-bg: var(--sp-card);
@@ -51,28 +51,28 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #1a1e21;
-  --surface: #272b2e;
-  --surface-alt: #2e3235;
-  --nav-bg: #161a1d;
-  --text: #e6edf3;
-  --text-secondary: #8b949e;
-  --text-on-dark: #e6edf3;
-  --border: #3d4148;
-  --border-heavy: #555d66;
-  --btn-bg: #2e3235;
-  --btn-border: #3d4148;
-  --btn-hover: #3a3f43;
-  --input-bg: #2e3235;
-  --input-border: #3d4148;
-  --overlay-bg: rgba(0, 0, 0, 0.7);
-  --toast-bg: #2e3235;
-  --toast-text: #e6edf3;
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --scrollbar-track: rgba(255, 255, 255, 0.05);
-  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
+  --bg: var(--sp-light);
+  --surface: #c8c4b9;
+  --surface-alt: #bfbbb0;
+  --nav-bg: var(--sp-dark);
+  --text: var(--sp-dark);
+  --text-secondary: #5a5d56;
+  --text-on-nav: #ffffff;
+  --border: #9e9a8f;
+  --border-heavy: #8a867b;
+  --btn-bg: #c8c4b9;
+  --btn-border: #9e9a8f;
+  --btn-hover: #d2cec3;
+  --input-bg: #c8c4b9;
+  --input-border: #9e9a8f;
+  --overlay-bg: rgba(0, 0, 0, 0.6);
+  --toast-bg: var(--sp-dark);
+  --toast-text: #ffffff;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.15);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --scrollbar-track: rgba(0, 0, 0, 0.08);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.2);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.3);
 }
 
 /* ── Reset & Base ─────────────────────────────────────────── */
@@ -110,7 +110,7 @@ body {
 #status-bar {
   flex: 0 0 40px;
   background: var(--nav-bg);
-  color: var(--text-on-dark);
+  color: var(--text-on-nav);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -155,7 +155,7 @@ body {
   border: none;
   cursor: pointer;
   padding: 4px;
-  color: var(--text-on-dark);
+  color: var(--text-on-nav);
   opacity: 0.7;
   transition: opacity 0.2s;
   -webkit-tap-highlight-color: transparent;
@@ -190,7 +190,7 @@ body {
   display: flex;
   justify-content: space-evenly;
   align-items: center;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border);
   z-index: 100;
   padding: 0 4px;
 }
@@ -215,30 +215,33 @@ body {
 
 .nav-item .material-icons {
   font-size: 28px;
-  color: rgba(255, 255, 255, 0.6);
-  transition: color 0.2s;
+  color: var(--text-on-nav);
+  opacity: 0.6;
+  transition: all 0.2s;
 }
 
 .nav-item .nav-label {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--text-on-nav);
+  opacity: 0.6;
   margin-top: 2px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
-  transition: color 0.2s;
+  transition: all 0.2s;
 }
 
 .nav-item.active .material-icons,
 .nav-item.active .nav-label {
   color: var(--accent);
+  opacity: 1;
 }
 
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .nav-item:active {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.12);
 }
 
 .nav-item.hidden {
