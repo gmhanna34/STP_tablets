@@ -78,9 +78,8 @@
       { "id": 44, "name": "ATEMInput1_PIP", "location": "AV Room" },
       { "id": 45, "name": "ATEMInput2", "location": "AV Room" },
       { "id": 46, "name": "MC_HDMITransmitter", "location": "Main Church" },
-      { "id": 47, "name": "Chapel_HDMITransmitter", "location": "Chapel" }
+      { "id": 47, "name": "Chapel_HDMITransmitter", "location": "Chapel" },
       { "id": 48, "name": "Spare", "location": "AV Room" }
-	  
     ],
     "irCodes": {
 		"IRPowerOn":          "0000 006D 0022 0000 00AC 00AC 0015 0040 0015 0040 0015 0040 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0040 0015 0040 0015 0040 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0040 0015 0015 0015 0015 0015 0040 0015 0040 0015 0015 0015 0015 0015 0040 0015 0015 0015 0040 0015 0040 0015 0015 0015 0015 0015 0040 0015 0040 0015 0015 0015 0689",
