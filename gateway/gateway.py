@@ -239,7 +239,7 @@ class MockBackend:
     """Returns canned responses for all subsystems when --mock is used."""
 
     MOIP_RECEIVERS = {
-        str(i): {"id": i, "name": f"Receiver {i}", "connectedTx": 1}
+        str(i): {"receiver_id": str(i), "transmitter_id": str(1), "connected": True}
         for i in range(1, 29)
     }
 

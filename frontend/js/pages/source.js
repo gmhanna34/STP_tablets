@@ -39,6 +39,11 @@ const SourcePage = {
     const container = document.getElementById('routing-container');
     if (!container) return;
 
+    if (!this.receivers.length) {
+      container.innerHTML = '<div class="text-center" style="color:#cc0000;">No receivers configured. Check device configuration.</div>';
+      return;
+    }
+
     // Group receivers by location
     const groups = {};
     this.receivers.forEach(rx => {
