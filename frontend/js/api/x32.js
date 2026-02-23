@@ -50,7 +50,7 @@ const X32API = {
         id: i,
         name: raw[`ch${i}name`] || `Ch ${i}`,
         muted: raw[`ch${i}mutestatus`] || '',
-        volume: raw[`ch${i}vol`] !== undefined ? parseFloat(raw[`ch${i}vol`]) : 0
+        volume: raw[`ch${i}vol`] !== undefined ? parseFloat(raw[`ch${i}vol`]) / 100 : 0
       });
     }
 
@@ -60,7 +60,7 @@ const X32API = {
         id: a,
         name: raw[`aux${a}_name`] || `Aux ${a}`,
         muted: raw[`aux${a}_mutestatus`] || '',
-        volume: raw[`aux${a}vol`] !== undefined ? parseFloat(raw[`aux${a}vol`]) : 0
+        volume: raw[`aux${a}vol`] !== undefined ? parseFloat(raw[`aux${a}vol`]) / 100 : 0
       });
     }
 
