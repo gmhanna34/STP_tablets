@@ -15,11 +15,13 @@ const App = {
     // Load configuration from gateway
     try {
       const configResp = await fetch('/api/config');
+      if (!configResp.ok) throw new Error(`Config response ${configResp.status}`);
       const config = await configResp.json();
+      if (!config.devices) throw new Error('Config missing devices');
       this.settings = config.settings || {};
       this.devicesConfig = config.devices || {};
     } catch (e) {
-      console.warn('Gateway config unavailable, falling back to static files');
+      console.warn('Gateway config unavailable, falling back to static files:', e.message);
       try {
         const [settingsResp, devicesResp] = await Promise.all([
           fetch('config/settings.json'),
