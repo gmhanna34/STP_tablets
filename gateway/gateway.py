@@ -15,6 +15,9 @@ Usage:
 
 from __future__ import annotations
 
+import eventlet
+eventlet.monkey_patch()
+
 import argparse
 import copy
 import json
