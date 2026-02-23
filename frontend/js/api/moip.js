@@ -29,7 +29,7 @@ const MoIPAPI = {
 
   async poll() {
     const data = await this.sendCommand('/receivers');
-    if (data) this.state.receivers = data;
+    if (data && !data.error) this.state.receivers = data;
     return this.state;
   },
 
