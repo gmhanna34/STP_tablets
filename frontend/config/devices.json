@@ -115,146 +115,54 @@
       }
     ],
     "receivers": [
-      {
-        "id": 1,
-        "name": "Hall_VideoWallLeftP1",
-        "location": "SocialHall"
-      },
-      {
-        "id": 2,
-        "name": "Hall_VideoWallLeftP2",
-        "location": "SocialHall"
-      },
-      {
-        "id": 3,
-        "name": "Hall_VideoWallLeftP3",
-        "location": "SocialHall"
-      },
-      {
-        "id": 4,
-        "name": "Hall_VideoWallLeftP4",
-        "location": "SocialHall"
-      },
-      {
-        "id": 5,
-        "name": "Hall_VideoWallRightP1",
-        "location": "SocialHall"
-      },
-      {
-        "id": 6,
-        "name": "Hall_VideoWallRightP2",
-        "location": "SocialHall"
-      },
-      {
-        "id": 7,
-        "name": "Hall_VideoWallRightP3",
-        "location": "SocialHall"
-      },
-      {
-        "id": 8,
-        "name": "Hall_VideoWallRightP4",
-        "location": "SocialHall"
-      },
-      {
-        "id": 9,
-        "name": "Chapel_Portable_IR",
-        "location": "Chapel"
-      },
-      {
-        "id": 10,
-        "name": "AV_SlideInput_SDI",
-        "location": "AV Room"
-      },
-      {
-        "id": 11,
-        "name": "VideoWall_Left",
-        "location": "SocialHall"
-      },
-      {
-        "id": 12,
-        "name": "VideoWall_Right",
-        "location": "SocialHall"
-      },
-      {
-        "id": 13,
-        "name": "SS_AngesIPreK",
-        "location": "Sunday School"
-      },
-      {
-        "id": 14,
-        "name": "SS_AngesIIKinder",
-        "location": "Sunday School"
-      },
-      {
-        "id": 15,
-        "name": "SS_1st2nd",
-        "location": "Sunday School"
-      },
-      {
-        "id": 16,
-        "name": "Receiver 16",
-        "location": "Sunday School"
-      },
-      {
-        "id": 17,
-        "name": "Receiver 17",
-        "location": "MainChurch"
-      },
-      {
-        "id": 18,
-        "name": "Receiver 18",
-        "location": "MainChurch"
-      },
-      {
-        "id": 19,
-        "name": "Receiver 19",
-        "location": "MainChurch"
-      },
-      {
-        "id": 20,
-        "name": "Receiver 20",
-        "location": "MainChurch"
-      },
-      {
-        "id": 21,
-        "name": "Receiver 21",
-        "location": "MainChurch"
-      },
-      {
-        "id": 22,
-        "name": "Receiver 22",
-        "location": "MainChurch"
-      },
-      {
-        "id": 23,
-        "name": "Receiver 23",
-        "location": "SocialHall"
-      },
-      {
-        "id": 24,
-        "name": "Receiver 24",
-        "location": "SocialHall"
-      },
-      {
-        "id": 25,
-        "name": "Receiver 25",
-        "location": "SocialHall"
-      },
-      {
-        "id": 26,
-        "name": "Receiver 26",
-        "location": "BaptismRoom"
-      },
-      {
-        "id": 27,
-        "name": "Receiver 27",
-        "location": "Gym"
-      },
-      {
-        "id": 28,
-        "name": "Receiver 28",
-        "location": "Office"
-      }
+      { "id": 1,  "name": "Hall_VideoWallLeftP1", "location": "SocialHall" },
+      { "id": 2,  "name": "Hall_VideoWallLeftP2", "location": "SocialHall" },
+      { "id": 3,  "name": "Hall_VideoWallLeftP3", "location": "SocialHall" },
+      { "id": 4,  "name": "Hall_VideoWallLeftP4", "location": "SocialHall" },
+      { "id": 5,  "name": "Hall_VideoWallRightP1", "location": "SocialHall" },
+      { "id": 6,  "name": "Hall_VideoWallRightP2", "location": "SocialHall" },
+      { "id": 7,  "name": "Hall_VideoWallRightP3", "location": "SocialHall" },
+      { "id": 8,  "name": "Hall_VideoWallRightP4", "location": "SocialHall" },
+      { "id": 9,  "name": "Chapel_Portable_IR", "location": "Chapel" },
+      { "id": 10, "name": "AV_SlideInput_SDI", "location": "AV Room" },
+      { "id": 11, "name": "VideoWall_Left", "location": "SocialHall" },
+      { "id": 12, "name": "VideoWall_Right", "location": "SocialHall" },
+      { "id": 13, "name": "SS_AngesIPreK", "location": "Sunday School" },
+      { "id": 14, "name": "SS_AngesIIKinder", "location": "Sunday School" },
+      { "id": 15, "name": "SS_1st2nd", "location": "Sunday School" },
+      { "id": 16, "name": "SS_3rd4th", "location": "Sunday School" },
+      { "id": 17, "name": "SS_5th6th", "location": "Sunday School" },
+      { "id": 18, "name": "Ofc_Andrew", "location": "Sunday School" },
+      { "id": 19, "name": "AV_AnnounceVideoInput", "location": "AV Room" },
+      { "id": 20, "name": "Ofc_Kyrillos", "location": "Sunday School" },
+      { "id": 21, "name": "SS_HighSchool", "location": "Sunday School" },
+      { "id": 22, "name": "AV_SlideInput", "location": "AV Room" },
+      { "id": 23, "name": "OldP5", "location": "Sunday School" },
+      { "id": 24, "name": "AV_StreamingAudio", "location": "AV Room" },
+      { "id": 25, "name": "Hall_RackInput", "location": "SocialHall" },
+      { "id": 26, "name": "Lounge", "location": "Lounge" },
+      { "id": 27, "name": "HamalRoom", "location": "Hamal" },
+      { "id": 28, "name": "ConfRoom_Left", "location": "Conference Room" }
+      { "id": 29, "name": "ConfRoom_Right", "location": "Conference Room" }
+      { "id": 30, "name": "SS_7th8th", "location": "Sunday School" },
+      { "id": 31, "name": "AV_CenterMonitor", "location": "AV Room" },
+      { "id": 32, "name": "AV_X32ReceiveToX32", "location": "AV Room" },
+      { "id": 33, "name": "SS_Open", "location": "Sunday School" },
+      { "id": 34, "name": "MainChurch_PortableTV", "location": "Main Church" },
+      { "id": 35, "name": "MainChurch_CryRoom", "location": "Main Church" },
+      { "id": 36, "name": "MainChurch_FrontLeft", "location": "Main Church" },
+      { "id": 37, "name": "MainChurch_FrontRight", "location": "Main Church" }
+      { "id": 38, "name": "MainChurch_RearRight", "location": "Main Church" }
+      { "id": 39, "name": "MainChurch_RearLeft", "location": "Main Church" }
+      { "id": 40, "name": "AV_AnnounceAudioInput", "location": "AV Room" },
+      { "id": 41, "name": "Spare", "location": "AV Room" },
+      { "id": 42, "name": "ATEMAudioInput", "location": "AV Room" },
+      { "id": 43, "name": "AudioReceiverSpare", "location": "AV Room" },
+      { "id": 44, "name": "ATEMInput1_PIP", "location": "AV Room" },
+      { "id": 45, "name": "ATEMInput2", "location": "AV Room" },
+      { "id": 46, "name": "MC_HDMITransmitter", "location": "Main Church" },
+      { "id": 47, "name": "Chapel_HDMITransmitter", "location": "Chapel" },
+      { "id": 48, "name": "Spare", "location": "AV Room" }
     ],
     "irCodes": {
       "IRPowerOn": "0000 006D 0022 0000 00AC 00AC 0015 0040 0015 0040 0015 0040 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0040 0015 0040 0015 0040 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0015 0040 0015 0015 0015 0015 0015 0040 0015 0040 0015 0015 0015 0015 0015 0040 0015 0015 0015 0040 0015 0040 0015 0015 0015 0015 0015 0040 0015 0040 0015 0015 0015 0689",
