@@ -302,7 +302,12 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     """Create and configure the Flask app + SocketIO instance."""
 
     gateway_cfg = cfg.get("gateway", {})
-    static_dir = os.path.abspath(gateway_cfg.get("static_dir", "../frontend"))
+    # Resolve static_dir relative to this file's directory, not CWD,
+    # so that "../frontend" works regardless of where the process is started.
+    _gateway_dir = os.path.dirname(os.path.abspath(__file__))
+    static_dir = os.path.normpath(
+        os.path.join(_gateway_dir, gateway_cfg.get("static_dir", "../frontend"))
+    )
     sec_cfg = cfg.get("security", {})
 
     app = Flask(__name__, static_folder=None)
