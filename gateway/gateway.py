@@ -973,7 +973,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                                      b'\x00\x00\x01\x00\x01\x00\x00\xff\xd9'),
                              mimetype="image/jpeg")
 
-        snapshot_path = cam.get("snapshot_path", "/cgi-bin/snapshot.cgi")
+        snapshot_path = cam.get("snapshot_path", "/snapshot.jpg")
         url = f"http://{cam['ip']}{snapshot_path}"
         try:
             resp = http_requests.get(url, timeout=3)
@@ -1195,13 +1195,18 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             if eid.startswith("binary_sensor.") and attrs.get("device_class") == "door":
                 base = eid.replace("binary_sensor.", "").replace("_position", "").replace("_dps", "")
                 door_sensors[base] = entity.get("state", "unknown")
-            elif eid.startswith("input_select."):
-                base = eid.replace("input_select.", "").replace("_lock_rule", "").replace("_locking_rule", "")
+            # Lock rule: match select.* or input_select.* with "lock_rule" / "locking_rule"
+            elif (eid.startswith("select.") or eid.startswith("input_select.")) and ("lock_rule" in eid or "locking_rule" in eid):
+                base = eid.split(".", 1)[1]
+                for suffix in ("_lock_rule", "_locking_rule"):
+                    base = base.replace(suffix, "")
                 lock_rules[base] = eid
-            elif eid.startswith("input_number."):
-                if "duration" in eid or "custom" in eid:
-                    base = eid.replace("input_number.", "").replace("_custom_duration", "").replace("_duration", "")
-                    lock_durations[base] = eid
+            # Duration: match number.* or input_number.* with "duration" or "custom"
+            elif (eid.startswith("number.") or eid.startswith("input_number.")) and ("duration" in eid or "custom" in eid):
+                base = eid.split(".", 1)[1]
+                for suffix in ("_custom_duration", "_duration", "_custom_unlock_time"):
+                    base = base.replace(suffix, "")
+                lock_durations[base] = eid
 
         locks = []
         for entity in all_entities:
