@@ -16,7 +16,6 @@ const Router = {
       stream: StreamPage,
       source: SourcePage,
       security: SecurityPage,
-      access: AccessControlPage,
       settings: SettingsPage
     };
 
