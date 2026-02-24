@@ -421,6 +421,10 @@ const SecurityPage = {
       existing.state = lock.state;
       existing.door_open = lock.door_open;
       existing.changed_by = lock.changed_by;
+      existing.lock_rule_entity = lock.lock_rule_entity;
+      existing.lock_rule_options = lock.lock_rule_options;
+      existing.duration_entity = lock.duration_entity;
+      existing.duration_attrs = lock.duration_attrs;
 
       const safeId = lock.entity_id.replace(/\./g, '_');
       const card = document.getElementById(`card-${safeId}`);
@@ -489,7 +493,11 @@ const SecurityPage = {
       const result = await this._showUnlockConfirm(count);
       if (!result) return;
 
-      if (result.duration > 0) {
+      if (result.duration === -1) {
+        // "Until Re-Locked" — use the "Keep Unlocked" HA option
+        App.showToast(`Unlocking ${count} door${plural} until re-locked...`);
+        await this._executeBatchKeepUnlocked(entities);
+      } else if (result.duration > 0) {
         App.showToast(`Unlocking ${count} door${plural} for ${result.duration} min...`);
         await this._executeBatchTimedUnlock(entities, result.duration);
       } else {
@@ -516,7 +524,7 @@ const SecurityPage = {
           <div class="confirm-message">Unlock ${doorCount} door${plural}?</div>
           <div style="margin:16px 0 8px;font-weight:600;font-size:14px;">Unlock duration:</div>
           <div class="duration-chips" style="justify-content:center;margin-bottom:16px;">
-            <button class="btn btn-sm duration-chip" data-dur="0">Until re-locked</button>
+            <button class="btn btn-sm duration-chip" data-dur="-1">Until re-locked</button>
             <button class="btn btn-sm duration-chip" data-dur="5">5 min</button>
             <button class="btn btn-sm duration-chip active" data-dur="10">10 min</button>
             <button class="btn btn-sm duration-chip" data-dur="15">15 min</button>
@@ -570,16 +578,22 @@ const SecurityPage = {
     await Promise.all(promises);
   },
 
+  _findRuleOption(lock, keyword) {
+    // Find the actual HA option string that contains the keyword (case-insensitive)
+    if (!lock.lock_rule_options || !Array.isArray(lock.lock_rule_options)) return null;
+    return lock.lock_rule_options.find(opt => opt.toLowerCase().includes(keyword.toLowerCase())) || null;
+  },
+
   async _executeBatchTimedUnlock(entities, minutes) {
     // For each door that has a lock_rule_entity, use timed unlock;
     // for others, fall back to simple unlock
     const promises = entities.map(async (eid) => {
       const lock = this._locks.find(l => l.entity_id === eid);
-      if (lock && lock.duration_entity && lock.lock_rule_entity) {
-        // Derive domain from entity_id (select.* or input_select.*, number.* or input_number.*)
+      const customOption = lock ? this._findRuleOption(lock, 'custom') : null;
+      if (lock && lock.duration_entity && lock.lock_rule_entity && customOption) {
         const durDomain = lock.duration_entity.split('.')[0];
         const ruleDomain = lock.lock_rule_entity.split('.')[0];
-        // Set duration then trigger custom rule
+        // Set duration first, then trigger the custom rule
         await fetch(`/api/ha/service/${durDomain}/set_value`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
@@ -588,10 +602,34 @@ const SecurityPage = {
         await fetch(`/api/ha/service/${ruleDomain}/select_option`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
-          body: JSON.stringify({ entity_id: lock.lock_rule_entity, option: 'custom' }),
+          body: JSON.stringify({ entity_id: lock.lock_rule_entity, option: customOption }),
         }).catch(() => null);
       } else {
         // No rule entity — simple unlock
+        await fetch('/api/ha/service/lock/unlock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          body: JSON.stringify({ entity_id: eid }),
+        }).catch(() => null);
+      }
+    });
+    await Promise.all(promises);
+  },
+
+  async _executeBatchKeepUnlocked(entities) {
+    // Use the "Keep Unlocked" HA option for each door
+    const promises = entities.map(async (eid) => {
+      const lock = this._locks.find(l => l.entity_id === eid);
+      const keepOption = lock ? this._findRuleOption(lock, 'keep') : null;
+      if (lock && lock.lock_rule_entity && keepOption) {
+        const ruleDomain = lock.lock_rule_entity.split('.')[0];
+        await fetch(`/api/ha/service/${ruleDomain}/select_option`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          body: JSON.stringify({ entity_id: lock.lock_rule_entity, option: keepOption }),
+        }).catch(() => null);
+      } else {
+        // Fallback: simple unlock
         await fetch('/api/ha/service/lock/unlock', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
@@ -651,8 +689,9 @@ const SecurityPage = {
       <div class="door-panel-timed">
         <div style="font-weight:600;margin-bottom:10px;">Timed Unlock</div>
         <div class="duration-chips">
+          <button class="btn btn-sm duration-chip" data-minutes="-1">Until re-locked</button>
           <button class="btn btn-sm duration-chip" data-minutes="5">5 min</button>
-          <button class="btn btn-sm duration-chip" data-minutes="10">10 min</button>
+          <button class="btn btn-sm duration-chip active" data-minutes="10">10 min</button>
           <button class="btn btn-sm duration-chip" data-minutes="15">15 min</button>
           <button class="btn btn-sm duration-chip" data-minutes="30">30 min</button>
           <button class="btn btn-sm duration-chip" data-minutes="60">1 hr</button>
@@ -691,32 +730,48 @@ const SecurityPage = {
         body.querySelectorAll('.duration-chip').forEach(c => c.classList.remove('active'));
         chip.classList.add('active');
         const label = body.querySelector('#timed-label');
-        if (label) label.textContent = `Unlock for ${selectedMinutes >= 60 ? (selectedMinutes / 60) + ' hr' : selectedMinutes + ' min'}`;
+        if (label) {
+          if (selectedMinutes === -1) {
+            label.textContent = 'Keep Unlocked';
+          } else {
+            label.textContent = `Unlock for ${selectedMinutes >= 60 ? (selectedMinutes / 60) + ' hr' : selectedMinutes + ' min'}`;
+          }
+        }
       });
     });
 
-    const default10 = body.querySelector('.duration-chip[data-minutes="10"]');
-    if (default10) default10.classList.add('active');
-
     body.querySelector('#panel-btn-timed')?.addEventListener('click', async () => {
-      if (!lock.duration_entity || !lock.lock_rule_entity) return;
+      if (!lock.lock_rule_entity) return;
 
-      App.showToast(`Unlocking ${lock.friendly_name} for ${selectedMinutes} min...`);
-
-      const durDomain = lock.duration_entity.split('.')[0];
       const ruleDomain = lock.lock_rule_entity.split('.')[0];
 
-      await fetch(`/api/ha/service/${durDomain}/set_value`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
-        body: JSON.stringify({ entity_id: lock.duration_entity, value: selectedMinutes }),
-      }).catch(() => null);
-
-      await fetch(`/api/ha/service/${ruleDomain}/select_option`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
-        body: JSON.stringify({ entity_id: lock.lock_rule_entity, option: 'custom' }),
-      }).catch(() => null);
+      if (selectedMinutes === -1) {
+        // "Until Re-Locked" — use the "Keep Unlocked" HA option
+        const keepOption = this._findRuleOption(lock, 'keep');
+        if (!keepOption) { App.showToast('Keep Unlocked option not found', 'error'); return; }
+        App.showToast(`Keeping ${lock.friendly_name} unlocked until re-locked...`);
+        await fetch(`/api/ha/service/${ruleDomain}/select_option`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          body: JSON.stringify({ entity_id: lock.lock_rule_entity, option: keepOption }),
+        }).catch(() => null);
+      } else {
+        // Timed unlock — set duration then trigger custom rule
+        const customOption = this._findRuleOption(lock, 'custom');
+        if (!customOption || !lock.duration_entity) { App.showToast('Timed unlock not available', 'error'); return; }
+        App.showToast(`Unlocking ${lock.friendly_name} for ${selectedMinutes} min...`);
+        const durDomain = lock.duration_entity.split('.')[0];
+        await fetch(`/api/ha/service/${durDomain}/set_value`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          body: JSON.stringify({ entity_id: lock.duration_entity, value: selectedMinutes }),
+        }).catch(() => null);
+        await fetch(`/api/ha/service/${ruleDomain}/select_option`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          body: JSON.stringify({ entity_id: lock.lock_rule_entity, option: customOption }),
+        }).catch(() => null);
+      }
 
       setTimeout(() => this._refreshLocks(), 1000);
     });

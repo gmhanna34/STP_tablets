@@ -1185,28 +1185,41 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         cameras.sort(key=lambda c: c["friendly_name"])
 
         # --- locks ---
-        door_sensors = {}
-        lock_rules = {}
-        lock_durations = {}
+        # Collect candidate entities by type, indexed by full entity state
+        door_sensors = {}     # base_name -> state string
+        rule_candidates = {}  # entity_id -> {name, state, options}
+        dur_candidates = {}   # entity_id -> {name, state, attrs}
+        entity_by_id = {}     # entity_id -> full entity object
 
         for entity in all_entities:
             eid = entity.get("entity_id", "")
             attrs = entity.get("attributes", {})
+            entity_by_id[eid] = entity
+
             if eid.startswith("binary_sensor.") and attrs.get("device_class") == "door":
                 base = eid.replace("binary_sensor.", "").replace("_position", "").replace("_dps", "")
                 door_sensors[base] = entity.get("state", "unknown")
-            # Lock rule: match select.* or input_select.* with "lock_rule" / "locking_rule"
-            elif (eid.startswith("select.") or eid.startswith("input_select.")) and ("lock_rule" in eid or "locking_rule" in eid):
-                base = eid.split(".", 1)[1]
-                for suffix in ("_lock_rule", "_locking_rule"):
-                    base = base.replace(suffix, "")
-                lock_rules[base] = eid
-            # Duration: match number.* or input_number.* with "duration" or "custom"
-            elif (eid.startswith("number.") or eid.startswith("input_number.")) and ("duration" in eid or "custom" in eid):
-                base = eid.split(".", 1)[1]
-                for suffix in ("_custom_duration", "_duration", "_custom_unlock_time"):
-                    base = base.replace(suffix, "")
-                lock_durations[base] = eid
+            elif (eid.startswith("select.") or eid.startswith("input_select.")):
+                name = eid.split(".", 1)[1]
+                if "lock_rule" in name or "locking_rule" in name:
+                    rule_candidates[eid] = name
+            elif (eid.startswith("number.") or eid.startswith("input_number.")):
+                name = eid.split(".", 1)[1]
+                if any(kw in name for kw in ("interval", "duration", "custom", "unlock_time")):
+                    dur_candidates[eid] = name
+
+        def _find_best_match(base_name, candidates):
+            """Find the candidate whose name shares the longest common prefix."""
+            # Try variants: full name, without _door suffix
+            variants = [base_name]
+            if base_name.endswith("_door"):
+                variants.append(base_name[:-5])
+            best_eid, best_len = None, 0
+            for eid, cname in candidates.items():
+                for v in variants:
+                    if v in cname and len(v) > best_len:
+                        best_eid, best_len = eid, len(v)
+            return best_eid
 
         locks = []
         for entity in all_entities:
@@ -1215,6 +1228,27 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 continue
             attrs = entity.get("attributes", {})
             base_name = eid.replace("lock.", "")
+
+            matched_rule = _find_best_match(base_name, rule_candidates)
+            matched_dur = _find_best_match(base_name, dur_candidates)
+
+            # Get the rule entity's options so the frontend uses the exact strings
+            rule_options = None
+            if matched_rule and matched_rule in entity_by_id:
+                rule_attrs = entity_by_id[matched_rule].get("attributes", {})
+                rule_options = rule_attrs.get("options", [])
+
+            # Get the duration entity's min/max/step
+            dur_attrs_out = None
+            if matched_dur and matched_dur in entity_by_id:
+                da = entity_by_id[matched_dur].get("attributes", {})
+                dur_attrs_out = {
+                    "min": da.get("min", 1),
+                    "max": da.get("max", 60),
+                    "step": da.get("step", 1),
+                    "current": entity_by_id[matched_dur].get("state", "10"),
+                }
+
             locks.append({
                 "entity_id": eid,
                 "friendly_name": attrs.get("friendly_name", eid),
@@ -1222,8 +1256,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 "supported_features": attrs.get("supported_features", 0),
                 "changed_by": attrs.get("changed_by", ""),
                 "door_open": door_sensors.get(base_name, None),
-                "lock_rule_entity": lock_rules.get(base_name, None),
-                "duration_entity": lock_durations.get(base_name, None),
+                "lock_rule_entity": matched_rule,
+                "lock_rule_options": rule_options,
+                "duration_entity": matched_dur,
+                "duration_attrs": dur_attrs_out,
             })
         locks.sort(key=lambda l: l["friendly_name"])
 
