@@ -620,7 +620,7 @@ const SecurityPage = {
     // Use the "Keep Unlocked" HA option for each door
     const promises = entities.map(async (eid) => {
       const lock = this._locks.find(l => l.entity_id === eid);
-      const keepOption = lock ? this._findRuleOption(lock, 'keep') : null;
+      const keepOption = lock ? this._findRuleOption(lock, 'keep_unlock') : null;
       if (lock && lock.lock_rule_entity && keepOption) {
         const ruleDomain = lock.lock_rule_entity.split('.')[0];
         await fetch(`/api/ha/service/${ruleDomain}/select_option`, {
@@ -746,9 +746,9 @@ const SecurityPage = {
       const ruleDomain = lock.lock_rule_entity.split('.')[0];
 
       if (selectedMinutes === -1) {
-        // "Until Re-Locked" — use the "Keep Unlocked" HA option
-        const keepOption = this._findRuleOption(lock, 'keep');
-        if (!keepOption) { App.showToast('Keep Unlocked option not found', 'error'); return; }
+        // "Until Re-Locked" — use the "keep_unlock" HA option
+        const keepOption = this._findRuleOption(lock, 'keep_unlock');
+        if (!keepOption) { App.showToast('Keep Unlock option not found', 'error'); return; }
         App.showToast(`Keeping ${lock.friendly_name} unlocked until re-locked...`);
         await fetch(`/api/ha/service/${ruleDomain}/select_option`, {
           method: 'POST',
