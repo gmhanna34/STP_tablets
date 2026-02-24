@@ -1281,6 +1281,21 @@ body {
   filter: brightness(1.1);
 }
 
+/* ── HA Entity Browser ────────────────────────────────────── */
+
+#ha-results table {
+  font-size: 12px;
+  font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+}
+
+#ha-results tr:hover {
+  background: var(--surface-alt);
+}
+
+#ha-results td:first-child:hover {
+  text-decoration: underline;
+}
+
 /* ── Toast Notifications ──────────────────────────────────── */
 
 .toast {
