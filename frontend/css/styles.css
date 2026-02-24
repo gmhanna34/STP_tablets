@@ -487,6 +487,61 @@ body {
   color: #fff;
 }
 
+/* Active-danger state (red) — for streaming/recording toggles */
+.btn.active-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  animation: pulse 1.5s infinite;
+}
+
+/* ── Badges ──────────────────────────────────────────────── */
+
+.btn {
+  position: relative;
+}
+
+.btn-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--sp-dark);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 8px;
+  line-height: 1.2;
+  min-width: 20px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.btn.active .btn-badge,
+.btn.active-danger .btn-badge,
+.btn.live .btn-badge,
+.btn.recording .btn-badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+
+/* ── Disabled State (disabled_when) ──────────────────────── */
+
+.btn.btn-disabled-state {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+  filter: grayscale(40%);
+}
+
+/* ── Long Press Visual Feedback ──────────────────────────── */
+
+.btn.long-press-fire {
+  transform: scale(0.93);
+  transition: transform 0.1s;
+}
+
 /* ── Slider / Volume Controls ─────────────────────────────── */
 
 .slider-control {

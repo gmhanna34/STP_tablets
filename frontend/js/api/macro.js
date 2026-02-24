@@ -3,6 +3,7 @@ const MacroAPI = {
   _buttonCache: {},
   _stateCache: {},
   _stateListeners: [],
+  _longPressDelay: 800,
 
   init() {
     this.tabletId = localStorage.getItem('tabletId') || 'WebApp';
@@ -141,6 +142,52 @@ const MacroAPI = {
     return String(value) === String(on_value);
   },
 
+  // Resolve raw value from state cache (for badges and disabled_when)
+  resolveValue(binding) {
+    if (!binding) return null;
+    const { source, entity, field, attribute } = binding;
+
+    if (source === 'ha') {
+      const haStates = this._stateCache.ha || {};
+      const entityState = haStates[entity];
+      if (!entityState) return null;
+      if (attribute) return entityState.attributes?.[attribute];
+      return entityState.state;
+    }
+
+    const sourceData = this._stateCache[source];
+    if (!sourceData || !field) return null;
+    return field.split('.').reduce((obj, key) => obj && obj[key], sourceData);
+  },
+
+  // Check disabled_when condition — returns true if button should be disabled
+  _checkDisabledWhen(condition) {
+    if (!condition) return false;
+    const currentValue = this.resolveValue(condition);
+    if (currentValue === null || currentValue === undefined) return false;
+    return String(currentValue) === String(condition.value);
+  },
+
+  // Format a badge value for display
+  _formatBadge(value, format) {
+    if (value === null || value === undefined) return '--';
+    switch (format) {
+      case 'temp': return `${Math.round(Number(value))}\u00B0F`;
+      case 'percent': return `${Math.round(Number(value))}%`;
+      case 'duration': {
+        const secs = Number(value);
+        if (isNaN(secs)) return String(value);
+        const h = Math.floor(secs / 3600);
+        const m = Math.floor((secs % 3600) / 60);
+        const s = Math.floor(secs % 60);
+        return h > 0
+          ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+          : `${m}:${String(s).padStart(2, '0')}`;
+      }
+      default: return String(value);
+    }
+  },
+
   // -----------------------------------------------------------------------
   // Dynamic button renderer
   // -----------------------------------------------------------------------
@@ -154,28 +201,72 @@ const MacroAPI = {
     container.innerHTML = sections.map(section => {
       const isCollapsed = section.collapsed === true;
       const collapseClass = isCollapsed ? ' collapsed' : '';
-      const toggleAttr = isCollapsed ? ' data-collapsible="true"' : '';
+      const collapseAttr = isCollapsed ? ' data-collapsible="true"' : '';
+      const sectionDisabled = this._checkDisabledWhen(section.disabled_when);
 
       return `
-      <div class="control-section${collapseClass}"${toggleAttr}>
+      <div class="control-section${collapseClass}"${collapseAttr}>
         <div class="section-title${isCollapsed ? ' section-title-toggle' : ''}">${section.section || ''}${isCollapsed ? '<span class="material-icons section-toggle-icon">expand_more</span>' : ''}</div>
         <div class="control-grid${isCollapsed ? ' section-content-collapsed' : ''}">
           ${(section.items || []).map((item, idx) => {
             const spanStyle = item.span ? `grid-column: span ${item.span};` : '';
-            const styleClasses = this._resolveStyleClasses(item);
-            const stateActive = this.resolveState(item.state);
-            const stateClass = stateActive === true ? (item.state?.on_style || 'active') : '';
-            const confirmAttr = this._resolveConfirm(item, macros);
-            const confirmSteps = item.confirm_steps ? ' data-confirm-steps="true"' : '';
 
-            return `<button class="btn ${styleClasses} ${stateClass}"
+            // Toggle buttons: resolve current appearance from state
+            let label = item.label || '';
+            let icon = item.icon || '';
+            let styleClasses = this._resolveStyleClasses(item);
+            let stateClass = '';
+            let confirmAttr = this._resolveConfirm(item, macros);
+            let confirmSteps = item.confirm_steps ? ' data-confirm-steps="true"' : '';
+            let isToggle = '';
+            let badgeHtml = '';
+            let longPressAttr = '';
+
+            if (item.toggle) {
+              const isOn = this.resolveState(item.toggle.state);
+              const resolved = isOn ? item.toggle.on : item.toggle.off;
+              label = resolved.label || label;
+              icon = resolved.icon || icon;
+              if (resolved.style) {
+                styleClasses = resolved.style.split(' ').filter(Boolean).map(s => `btn-${s}`).join(' ');
+              } else {
+                styleClasses = '';
+              }
+              if (isOn && item.toggle.state?.on_style) {
+                stateClass = item.toggle.state.on_style;
+              }
+              confirmAttr = resolved.confirm || '';
+              if (resolved.confirm_steps) confirmSteps = ' data-confirm-steps="true"';
+              isToggle = ' data-toggle="true"';
+            } else {
+              const stateActive = this.resolveState(item.state);
+              stateClass = stateActive === true ? (item.state?.on_style || 'active') : '';
+            }
+
+            // Badge
+            if (item.badge) {
+              const val = this.resolveValue(item.badge);
+              const formatted = this._formatBadge(val, item.badge.format);
+              badgeHtml = `<span class="btn-badge">${formatted}</span>`;
+            }
+
+            // Long press
+            if (item.long_press) longPressAttr = ' data-long-press="true"';
+
+            // Disabled (section-level or button-level)
+            const btnDisabled = sectionDisabled || this._checkDisabledWhen(item.disabled_when);
+            const disabledAttr = btnDisabled ? ' disabled' : '';
+            const disabledClass = btnDisabled ? ' btn-disabled-state' : '';
+
+            return `<button class="btn ${styleClasses} ${stateClass}${disabledClass}"
                       data-macro-btn="${idx}"
-                      data-section="${section.section || ''}"
+                      data-section="${this._escapeHtml(section.section || '')}"
                       ${confirmAttr ? `data-confirm="${this._escapeHtml(confirmAttr)}"` : ''}
-                      ${confirmSteps}
+                      ${confirmSteps}${isToggle}${longPressAttr}${disabledAttr}
                       style="${spanStyle}">
-              ${item.icon ? `<span class="material-icons">${item.icon}</span>` : ''}
-              <span class="btn-label">${item.label || ''}</span>
+              ${icon ? `<span class="material-icons">${icon}</span>` : ''}
+              <span class="btn-label">${label}</span>
+              ${badgeHtml}
             </button>`;
           }).join('')}
         </div>
@@ -185,16 +276,16 @@ const MacroAPI = {
     // Attach collapsible section toggle handlers
     container.querySelectorAll('.section-title-toggle').forEach(title => {
       title.addEventListener('click', () => {
-        const section = title.closest('.control-section');
-        const grid = section.querySelector('.control-grid');
+        const sec = title.closest('.control-section');
+        const grid = sec.querySelector('.control-grid');
         const icon = title.querySelector('.section-toggle-icon');
-        section.classList.toggle('collapsed');
+        sec.classList.toggle('collapsed');
         grid.classList.toggle('section-content-collapsed');
-        if (icon) icon.textContent = section.classList.contains('collapsed') ? 'expand_more' : 'expand_less';
+        if (icon) icon.textContent = sec.classList.contains('collapsed') ? 'expand_more' : 'expand_less';
       });
     });
 
-    // Attach click handlers
+    // Attach click / long-press handlers
     container.querySelectorAll('[data-macro-btn]').forEach(btn => {
       const sectionName = btn.dataset.section;
       const idx = parseInt(btn.dataset.macroBtnIdx || btn.dataset.macroBtn);
@@ -203,19 +294,79 @@ const MacroAPI = {
       const item = section.items[idx];
       if (!item) return;
 
-      btn.addEventListener('click', async () => {
-        await this._handleButtonClick(btn, item);
-      });
+      if (item.long_press) {
+        this._attachLongPress(btn, item);
+      } else {
+        btn.addEventListener('click', async () => {
+          await this._handleButtonClick(btn, item);
+        });
+      }
     });
   },
 
+  // Long press: hold 800ms for alternate action, short tap for normal action
+  _attachLongPress(btn, item) {
+    let pressTimer = null;
+    let longPressed = false;
+
+    const startPress = () => {
+      longPressed = false;
+      pressTimer = setTimeout(async () => {
+        longPressed = true;
+        btn.classList.add('long-press-fire');
+        setTimeout(() => btn.classList.remove('long-press-fire'), 200);
+        const lpAction = item.long_press.action;
+        if (lpAction?.type === 'navigate') {
+          Router.navigate(lpAction.page);
+        } else if (lpAction) {
+          await this._handleButtonClick(btn, { ...item, action: lpAction, toggle: null, long_press: null });
+        }
+      }, this._longPressDelay);
+    };
+
+    const endPress = async () => {
+      clearTimeout(pressTimer);
+      if (!longPressed) {
+        await this._handleButtonClick(btn, item);
+      }
+    };
+
+    const cancelPress = () => {
+      clearTimeout(pressTimer);
+    };
+
+    btn.addEventListener('mousedown', startPress);
+    btn.addEventListener('mouseup', endPress);
+    btn.addEventListener('mouseleave', cancelPress);
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); startPress(); }, { passive: false });
+    btn.addEventListener('touchend', (e) => { e.preventDefault(); endPress(); });
+    btn.addEventListener('touchcancel', cancelPress);
+  },
+
   async _handleButtonClick(btn, item) {
-    const action = item.action;
+    let action = item.action;
+    let confirmMsg = '';
+    let useStepConfirm = false;
+    let displayLabel = item.label || '';
+
+    // Toggle: resolve current action based on live state
+    if (item.toggle) {
+      const isOn = this.resolveState(item.toggle.state);
+      const resolved = isOn ? item.toggle.on : item.toggle.off;
+      action = resolved.action;
+      confirmMsg = resolved.confirm || '';
+      useStepConfirm = resolved.confirm_steps === true;
+      displayLabel = resolved.label || item.label || '';
+    } else {
+      confirmMsg = btn.dataset.confirm || '';
+      useStepConfirm = btn.dataset.confirmSteps === 'true';
+    }
+
     if (!action) return;
 
     // Step confirmation: show expanded step list with checkboxes
-    if (btn.dataset.confirmSteps === 'true' && action.type === 'macro') {
-      const result = await this.showStepConfirm(action.macro, btn.dataset.confirm || '');
+    if (useStepConfirm && action.type === 'macro') {
+      const result = await this.showStepConfirm(action.macro, confirmMsg);
       if (!result.confirmed) return;
 
       btn.classList.add('loading');
@@ -223,9 +374,9 @@ const MacroAPI = {
       try {
         const execResult = await this.execute(action.macro, result.skipSteps);
         if (execResult && execResult.success) {
-          App.showToast(`${item.label || action.macro}: Done`, 2000);
+          App.showToast(`${displayLabel || action.macro}: Done`, 2000);
         } else if (execResult && execResult.error) {
-          App.showToast(`${item.label}: ${execResult.error}`, 4000, 'error');
+          App.showToast(`${displayLabel}: ${execResult.error}`, 4000, 'error');
         }
       } finally {
         btn.classList.remove('loading');
@@ -235,7 +386,6 @@ const MacroAPI = {
     }
 
     // Simple confirmation check
-    const confirmMsg = btn.dataset.confirm;
     if (confirmMsg) {
       if (!await App.showConfirm(confirmMsg)) return;
     }
@@ -247,22 +397,22 @@ const MacroAPI = {
       if (action.type === 'macro') {
         const result = await this.execute(action.macro);
         if (result && result.success) {
-          App.showToast(`${item.label || action.macro}: Done`, 2000);
+          App.showToast(`${displayLabel || action.macro}: Done`, 2000);
         } else if (result && result.error) {
-          App.showToast(`${item.label}: ${result.error}`, 4000, 'error');
+          App.showToast(`${displayLabel}: ${result.error}`, 4000, 'error');
         }
 
       } else if (action.type === 'moip_switch') {
         await MoIPAPI.switchSource(String(action.tx), String(action.rx));
-        App.showToast(item.label || 'Source switched');
+        App.showToast(displayLabel || 'Source switched');
 
       } else if (action.type === 'ha_service') {
-        const resp = await fetch(`/api/ha/service/${action.domain}/${action.service}`, {
+        await fetch(`/api/ha/service/${action.domain}/${action.service}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': this.tabletId },
           body: JSON.stringify(action.data || {}),
         });
-        App.showToast(item.label || 'HA service called');
+        App.showToast(displayLabel || 'HA service called');
 
       } else if (action.type === 'navigate') {
         Router.navigate(action.page);
@@ -424,15 +574,68 @@ const MacroAPI = {
       const section = sections.find(s => s.section === sectionName);
       if (!section) return;
       const item = section.items[idx];
-      if (!item || !item.state) return;
+      if (!item) return;
 
-      const stateActive = this.resolveState(item.state);
-      const onStyle = item.state.on_style || 'active';
+      // --- Toggle button: swap label, icon, and state class ---
+      if (item.toggle) {
+        const isOn = this.resolveState(item.toggle.state);
+        const resolved = isOn ? item.toggle.on : item.toggle.off;
+        const onStyle = item.toggle.state?.on_style || 'active';
 
-      if (stateActive === true) {
-        btn.classList.add(onStyle);
-      } else {
-        btn.classList.remove(onStyle);
+        // Update icon
+        const iconEl = btn.querySelector('.material-icons');
+        if (iconEl) iconEl.textContent = resolved.icon || item.icon || '';
+
+        // Update label
+        const labelEl = btn.querySelector('.btn-label');
+        if (labelEl) labelEl.textContent = resolved.label || item.label || '';
+
+        // Clear previous state classes, apply current
+        btn.classList.remove('active', 'active-danger', 'live', 'recording');
+        // Clear dynamic btn-* style classes (but keep btn and structural classes)
+        [...btn.classList].forEach(c => {
+          if (c.startsWith('btn-') && c !== 'btn-badge' && c !== 'btn-disabled-state' && c !== 'btn-label') {
+            btn.classList.remove(c);
+          }
+        });
+        // Apply resolved style (e.g., "large" → "btn-large")
+        const resolvedStyle = resolved.style || '';
+        if (resolvedStyle) {
+          resolvedStyle.split(' ').filter(Boolean).forEach(s => btn.classList.add(`btn-${s}`));
+        }
+        if (isOn) {
+          btn.classList.add(onStyle);
+        }
+
+      } else if (item.state) {
+        // --- Regular state binding (existing behavior) ---
+        const stateActive = this.resolveState(item.state);
+        const onStyle = item.state.on_style || 'active';
+        if (stateActive === true) {
+          btn.classList.add(onStyle);
+        } else {
+          btn.classList.remove(onStyle);
+        }
+      }
+
+      // --- Badge update ---
+      if (item.badge) {
+        let badgeEl = btn.querySelector('.btn-badge');
+        if (!badgeEl) {
+          badgeEl = document.createElement('span');
+          badgeEl.className = 'btn-badge';
+          btn.appendChild(badgeEl);
+        }
+        const val = this.resolveValue(item.badge);
+        badgeEl.textContent = this._formatBadge(val, item.badge.format);
+      }
+
+      // --- disabled_when update ---
+      const sectionDW = section.disabled_when;
+      const shouldDisable = this._checkDisabledWhen(sectionDW) || this._checkDisabledWhen(item.disabled_when);
+      if (!btn.classList.contains('loading')) {
+        btn.disabled = shouldDisable;
+        btn.classList.toggle('btn-disabled-state', shouldDisable);
       }
     });
   }
