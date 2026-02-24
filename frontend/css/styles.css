@@ -1016,6 +1016,73 @@ body {
   color: #000;
 }
 
+/* ── Scroll Wheel Duration Picker ────────────────────────── */
+
+.duration-picker-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.duration-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-border);
+}
+
+.duration-toggle-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.scroll-wheel-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  transition: opacity 0.2s;
+}
+
+.scroll-wheel-group {
+  text-align: center;
+}
+
+.scroll-wheel-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.5;
+  margin-bottom: 4px;
+}
+
+.scroll-wheel {
+  width: 80px;
+  background: var(--card-bg, #1e1e1e);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.scroll-wheel-separator {
+  font-size: 28px;
+  font-weight: 700;
+  opacity: 0.5;
+  padding-top: 20px;
+}
+
 /* ── Scene Selector ───────────────────────────────────────── */
 
 .scene-grid {
