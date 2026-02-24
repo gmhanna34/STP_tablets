@@ -336,10 +336,13 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     # Load devices config from frontend config
     devices_path = os.path.join(static_dir, "config", "devices.json")
     try:
+        logger.info(f"Loading devices from: {devices_path} (exists={os.path.isfile(devices_path)})")
         with open(devices_path) as f:
             devices_data = json.load(f)
-    except Exception:
-        logger.warning(f"Could not load devices from {devices_path}, using defaults")
+        logger.info(f"Devices loaded OK: top-level keys={list(devices_data.keys())}, "
+                     f"moip={'yes' if 'moip' in devices_data else 'NO'}")
+    except Exception as e:
+        logger.warning(f"Could not load devices from {devices_path}: {e}")
         devices_data = {}
 
     # Load settings from frontend config
@@ -689,6 +692,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     def api_config():
         """Returns merged config for the frontend (devices, permissions, settings).
         API keys and secrets are stripped — this is safe to serve to browsers."""
+        logger.info(f"[/api/config] devices_data keys={list(devices_data.keys())}, "
+                     f"has moip={'moip' in devices_data}")
         obs_cfg = cfg.get("obs", {})
         safe_settings = {
             "app": settings_data.get("app", {}),
