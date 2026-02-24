@@ -23,9 +23,14 @@ const SourcePage = {
 
   init() {
     // Load device config
+    console.log('[SOURCE] App.devicesConfig:', JSON.stringify(App.devicesConfig).substring(0, 200));
+    console.log('[SOURCE] App.devicesConfig?.moip:', !!App.devicesConfig?.moip);
     if (App.devicesConfig?.moip) {
       this.transmitters = App.devicesConfig.moip.transmitters || [];
       this.receivers = App.devicesConfig.moip.receivers || [];
+      console.log('[SOURCE] Loaded', this.transmitters.length, 'transmitters,', this.receivers.length, 'receivers');
+    } else {
+      console.warn('[SOURCE] No moip config found in devicesConfig');
     }
 
     this.loadRouting();

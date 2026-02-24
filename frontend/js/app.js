@@ -15,26 +15,34 @@ const App = {
     // Load configuration from gateway
     try {
       const configResp = await fetch('/api/config');
+      console.log('[CONFIG] /api/config status:', configResp.status);
       if (!configResp.ok) throw new Error(`Config response ${configResp.status}`);
       const config = await configResp.json();
+      console.log('[CONFIG] Response keys:', Object.keys(config));
+      console.log('[CONFIG] devices keys:', config.devices ? Object.keys(config.devices) : 'MISSING');
+      console.log('[CONFIG] has moip:', !!(config.devices && config.devices.moip));
       if (!config.devices) throw new Error('Config missing devices');
       this.settings = config.settings || {};
       this.devicesConfig = config.devices || {};
     } catch (e) {
-      console.warn('Gateway config unavailable, falling back to static files:', e.message);
+      console.warn('[CONFIG] Gateway config failed, falling back to static files:', e.message);
       try {
         const [settingsResp, devicesResp] = await Promise.all([
           fetch('config/settings.json'),
           fetch('config/devices.json')
         ]);
+        console.log('[CONFIG] Static fallback status:', settingsResp.status, devicesResp.status);
         this.settings = await settingsResp.json();
         this.devicesConfig = await devicesResp.json();
+        console.log('[CONFIG] Static fallback devices keys:', Object.keys(this.devicesConfig));
       } catch (e2) {
-        console.error('Failed to load config:', e2);
+        console.error('[CONFIG] Static fallback also failed:', e2);
         this.settings = {};
         this.devicesConfig = {};
       }
     }
+    console.log('[CONFIG] Final devicesConfig has moip:', !!this.devicesConfig?.moip,
+                'receivers:', this.devicesConfig?.moip?.receivers?.length || 0);
 
     // Initialize auth/permissions
     await Auth.init();
