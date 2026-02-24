@@ -1133,6 +1133,153 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         except Exception as e:
             return jsonify({"error": str(e)}), 503
 
+    def _fetch_all_ha_entities():
+        """Fetch all entity states from Home Assistant in one bulk call."""
+        ha_cfg = cfg.get("home_assistant", {})
+        if not ha_cfg.get("url") or not ha_cfg.get("token"):
+            return None, "Home Assistant not configured"
+        resp = http_requests.get(
+            f"{ha_cfg['url']}/api/states",
+            headers={"Authorization": f"Bearer {ha_cfg['token']}"},
+            timeout=ha_cfg.get("timeout", 10),
+        )
+        if resp.status_code != 200:
+            return None, f"HA returned {resp.status_code}"
+        return resp.json(), None
+
+    @app.route("/api/ha/entities")
+    def ha_entities():
+        """Return all HA entities grouped by domain."""
+        if mock_mode:
+            return jsonify({"total": 0, "domains": {}, "mock": True}), 200
+
+        domain_filter = request.args.get("domain", "").strip()
+        search = request.args.get("q", "").strip().lower()
+
+        try:
+            all_entities, err = _fetch_all_ha_entities()
+            if err:
+                return jsonify({"error": err}), 503
+        except Exception as e:
+            return jsonify({"error": str(e)}), 503
+
+        domains = {}
+        for entity in all_entities:
+            eid = entity.get("entity_id", "")
+            domain = eid.split(".")[0] if "." in eid else "unknown"
+            attrs = entity.get("attributes", {})
+            friendly = attrs.get("friendly_name", "")
+
+            if domain_filter and domain != domain_filter:
+                continue
+            if search and search not in eid.lower() and search not in friendly.lower():
+                continue
+
+            if domain not in domains:
+                domains[domain] = {"count": 0, "entities": []}
+
+            domains[domain]["entities"].append({
+                "entity_id": eid,
+                "state": entity.get("state", "unknown"),
+                "friendly_name": friendly,
+                "device_class": attrs.get("device_class", ""),
+                "attributes": attrs,
+                "last_changed": entity.get("last_changed", ""),
+            })
+            domains[domain]["count"] += 1
+
+        # Sort domains alphabetically, entities by entity_id within each domain
+        sorted_domains = {}
+        for d in sorted(domains.keys()):
+            domains[d]["entities"].sort(key=lambda e: e["entity_id"])
+            sorted_domains[d] = domains[d]
+
+        total = sum(d["count"] for d in sorted_domains.values())
+        return jsonify({"total": total, "domains": sorted_domains}), 200
+
+    @app.route("/api/ha/entities/yaml")
+    def ha_entities_yaml():
+        """Return all HA entities as a downloadable YAML reference file."""
+        if mock_mode:
+            return "# Mock mode — no HA entities available\n", 200, {"Content-Type": "text/yaml"}
+
+        try:
+            all_entities, err = _fetch_all_ha_entities()
+            if err:
+                return f"# Error: {err}\n", 503, {"Content-Type": "text/yaml"}
+        except Exception as e:
+            return f"# Error: {e}\n", 503, {"Content-Type": "text/yaml"}
+
+        # Group by domain
+        domains = {}
+        for entity in all_entities:
+            eid = entity.get("entity_id", "")
+            domain = eid.split(".")[0] if "." in eid else "unknown"
+            attrs = entity.get("attributes", {})
+
+            if domain not in domains:
+                domains[domain] = []
+
+            # Build a clean entry — include key attributes, skip bloat
+            entry = {
+                "entity_id": eid,
+                "state": entity.get("state", "unknown"),
+                "friendly_name": attrs.get("friendly_name", ""),
+            }
+            if attrs.get("device_class"):
+                entry["device_class"] = attrs["device_class"]
+            if attrs.get("unit_of_measurement"):
+                entry["unit"] = attrs["unit_of_measurement"]
+
+            # Include relevant attributes based on domain
+            if domain == "climate":
+                for key in ("current_temperature", "temperature", "hvac_modes",
+                            "hvac_action", "fan_mode", "preset_mode"):
+                    if key in attrs:
+                        entry[key] = attrs[key]
+            elif domain == "sensor":
+                if attrs.get("state_class"):
+                    entry["state_class"] = attrs["state_class"]
+            elif domain in ("switch", "light", "fan"):
+                pass  # state is enough
+            elif domain == "media_player":
+                for key in ("media_title", "source", "volume_level"):
+                    if key in attrs:
+                        entry[key] = attrs[key]
+
+            domains[domain].append(entry)
+
+        # Sort
+        for d in domains:
+            domains[d].sort(key=lambda e: e["entity_id"])
+
+        from datetime import datetime
+        total = sum(len(v) for v in domains.values())
+        lines = [
+            f"# Home Assistant Entity Reference",
+            f"# Generated: {datetime.now().isoformat(timespec='seconds')}",
+            f"# Total: {total} entities across {len(domains)} domains",
+            f"#",
+            f"# Usage in macros.yaml button configs:",
+            f"#   state:  {{ source: ha, entity: \"switch.example\", on_value: \"on\", on_style: \"active\" }}",
+            f"#   badge:  {{ source: ha, entity: \"sensor.example\", format: \"percent\" }}",
+            f"#   badge:  {{ source: ha, entity: \"climate.example\", attribute: \"current_temperature\", format: \"temp\" }}",
+            f"",
+        ]
+
+        output = "\n".join(lines) + "\n" + yaml.dump(
+            dict(sorted(domains.items())),
+            default_flow_style=False,
+            allow_unicode=True,
+            sort_keys=False,
+            width=120,
+        )
+
+        return output, 200, {
+            "Content-Type": "text/yaml; charset=utf-8",
+            "Content-Disposition": "inline; filename=ha_entities.yaml",
+        }
+
     # -------------------------------------------------------------------------
     # AUDIT LOG ENDPOINT (admin only)
     # -------------------------------------------------------------------------
@@ -1830,26 +1977,32 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return statuses
 
         def poll_ha_states():
-            """Poll HA entity states for button state bindings."""
+            """Poll HA entity states for button state bindings (bulk fetch)."""
             if not ha_state_entities:
                 return None
             ha_cfg = cfg.get("home_assistant", {})
             if mock_mode:
-                return {e: {"state": "on"} for e in ha_state_entities}
-            states = {}
-            for entity_id in ha_state_entities:
-                try:
-                    resp = http_requests.get(
-                        f"{ha_cfg['url']}/api/states/{entity_id}",
-                        headers={"Authorization": f"Bearer {ha_cfg['token']}"},
-                        timeout=5,
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        states[entity_id] = {"state": data.get("state", "unknown")}
-                except Exception:
-                    states[entity_id] = {"state": "unavailable"}
-            return states
+                return {e: {"state": "on", "attributes": {}} for e in ha_state_entities}
+            try:
+                all_entities, err = _fetch_all_ha_entities()
+                if err or all_entities is None:
+                    return {e: {"state": "unavailable"} for e in ha_state_entities}
+                # Build lookup and filter to only entities we care about
+                states = {}
+                for entity in all_entities:
+                    eid = entity.get("entity_id", "")
+                    if eid in ha_state_entities:
+                        states[eid] = {
+                            "state": entity.get("state", "unknown"),
+                            "attributes": entity.get("attributes", {}),
+                        }
+                # Mark missing entities as unavailable
+                for eid in ha_state_entities:
+                    if eid not in states:
+                        states[eid] = {"state": "unavailable", "attributes": {}}
+                return states
+            except Exception:
+                return {e: {"state": "unavailable", "attributes": {}} for e in ha_state_entities}
 
         pollers = [
             ("x32", poll_cfg.get("x32", 5), poll_x32),
