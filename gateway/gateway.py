@@ -1368,6 +1368,64 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return "HA unreachable", 503
 
     # -------------------------------------------------------------------------
+    # HA LOCK / ACCESS CONTROL PROXY
+    # -------------------------------------------------------------------------
+
+    @app.route("/api/ha/locks")
+    def ha_locks():
+        """Return all lock entities with matched door-position binary sensors."""
+        ha_cfg = cfg.get("home_assistant", {})
+        if mock_mode:
+            return jsonify({"locks": []}), 200
+        try:
+            all_entities, err = _fetch_all_ha_entities()
+            if err:
+                return jsonify({"error": err}), 503
+        except Exception as e:
+            return jsonify({"error": str(e)}), 503
+
+        # Index binary_sensors with device_class=door and input_select/input_number by name
+        door_sensors = {}     # base_name -> entity state
+        lock_rules = {}       # base_name -> input_select entity_id
+        lock_durations = {}   # base_name -> input_number entity_id
+
+        for entity in all_entities:
+            eid = entity.get("entity_id", "")
+            attrs = entity.get("attributes", {})
+            if eid.startswith("binary_sensor.") and attrs.get("device_class") == "door":
+                # Try to match binary_sensor.front_door_position -> front_door
+                base = eid.replace("binary_sensor.", "").replace("_position", "").replace("_dps", "")
+                door_sensors[base] = entity.get("state", "unknown")
+            elif eid.startswith("input_select."):
+                base = eid.replace("input_select.", "").replace("_lock_rule", "").replace("_locking_rule", "")
+                lock_rules[base] = eid
+            elif eid.startswith("input_number."):
+                if "duration" in eid or "custom" in eid:
+                    base = eid.replace("input_number.", "").replace("_custom_duration", "").replace("_duration", "")
+                    lock_durations[base] = eid
+
+        locks = []
+        for entity in all_entities:
+            eid = entity.get("entity_id", "")
+            if not eid.startswith("lock."):
+                continue
+            attrs = entity.get("attributes", {})
+            base_name = eid.replace("lock.", "")
+
+            locks.append({
+                "entity_id": eid,
+                "friendly_name": attrs.get("friendly_name", eid),
+                "state": entity.get("state", "unknown"),
+                "supported_features": attrs.get("supported_features", 0),
+                "changed_by": attrs.get("changed_by", ""),
+                "door_open": door_sensors.get(base_name, None),
+                "lock_rule_entity": lock_rules.get(base_name, None),
+                "duration_entity": lock_durations.get(base_name, None),
+            })
+        locks.sort(key=lambda l: l["friendly_name"])
+        return jsonify({"locks": locks}), 200
+
+    # -------------------------------------------------------------------------
     # AUDIT LOG ENDPOINT (admin only)
     # -------------------------------------------------------------------------
 

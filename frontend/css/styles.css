@@ -855,6 +855,167 @@ body {
   box-shadow: none;
 }
 
+/* ── Door / Access Control Grid ──────────────────────────── */
+
+.door-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.door-card {
+  background: var(--surface);
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.door-card.door-locked {
+  border-color: var(--ok, #2ecc71);
+}
+
+.door-card.door-unlocked {
+  border-color: var(--danger, #e74c3c);
+}
+
+.door-card.door-transitioning {
+  border-color: var(--warn, #f39c12);
+  animation: door-pulse 1.2s ease-in-out infinite;
+}
+
+.door-card.door-jammed {
+  border-color: var(--danger, #e74c3c);
+  animation: door-pulse 0.6s ease-in-out infinite;
+}
+
+.door-card.door-unknown {
+  border-color: var(--border);
+  opacity: 0.6;
+}
+
+.door-card.selected {
+  box-shadow: 0 0 0 2px var(--accent), var(--shadow-sm);
+}
+
+@keyframes door-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.door-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  cursor: pointer;
+}
+
+.door-checkbox input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.door-card-body {
+  padding: 16px 12px;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.door-icon {
+  font-size: 36px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.door-locked .door-icon { color: var(--ok, #2ecc71); }
+.door-unlocked .door-icon { color: var(--danger, #e74c3c); }
+.door-transitioning .door-icon { color: var(--warn, #f39c12); }
+.door-jammed .door-icon { color: var(--danger, #e74c3c); }
+
+.door-name {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 4px;
+  line-height: 1.2;
+}
+
+.door-status {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.door-locked .door-status { color: var(--ok, #2ecc71); }
+.door-unlocked .door-status { color: var(--danger, #e74c3c); }
+.door-transitioning .door-status { color: var(--warn, #f39c12); }
+
+.door-position {
+  font-size: 11px;
+  opacity: 0.5;
+  margin-top: 2px;
+  min-height: 14px;
+}
+
+/* Batch action bar */
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.batch-count {
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+/* Door panel */
+.door-panel-status {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.door-panel-status.door-locked .material-icons { color: var(--ok, #2ecc71); }
+.door-panel-status.door-unlocked .material-icons { color: var(--danger, #e74c3c); }
+.door-panel-status.door-transitioning .material-icons { color: var(--warn, #f39c12); }
+
+.door-panel-timed {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.duration-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.duration-chip {
+  min-width: 60px;
+}
+
+.duration-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #000;
+}
+
 /* ── Scene Selector ───────────────────────────────────────── */
 
 .scene-grid {
