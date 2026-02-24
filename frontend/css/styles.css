@@ -750,6 +750,46 @@ body {
   box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
 }
 
+/* ── Camera Tab Bar ──────────────────────────────────────── */
+
+.cam-tab-bar {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.cam-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: 2px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.cam-tab .material-icons {
+  font-size: 20px;
+}
+
+.cam-tab:hover {
+  background: var(--btn-hover);
+}
+
+.cam-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #000;
+}
+
 /* ── Camera Grid & Cards ──────────────────────────────────── */
 
 .camera-grid {
@@ -777,6 +817,7 @@ body {
 .camera-card .camera-feed {
   width: 100%;
   aspect-ratio: 16 / 9;
+  cursor: pointer;
   background: #111;
   display: flex;
   align-items: center;

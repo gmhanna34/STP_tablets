@@ -1281,6 +1281,93 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         }
 
     # -------------------------------------------------------------------------
+    # HA CAMERA PROXY (snapshot + MJPEG stream)
+    # -------------------------------------------------------------------------
+
+    @app.route("/api/ha/cameras")
+    def ha_cameras():
+        """Return all camera entities from HA with friendly names and state."""
+        ha_cfg = cfg.get("home_assistant", {})
+        if mock_mode:
+            return jsonify({"cameras": []}), 200
+        try:
+            all_entities, err = _fetch_all_ha_entities()
+            if err:
+                return jsonify({"error": err}), 503
+        except Exception as e:
+            return jsonify({"error": str(e)}), 503
+
+        cameras = []
+        for entity in all_entities:
+            eid = entity.get("entity_id", "")
+            if not eid.startswith("camera."):
+                continue
+            attrs = entity.get("attributes", {})
+            cameras.append({
+                "entity_id": eid,
+                "friendly_name": attrs.get("friendly_name", eid),
+                "state": entity.get("state", "unknown"),
+                "brand": attrs.get("brand", ""),
+                "model_name": attrs.get("model_name", ""),
+                "frontend_stream_type": attrs.get("frontend_stream_type", ""),
+                "supported_features": attrs.get("supported_features", 0),
+            })
+        cameras.sort(key=lambda c: c["friendly_name"])
+        return jsonify({"cameras": cameras}), 200
+
+    @app.route("/api/ha/camera/<path:entity_id>/snapshot")
+    def ha_camera_snapshot(entity_id: str):
+        """Proxy a JPEG snapshot from an HA camera entity."""
+        ha_cfg = cfg.get("home_assistant", {})
+        if not entity_id.startswith("camera."):
+            entity_id = f"camera.{entity_id}"
+
+        if mock_mode:
+            from io import BytesIO
+            return send_file(BytesIO(b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01'
+                                     b'\x00\x00\x01\x00\x01\x00\x00\xff\xd9'),
+                             mimetype="image/jpeg")
+
+        url = f"{ha_cfg['url']}/api/camera_proxy/{entity_id}"
+        headers = {"Authorization": f"Bearer {ha_cfg['token']}"}
+        try:
+            resp = http_requests.get(url, headers=headers, timeout=10)
+            if resp.status_code != 200:
+                return f"HA returned {resp.status_code}", resp.status_code
+            ct = resp.headers.get("Content-Type", "image/jpeg")
+            return Response(resp.content, content_type=ct,
+                            headers={"Cache-Control": "no-store"})
+        except http_requests.Timeout:
+            return "HA camera timeout", 504
+        except http_requests.ConnectionError:
+            return "HA unreachable", 503
+
+    @app.route("/api/ha/camera/<path:entity_id>/stream")
+    def ha_camera_stream(entity_id: str):
+        """Proxy an MJPEG stream from an HA camera entity."""
+        ha_cfg = cfg.get("home_assistant", {})
+        if not entity_id.startswith("camera."):
+            entity_id = f"camera.{entity_id}"
+
+        if mock_mode:
+            return "MJPEG not available in mock mode", 503
+
+        url = f"{ha_cfg['url']}/api/camera_proxy_stream/{entity_id}"
+        headers = {"Authorization": f"Bearer {ha_cfg['token']}"}
+        try:
+            resp = http_requests.get(url, headers=headers, timeout=30, stream=True)
+            if resp.status_code != 200:
+                return f"HA returned {resp.status_code}", resp.status_code
+            ct = resp.headers.get("Content-Type", "multipart/x-mixed-replace")
+            return Response(resp.iter_content(chunk_size=8192),
+                            content_type=ct,
+                            headers={"Cache-Control": "no-store"})
+        except http_requests.Timeout:
+            return "HA stream timeout", 504
+        except http_requests.ConnectionError:
+            return "HA unreachable", 503
+
+    # -------------------------------------------------------------------------
     # AUDIT LOG ENDPOINT (admin only)
     # -------------------------------------------------------------------------
 
