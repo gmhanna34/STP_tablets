@@ -874,11 +874,11 @@ body {
 }
 
 .door-card.door-locked {
-  border-color: var(--ok, #2ecc71);
+  border-color: var(--danger, #e74c3c);
 }
 
 .door-card.door-unlocked {
-  border-color: var(--danger, #e74c3c);
+  border-color: var(--ok, #2ecc71);
 }
 
 .door-card.door-transitioning {
@@ -933,8 +933,8 @@ body {
   margin-bottom: 8px;
 }
 
-.door-locked .door-icon { color: var(--ok, #2ecc71); }
-.door-unlocked .door-icon { color: var(--danger, #e74c3c); }
+.door-locked .door-icon { color: var(--danger, #e74c3c); }
+.door-unlocked .door-icon { color: var(--ok, #2ecc71); }
 .door-transitioning .door-icon { color: var(--warn, #f39c12); }
 .door-jammed .door-icon { color: var(--danger, #e74c3c); }
 
@@ -951,8 +951,8 @@ body {
   letter-spacing: 0.5px;
 }
 
-.door-locked .door-status { color: var(--ok, #2ecc71); }
-.door-unlocked .door-status { color: var(--danger, #e74c3c); }
+.door-locked .door-status { color: var(--danger, #e74c3c); }
+.door-unlocked .door-status { color: var(--ok, #2ecc71); }
 .door-transitioning .door-status { color: var(--warn, #f39c12); }
 
 .door-position {
@@ -989,8 +989,8 @@ body {
   padding: 20px 0;
 }
 
-.door-panel-status.door-locked .material-icons { color: var(--ok, #2ecc71); }
-.door-panel-status.door-unlocked .material-icons { color: var(--danger, #e74c3c); }
+.door-panel-status.door-locked .material-icons { color: var(--danger, #e74c3c); }
+.door-panel-status.door-unlocked .material-icons { color: var(--ok, #2ecc71); }
 .door-panel-status.door-transitioning .material-icons { color: var(--warn, #f39c12); }
 
 .door-panel-timed {

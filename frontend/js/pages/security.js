@@ -209,23 +209,26 @@ const SecurityPage = {
     const grid = document.getElementById('security-grid');
     if (!grid) return;
 
-    if (!this._haCameras) {
+    // Always re-fetch if cache was empty (gateway may have been warming up)
+    if (!this._haCameras || this._haCameras.length === 0) {
+      this._haCameras = null;
       grid.innerHTML = '<div style="opacity:0.5;text-align:center;padding:20px;grid-column:1/-1;">Loading security cameras...</div>';
       try {
         const resp = await fetch('/api/ha/cameras', {
           headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
         });
         const data = await resp.json();
-        this._haCameras = data.cameras || [];
+        if (data.warming || !data.cameras || data.cameras.length === 0) {
+          grid.innerHTML = '<div style="opacity:0.5;text-align:center;padding:20px;grid-column:1/-1;">Waiting for camera list from Home Assistant...</div>';
+          // Retry in 3 seconds
+          this._feedTimers['_ha_retry'] = setTimeout(() => this._loadSecurityCameras(), 3000);
+          return;
+        }
+        this._haCameras = data.cameras;
       } catch (e) {
         grid.innerHTML = '<div style="color:var(--danger);text-align:center;padding:20px;grid-column:1/-1;">Failed to load cameras from Home Assistant.</div>';
         return;
       }
-    }
-
-    if (this._haCameras.length === 0) {
-      grid.innerHTML = '<div style="opacity:0.5;text-align:center;padding:20px;grid-column:1/-1;">No camera entities found in Home Assistant.</div>';
-      return;
     }
 
     grid.innerHTML = this._haCameras.map(cam => {
@@ -471,13 +474,89 @@ const SecurityPage = {
     if (entities.length === 0) return;
 
     const label = action === 'lock' ? 'Lock' : 'Unlock';
-    const confirmed = await App.showConfirm(
-      `${label} ${entities.length} door${entities.length > 1 ? 's' : ''}?`
-    );
-    if (!confirmed) return;
+    const count = entities.length;
+    const plural = count > 1 ? 's' : '';
 
-    App.showToast(`${label}ing ${entities.length} door${entities.length > 1 ? 's' : ''}...`);
+    if (action === 'lock') {
+      // Simple confirm for locking
+      const confirmed = await App.showConfirm(`Lock ${count} door${plural}?`);
+      if (!confirmed) return;
 
+      App.showToast(`Locking ${count} door${plural}...`);
+      await this._executeBatchLockAction('lock', entities);
+    } else {
+      // Unlock: show duration picker in confirm dialog
+      const result = await this._showUnlockConfirm(count);
+      if (!result) return;
+
+      if (result.duration > 0) {
+        App.showToast(`Unlocking ${count} door${plural} for ${result.duration} min...`);
+        await this._executeBatchTimedUnlock(entities, result.duration);
+      } else {
+        App.showToast(`Unlocking ${count} door${plural}...`);
+        await this._executeBatchLockAction('unlock', entities);
+      }
+    }
+
+    this._selected.clear();
+    this._updateSelectionUI();
+    setTimeout(() => this._refreshLocks(), 500);
+  },
+
+  _showUnlockConfirm(doorCount) {
+    return new Promise((resolve) => {
+      document.getElementById('confirm-overlay')?.remove();
+
+      const plural = doorCount > 1 ? 's' : '';
+      const overlay = document.createElement('div');
+      overlay.id = 'confirm-overlay';
+      overlay.className = 'confirm-overlay';
+      overlay.innerHTML = `
+        <div class="confirm-modal" style="max-width:380px;">
+          <div class="confirm-message">Unlock ${doorCount} door${plural}?</div>
+          <div style="margin:16px 0 8px;font-weight:600;font-size:14px;">Unlock duration:</div>
+          <div class="duration-chips" style="justify-content:center;margin-bottom:16px;">
+            <button class="btn btn-sm duration-chip" data-dur="0">Until re-locked</button>
+            <button class="btn btn-sm duration-chip" data-dur="5">5 min</button>
+            <button class="btn btn-sm duration-chip active" data-dur="10">10 min</button>
+            <button class="btn btn-sm duration-chip" data-dur="15">15 min</button>
+            <button class="btn btn-sm duration-chip" data-dur="30">30 min</button>
+            <button class="btn btn-sm duration-chip" data-dur="60">1 hr</button>
+          </div>
+          <div class="confirm-buttons">
+            <button class="btn confirm-cancel">Cancel</button>
+            <button class="btn confirm-ok btn-danger">Unlock</button>
+          </div>
+        </div>
+      `;
+
+      let selectedDuration = 10;
+
+      overlay.querySelectorAll('.duration-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          selectedDuration = parseInt(chip.dataset.dur, 10);
+          overlay.querySelectorAll('.duration-chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+        });
+      });
+
+      overlay.querySelector('.confirm-cancel').addEventListener('click', () => {
+        overlay.remove();
+        resolve(null);
+      });
+      overlay.querySelector('.confirm-ok').addEventListener('click', () => {
+        overlay.remove();
+        resolve({ duration: selectedDuration });
+      });
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) { overlay.remove(); resolve(null); }
+      });
+
+      document.body.appendChild(overlay);
+    });
+  },
+
+  async _executeBatchLockAction(action, entities) {
     const promises = entities.map(eid =>
       fetch(`/api/ha/service/lock/${action}`, {
         method: 'POST',
@@ -489,10 +568,35 @@ const SecurityPage = {
       }).catch(() => null)
     );
     await Promise.all(promises);
+  },
 
-    this._selected.clear();
-    this._updateSelectionUI();
-    setTimeout(() => this._refreshLocks(), 500);
+  async _executeBatchTimedUnlock(entities, minutes) {
+    // For each door that has a lock_rule_entity, use timed unlock;
+    // for others, fall back to simple unlock
+    const promises = entities.map(async (eid) => {
+      const lock = this._locks.find(l => l.entity_id === eid);
+      if (lock && lock.duration_entity && lock.lock_rule_entity) {
+        // Set duration then trigger custom rule
+        await fetch('/api/ha/service/input_number/set_value', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          body: JSON.stringify({ entity_id: lock.duration_entity, value: minutes }),
+        }).catch(() => null);
+        await fetch('/api/ha/service/input_select/select_option', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          body: JSON.stringify({ entity_id: lock.lock_rule_entity, option: 'custom' }),
+        }).catch(() => null);
+      } else {
+        // No rule entity — simple unlock
+        await fetch('/api/ha/service/lock/unlock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          body: JSON.stringify({ entity_id: eid }),
+        }).catch(() => null);
+      }
+    });
+    await Promise.all(promises);
   },
 
   // --- Single-door panel ---
