@@ -1977,32 +1977,31 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return statuses
 
         def poll_ha_states():
-            """Poll HA entity states for button state bindings (bulk fetch)."""
+            """Poll HA entity states for button state bindings (per-entity)."""
             if not ha_state_entities:
                 return None
             ha_cfg = cfg.get("home_assistant", {})
             if mock_mode:
                 return {e: {"state": "on", "attributes": {}} for e in ha_state_entities}
-            try:
-                all_entities, err = _fetch_all_ha_entities()
-                if err or all_entities is None:
-                    return {e: {"state": "unavailable"} for e in ha_state_entities}
-                # Build lookup and filter to only entities we care about
-                states = {}
-                for entity in all_entities:
-                    eid = entity.get("entity_id", "")
-                    if eid in ha_state_entities:
-                        states[eid] = {
-                            "state": entity.get("state", "unknown"),
-                            "attributes": entity.get("attributes", {}),
+            states = {}
+            for entity_id in ha_state_entities:
+                try:
+                    resp = http_requests.get(
+                        f"{ha_cfg['url']}/api/states/{entity_id}",
+                        headers={"Authorization": f"Bearer {ha_cfg['token']}"},
+                        timeout=5,
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        states[entity_id] = {
+                            "state": data.get("state", "unknown"),
+                            "attributes": data.get("attributes", {}),
                         }
-                # Mark missing entities as unavailable
-                for eid in ha_state_entities:
-                    if eid not in states:
-                        states[eid] = {"state": "unavailable", "attributes": {}}
-                return states
-            except Exception:
-                return {e: {"state": "unavailable", "attributes": {}} for e in ha_state_entities}
+                    else:
+                        states[entity_id] = {"state": "unavailable", "attributes": {}}
+                except Exception:
+                    states[entity_id] = {"state": "unavailable", "attributes": {}}
+            return states
 
         pollers = [
             ("x32", poll_cfg.get("x32", 5), poll_x32),
