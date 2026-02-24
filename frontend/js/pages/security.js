@@ -523,13 +523,22 @@ const SecurityPage = {
         <div class="confirm-modal" style="max-width:380px;">
           <div class="confirm-message">Unlock ${doorCount} door${plural}?</div>
           <div style="margin:16px 0 8px;font-weight:600;font-size:14px;">Unlock duration:</div>
-          <div class="duration-chips" style="justify-content:center;margin-bottom:16px;">
-            <button class="btn btn-sm duration-chip" data-dur="-1">Until re-locked</button>
-            <button class="btn btn-sm duration-chip" data-dur="5">5 min</button>
-            <button class="btn btn-sm duration-chip active" data-dur="10">10 min</button>
-            <button class="btn btn-sm duration-chip" data-dur="15">15 min</button>
-            <button class="btn btn-sm duration-chip" data-dur="30">30 min</button>
-            <button class="btn btn-sm duration-chip" data-dur="60">1 hr</button>
+          <div class="duration-picker-row">
+            <label class="duration-toggle-label">
+              <input type="checkbox" id="batch-keep-unlocked">
+              <span>Until re-locked</span>
+            </label>
+          </div>
+          <div class="scroll-wheel-container" id="batch-wheels">
+            <div class="scroll-wheel-group">
+              <div class="scroll-wheel-label">Hours</div>
+              <div class="scroll-wheel" id="batch-wheel-hours" data-wheel="hours"></div>
+            </div>
+            <div class="scroll-wheel-separator">:</div>
+            <div class="scroll-wheel-group">
+              <div class="scroll-wheel-label">Minutes</div>
+              <div class="scroll-wheel" id="batch-wheel-minutes" data-wheel="minutes"></div>
+            </div>
           </div>
           <div class="confirm-buttons">
             <button class="btn confirm-cancel">Cancel</button>
@@ -538,15 +547,22 @@ const SecurityPage = {
         </div>
       `;
 
-      let selectedDuration = 10;
+      document.body.appendChild(overlay);
 
-      overlay.querySelectorAll('.duration-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-          selectedDuration = parseInt(chip.dataset.dur, 10);
-          overlay.querySelectorAll('.duration-chip').forEach(c => c.classList.remove('active'));
-          chip.classList.add('active');
+      const hoursWheel = overlay.querySelector('#batch-wheel-hours');
+      const minutesWheel = overlay.querySelector('#batch-wheel-minutes');
+      const keepCheck = overlay.querySelector('#batch-keep-unlocked');
+      const wheelsContainer = overlay.querySelector('#batch-wheels');
+
+      this._buildScrollWheel(hoursWheel, 0, 8, 1, 0);
+      this._buildScrollWheel(minutesWheel, 0, 55, 5, 10);
+
+      if (keepCheck) {
+        keepCheck.addEventListener('change', () => {
+          if (wheelsContainer) wheelsContainer.style.opacity = keepCheck.checked ? '0.3' : '1';
+          if (wheelsContainer) wheelsContainer.style.pointerEvents = keepCheck.checked ? 'none' : '';
         });
-      });
+      }
 
       overlay.querySelector('.confirm-cancel').addEventListener('click', () => {
         overlay.remove();
@@ -554,13 +570,17 @@ const SecurityPage = {
       });
       overlay.querySelector('.confirm-ok').addEventListener('click', () => {
         overlay.remove();
-        resolve({ duration: selectedDuration });
+        if (keepCheck && keepCheck.checked) {
+          resolve({ duration: -1 });
+        } else {
+          const h = this._getWheelValue(hoursWheel);
+          const m = this._getWheelValue(minutesWheel);
+          resolve({ duration: h * 60 + m });
+        }
       });
       overlay.addEventListener('click', (e) => {
         if (e.target === overlay) { overlay.remove(); resolve(null); }
       });
-
-      document.body.appendChild(overlay);
     });
   },
 
@@ -688,17 +708,26 @@ const SecurityPage = {
       ${lock.lock_rule_entity ? `
       <div class="door-panel-timed">
         <div style="font-weight:600;margin-bottom:10px;">Timed Unlock</div>
-        <div class="duration-chips">
-          <button class="btn btn-sm duration-chip" data-minutes="-1">Until re-locked</button>
-          <button class="btn btn-sm duration-chip" data-minutes="5">5 min</button>
-          <button class="btn btn-sm duration-chip active" data-minutes="10">10 min</button>
-          <button class="btn btn-sm duration-chip" data-minutes="15">15 min</button>
-          <button class="btn btn-sm duration-chip" data-minutes="30">30 min</button>
-          <button class="btn btn-sm duration-chip" data-minutes="60">1 hr</button>
+        <div class="duration-picker-row">
+          <label class="duration-toggle-label">
+            <input type="checkbox" id="panel-keep-unlocked">
+            <span>Until re-locked</span>
+          </label>
+        </div>
+        <div class="scroll-wheel-container" id="panel-wheels">
+          <div class="scroll-wheel-group">
+            <div class="scroll-wheel-label">Hours</div>
+            <div class="scroll-wheel" id="panel-wheel-hours" data-wheel="hours"></div>
+          </div>
+          <div class="scroll-wheel-separator">:</div>
+          <div class="scroll-wheel-group">
+            <div class="scroll-wheel-label">Minutes</div>
+            <div class="scroll-wheel" id="panel-wheel-minutes" data-wheel="minutes"></div>
+          </div>
         </div>
         <button class="btn btn-warning btn-lg" id="panel-btn-timed" style="margin-top:12px;width:100%;">
           <span class="material-icons">timer</span>
-          <span class="btn-label" id="timed-label">Unlock for 10 min</span>
+          <span class="btn-label" id="timed-label">Unlock for 0h 10m</span>
         </button>
       </div>
       ` : `
@@ -712,41 +741,58 @@ const SecurityPage = {
   },
 
   _wireDoorPanelEvents(body, lock) {
-    let selectedMinutes = 10;
-
     body.querySelector('#panel-btn-lock')?.addEventListener('click', async () => {
       await this._callLockService('lock', lock.entity_id);
+      App.closePanel();
       setTimeout(() => this._refreshLocks(), 500);
     });
 
     body.querySelector('#panel-btn-unlock')?.addEventListener('click', async () => {
       await this._callLockService('unlock', lock.entity_id);
+      App.closePanel();
       setTimeout(() => this._refreshLocks(), 500);
     });
 
-    body.querySelectorAll('.duration-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        selectedMinutes = parseInt(chip.dataset.minutes, 10);
-        body.querySelectorAll('.duration-chip').forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-        const label = body.querySelector('#timed-label');
-        if (label) {
-          if (selectedMinutes === -1) {
-            label.textContent = 'Keep Unlocked';
-          } else {
-            label.textContent = `Unlock for ${selectedMinutes >= 60 ? (selectedMinutes / 60) + ' hr' : selectedMinutes + ' min'}`;
-          }
+    // Scroll wheels for timed unlock
+    const hoursWheel = body.querySelector('#panel-wheel-hours');
+    const minutesWheel = body.querySelector('#panel-wheel-minutes');
+    const keepCheck = body.querySelector('#panel-keep-unlocked');
+    const wheelsContainer = body.querySelector('#panel-wheels');
+    const timedLabel = body.querySelector('#timed-label');
+
+    if (hoursWheel && minutesWheel) {
+      this._buildScrollWheel(hoursWheel, 0, 8, 1, 0);
+      this._buildScrollWheel(minutesWheel, 0, 55, 5, 10);
+
+      const updateLabel = () => {
+        if (!timedLabel) return;
+        if (keepCheck && keepCheck.checked) {
+          timedLabel.textContent = 'Keep Unlocked';
+        } else {
+          const h = this._getWheelValue(hoursWheel);
+          const m = this._getWheelValue(minutesWheel);
+          timedLabel.textContent = `Unlock for ${h}h ${m}m`;
         }
-      });
-    });
+      };
+
+      hoursWheel.addEventListener('wheel-change', updateLabel);
+      minutesWheel.addEventListener('wheel-change', updateLabel);
+
+      if (keepCheck) {
+        keepCheck.addEventListener('change', () => {
+          if (wheelsContainer) wheelsContainer.style.opacity = keepCheck.checked ? '0.3' : '1';
+          if (wheelsContainer) wheelsContainer.style.pointerEvents = keepCheck.checked ? 'none' : '';
+          updateLabel();
+        });
+      }
+    }
 
     body.querySelector('#panel-btn-timed')?.addEventListener('click', async () => {
       if (!lock.lock_rule_entity) return;
 
       const ruleDomain = lock.lock_rule_entity.split('.')[0];
 
-      if (selectedMinutes === -1) {
-        // "Until Re-Locked" — use the "keep_unlock" HA option
+      if (keepCheck && keepCheck.checked) {
         const keepOption = this._findRuleOption(lock, 'keep_unlock');
         if (!keepOption) { App.showToast('Keep Unlock option not found', 'error'); return; }
         App.showToast(`Keeping ${lock.friendly_name} unlocked until re-locked...`);
@@ -756,15 +802,18 @@ const SecurityPage = {
           body: JSON.stringify({ entity_id: lock.lock_rule_entity, option: keepOption }),
         }).catch(() => null);
       } else {
-        // Timed unlock — set duration then trigger custom rule
+        const h = hoursWheel ? this._getWheelValue(hoursWheel) : 0;
+        const m = minutesWheel ? this._getWheelValue(minutesWheel) : 10;
+        const totalMinutes = h * 60 + m;
+        if (totalMinutes === 0) { App.showToast('Select a duration', 'error'); return; }
         const customOption = this._findRuleOption(lock, 'custom');
         if (!customOption || !lock.duration_entity) { App.showToast('Timed unlock not available', 'error'); return; }
-        App.showToast(`Unlocking ${lock.friendly_name} for ${selectedMinutes} min...`);
+        App.showToast(`Unlocking ${lock.friendly_name} for ${h}h ${m}m...`);
         const durDomain = lock.duration_entity.split('.')[0];
         await fetch(`/api/ha/service/${durDomain}/set_value`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
-          body: JSON.stringify({ entity_id: lock.duration_entity, value: selectedMinutes }),
+          body: JSON.stringify({ entity_id: lock.duration_entity, value: totalMinutes }),
         }).catch(() => null);
         await fetch(`/api/ha/service/${ruleDomain}/select_option`, {
           method: 'POST',
@@ -773,6 +822,7 @@ const SecurityPage = {
         }).catch(() => null);
       }
 
+      App.closePanel();
       setTimeout(() => this._refreshLocks(), 1000);
     });
   },
@@ -796,7 +846,7 @@ const SecurityPage = {
   // --- Lock polling ---
 
   _startLockPolling() {
-    this._lockPollTimer = setInterval(() => this._refreshLocks(), 5000);
+    this._lockPollTimer = setInterval(() => this._refreshLocks(), 2000);
   },
 
   _stopLockPolling() {
@@ -855,6 +905,91 @@ const SecurityPage = {
       case 'jammed': return 'JAMMED';
       default: return state ? state.toUpperCase() : 'UNKNOWN';
     }
+  },
+
+  // ===========================================================================
+  // Scroll Wheel Duration Picker
+  // ===========================================================================
+
+  _buildScrollWheel(container, min, max, step, defaultVal) {
+    if (!container) return;
+    const values = [];
+    for (let v = min; v <= max; v += step) values.push(v);
+
+    const ITEM_H = 40;
+    const VISIBLE = 3;
+
+    container.innerHTML = `
+      <div class="sw-viewport" style="height:${ITEM_H * VISIBLE}px;overflow:hidden;position:relative;">
+        <div class="sw-track" style="position:absolute;width:100%;transition:transform 0.15s ease-out;"></div>
+        <div class="sw-highlight" style="position:absolute;top:${ITEM_H}px;left:0;right:0;height:${ITEM_H}px;
+          border-top:2px solid var(--accent);border-bottom:2px solid var(--accent);pointer-events:none;"></div>
+      </div>
+      <div class="sw-arrows" style="display:flex;justify-content:space-between;margin-top:4px;">
+        <button class="btn btn-sm sw-up" style="flex:1;min-height:32px;"><span class="material-icons" style="font-size:18px;">expand_less</span></button>
+        <button class="btn btn-sm sw-down" style="flex:1;min-height:32px;margin-left:4px;"><span class="material-icons" style="font-size:18px;">expand_more</span></button>
+      </div>
+    `;
+
+    const track = container.querySelector('.sw-track');
+    // Pad with empty items top and bottom so the first and last values can center
+    const padded = ['', ...values.map(String), ''];
+    track.innerHTML = padded.map(v =>
+      `<div class="sw-item" style="height:${ITEM_H}px;line-height:${ITEM_H}px;text-align:center;font-size:20px;font-weight:600;user-select:none;">${v}</div>`
+    ).join('');
+
+    let idx = values.indexOf(defaultVal);
+    if (idx === -1) idx = 0;
+    container._swValues = values;
+    container._swIndex = idx;
+
+    const setPos = (i, animate) => {
+      i = Math.max(0, Math.min(values.length - 1, i));
+      container._swIndex = i;
+      track.style.transition = animate ? 'transform 0.15s ease-out' : 'none';
+      track.style.transform = `translateY(${-i * ITEM_H}px)`;
+      // Style items: bold/dim based on selection
+      const items = track.querySelectorAll('.sw-item');
+      items.forEach((el, elIdx) => {
+        const valueIdx = elIdx - 1; // offset by 1 for top pad
+        el.style.opacity = valueIdx === i ? '1' : '0.3';
+      });
+      container.dispatchEvent(new Event('wheel-change'));
+    };
+    setPos(idx, false);
+
+    container.querySelector('.sw-up').addEventListener('click', () => setPos(container._swIndex - 1, true));
+    container.querySelector('.sw-down').addEventListener('click', () => setPos(container._swIndex + 1, true));
+
+    // Touch/mouse drag support
+    let startY = 0, startIdx = 0, dragging = false;
+    const viewport = container.querySelector('.sw-viewport');
+
+    const onStart = (y) => { startY = y; startIdx = container._swIndex; dragging = true; };
+    const onMove = (y) => {
+      if (!dragging) return;
+      const delta = Math.round((startY - y) / ITEM_H);
+      if (delta !== 0) { setPos(startIdx + delta, false); }
+    };
+    const onEnd = () => { dragging = false; };
+
+    viewport.addEventListener('touchstart', (e) => onStart(e.touches[0].clientY), { passive: true });
+    viewport.addEventListener('touchmove', (e) => onMove(e.touches[0].clientY), { passive: true });
+    viewport.addEventListener('touchend', onEnd);
+    viewport.addEventListener('mousedown', (e) => { e.preventDefault(); onStart(e.clientY); });
+    document.addEventListener('mousemove', (e) => onMove(e.clientY));
+    document.addEventListener('mouseup', onEnd);
+
+    // Mouse wheel scroll
+    viewport.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      setPos(container._swIndex + (e.deltaY > 0 ? 1 : -1), true);
+    }, { passive: false });
+  },
+
+  _getWheelValue(container) {
+    if (!container || !container._swValues) return 0;
+    return container._swValues[container._swIndex] || 0;
   },
 
   // ===========================================================================
