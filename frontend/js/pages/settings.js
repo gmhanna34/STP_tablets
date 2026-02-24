@@ -200,11 +200,8 @@ const SettingsPage = {
     const infoLoc = document.getElementById('info-location');
     if (infoLoc) infoLoc.textContent = Auth.getDisplayName();
 
-    // Health dashboard
-    document.getElementById('btn-open-health')?.addEventListener('click', () => {
-      const url = HealthAPI.getStatusUrl();
-      window.open(url, '_blank');
-    });
+    // Health dashboard (opens in panel overlay)
+    document.getElementById('btn-open-health')?.addEventListener('click', () => this.openHealthPanel());
 
     // HA Entity Browser (opens in panel overlay)
     document.getElementById('btn-ha-browse')?.addEventListener('click', () => this.openHABrowserPanel());
@@ -544,6 +541,146 @@ const SettingsPage = {
     } catch (e) {
       App.showToast('Failed to create schedule', 3000, 'error');
     }
+  },
+
+  // -----------------------------------------------------------------------
+  // Health Dashboard Panel
+  // -----------------------------------------------------------------------
+
+  async openHealthPanel() {
+    const self = this;
+
+    App.showPanel('System Health', async (body) => {
+      body.innerHTML = '<div style="opacity:0.5;padding:20px;text-align:center;">Loading health status...</div>';
+
+      let data;
+      try {
+        const url = HealthAPI.healthCheckUrl
+          ? `http://${HealthAPI.healthCheckUrl}/api/status`
+          : '/api/health';
+        const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        data = await resp.json();
+      } catch (e) {
+        body.innerHTML = '<div style="color:var(--danger);padding:20px;text-align:center;">Failed to reach health dashboard. Is it running?</div>';
+        return;
+      }
+
+      self._renderHealthPanel(body, data);
+    });
+  },
+
+  _renderHealthPanel(body, data) {
+    const results = data.results || {};
+    const heartbeat = data.heartbeat || {};
+    const generatedAt = data.generated_at || '';
+
+    // Compute summary counts
+    let healthy = 0, warning = 0, down = 0;
+    for (const svc of Object.values(results)) {
+      const level = svc.status?.level || 'down';
+      if (level === 'healthy') healthy++;
+      else if (level === 'warning') warning++;
+      else down++;
+    }
+
+    const ts = generatedAt ? new Date(generatedAt).toLocaleTimeString() : '--';
+
+    body.innerHTML = `
+      <div class="health-panel-summary">
+        <div class="health-summary-item health-summary-down" style="display:${down > 0 ? 'flex' : 'none'};">
+          <span class="material-icons">error</span>
+          <span>${down} Down</span>
+        </div>
+        <div class="health-summary-item health-summary-warn" style="display:${warning > 0 ? 'flex' : 'none'};">
+          <span class="material-icons">warning</span>
+          <span>${warning} Warning</span>
+        </div>
+        <div class="health-summary-item health-summary-ok">
+          <span class="material-icons">check_circle</span>
+          <span>${healthy} Healthy</span>
+        </div>
+        <div class="health-summary-ts">Last check: ${ts}</div>
+      </div>
+
+      <div id="health-service-list">
+        ${Object.values(results).map(svc => this._renderServiceTile(svc)).join('')}
+      </div>
+
+      ${heartbeat.count > 0 ? `
+        <div style="margin-top:20px;border-top:2px solid var(--border);padding-top:16px;">
+          <div style="font-weight:600;margin-bottom:8px;">Connected Tablets (${heartbeat.count})</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            ${Object.entries(heartbeat.tablets || {}).map(([tid, info]) => {
+              const age = info.age_seconds;
+              const fresh = age < 60;
+              return `<div style="background:var(--surface-alt);padding:6px 12px;border-radius:6px;font-size:13px;border:1px solid var(--border);">
+                <span style="color:${fresh ? 'var(--ok)' : 'var(--warn)'};font-weight:bold;">${tid.replace('Tablet_', '')}</span>
+                <span style="opacity:0.6;margin-left:4px;">${age < 60 ? age + 's ago' : Math.round(age / 60) + 'm ago'}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      ` : ''}
+    `;
+
+    // Expand/collapse composite members
+    body.querySelectorAll('[data-toggle-members]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = body.querySelector(`#${btn.dataset.toggleMembers}`);
+        if (target) {
+          const hidden = target.style.display === 'none';
+          target.style.display = hidden ? 'block' : 'none';
+          btn.querySelector('.material-icons').textContent = hidden ? 'expand_less' : 'expand_more';
+        }
+      });
+    });
+  },
+
+  _renderServiceTile(svc) {
+    const level = svc.status?.level || 'down';
+    const levelClass = level === 'healthy' ? 'health-tile-ok' : level === 'warning' ? 'health-tile-warn' : 'health-tile-down';
+    const icon = level === 'healthy' ? 'check_circle' : level === 'warning' ? 'warning' : 'error';
+    const latency = svc.latency_ms ? `${svc.latency_ms}ms` : '';
+    const memberRows = svc.details?.member_rows;
+    const isComposite = Array.isArray(memberRows) && memberRows.length > 0;
+    const memberId = `members-${(svc.id || '').replace(/[^a-z0-9]/g, '-')}`;
+
+    let membersHtml = '';
+    if (isComposite) {
+      membersHtml = `
+        <div id="${memberId}" style="display:none;margin-top:8px;padding-left:12px;border-left:2px solid var(--border);">
+          ${memberRows.map(m => {
+            const mLevel = m.level || 'down';
+            const mIcon = mLevel === 'healthy' ? 'check_circle' : mLevel === 'warning' ? 'warning' : 'error';
+            const mColor = mLevel === 'healthy' ? 'var(--ok)' : mLevel === 'warning' ? 'var(--warn)' : 'var(--down)';
+            return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:13px;">
+              <span class="material-icons" style="font-size:16px;color:${mColor};">${mIcon}</span>
+              <span>${m.name || m.id || '--'}</span>
+              <span style="opacity:0.5;margin-left:auto;">${m.message || m.status || ''}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      `;
+    }
+
+    return `
+      <div class="health-tile ${levelClass}">
+        <div class="health-tile-header">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="material-icons health-tile-icon">${icon}</span>
+            <div>
+              <div class="health-tile-name">${svc.name || svc.id}</div>
+              <div class="health-tile-msg">${svc.message || '--'}</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${latency ? `<span class="health-tile-latency">${latency}</span>` : ''}
+            ${isComposite ? `<button class="panel-close" data-toggle-members="${memberId}" style="padding:2px;"><span class="material-icons" style="font-size:20px;">expand_more</span></button>` : ''}
+          </div>
+        </div>
+        ${membersHtml}
+      </div>
+    `;
   },
 
   // -----------------------------------------------------------------------

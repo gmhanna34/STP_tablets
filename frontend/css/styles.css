@@ -1390,6 +1390,80 @@ body {
   text-decoration: underline;
 }
 
+/* ── Health Panel Tiles ───────────────────────────────────── */
+
+.health-panel-summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--border);
+}
+
+.health-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.health-summary-item .material-icons { font-size: 20px; }
+.health-summary-down { color: var(--down); }
+.health-summary-warn { color: var(--warn); }
+.health-summary-ok   { color: var(--ok); }
+
+.health-summary-ts {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.health-tile {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  border-left: 4px solid var(--border);
+}
+
+.health-tile-ok   { border-left-color: var(--ok); }
+.health-tile-warn { border-left-color: var(--warn); }
+.health-tile-down { border-left-color: var(--down); }
+
+.health-tile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.health-tile-icon {
+  font-size: 22px;
+}
+
+.health-tile-ok .health-tile-icon   { color: var(--ok); }
+.health-tile-warn .health-tile-icon { color: var(--warn); }
+.health-tile-down .health-tile-icon { color: var(--down); }
+
+.health-tile-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.health-tile-msg {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.health-tile-latency {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: 'SF Mono', 'Consolas', monospace;
+}
+
 /* ── Toast Notifications ──────────────────────────────────── */
 
 .toast {
