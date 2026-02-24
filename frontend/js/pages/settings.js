@@ -65,17 +65,6 @@ const SettingsPage = {
             <span class="btn-label">Download YAML</span>
           </button>
         </div>
-        <div id="ha-browser" class="hidden" style="margin-top:16px;">
-          <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
-            <input type="text" id="ha-search" placeholder="Search entities (e.g. switch, ecoflow, climate)..."
-              style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:14px;font-family:inherit;">
-            <select id="ha-domain-filter" style="padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
-              <option value="">All Domains</option>
-            </select>
-            <span id="ha-entity-count" style="font-size:12px;opacity:0.6;white-space:nowrap;"></span>
-          </div>
-          <div id="ha-results" style="max-height:500px;overflow-y:auto;font-size:12px;font-family:monospace;"></div>
-        </div>
       </div>
 
       <div class="control-section">
@@ -217,11 +206,9 @@ const SettingsPage = {
       window.open(url, '_blank');
     });
 
-    // HA Entity Browser
-    document.getElementById('btn-ha-browse')?.addEventListener('click', () => this.loadHAEntities());
+    // HA Entity Browser (opens in panel overlay)
+    document.getElementById('btn-ha-browse')?.addEventListener('click', () => this.openHABrowserPanel());
     document.getElementById('btn-ha-yaml')?.addEventListener('click', () => this.downloadHAYaml());
-    document.getElementById('ha-search')?.addEventListener('input', () => this.filterHAEntities());
-    document.getElementById('ha-domain-filter')?.addEventListener('change', () => this.filterHAEntities());
 
     // Logout
     document.getElementById('btn-logout')?.addEventListener('click', () => {
@@ -565,51 +552,62 @@ const SettingsPage = {
 
   _haEntities: null,  // cached raw response { domains: { domain: [entities] } }
 
-  async loadHAEntities() {
-    const browser = document.getElementById('ha-browser');
-    const results = document.getElementById('ha-results');
-    if (!browser || !results) return;
+  async openHABrowserPanel() {
+    const self = this;
 
-    browser.classList.remove('hidden');
+    App.showPanel('Home Assistant Entities', async (body) => {
+      // Render search toolbar + results area inside the panel body
+      body.innerHTML = `
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="ha-search" placeholder="Search entities (e.g. switch, ecoflow, climate)..."
+            style="flex:1;min-width:200px;padding:8px 12px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:14px;font-family:inherit;">
+          <select id="ha-domain-filter" style="padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+            <option value="">All Domains</option>
+          </select>
+          <span id="ha-entity-count" style="font-size:12px;opacity:0.6;white-space:nowrap;"></span>
+        </div>
+        <div id="ha-results"></div>
+      `;
 
-    if (this._haEntities) {
-      // Already loaded — just show
-      this.filterHAEntities();
-      return;
-    }
+      body.querySelector('#ha-search').addEventListener('input', () => self._renderHAResults(body));
+      body.querySelector('#ha-domain-filter').addEventListener('change', () => self._renderHAResults(body));
 
-    results.innerHTML = '<div style="opacity:0.5;padding:8px;">Loading entities...</div>';
-
-    try {
-      const resp = await fetch('/api/ha/entities', {
-        headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
-      });
-      this._haEntities = await resp.json();
+      // Load data (use cache if available)
+      if (!self._haEntities) {
+        body.querySelector('#ha-results').innerHTML = '<div style="opacity:0.5;padding:8px;">Loading entities...</div>';
+        try {
+          const resp = await fetch('/api/ha/entities', {
+            headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          });
+          self._haEntities = await resp.json();
+        } catch (e) {
+          body.querySelector('#ha-results').innerHTML = '<div style="color:var(--danger);padding:8px;">Failed to load entities. Is the gateway running?</div>';
+          return;
+        }
+      }
 
       // Populate domain dropdown
-      const domainSelect = document.getElementById('ha-domain-filter');
-      if (domainSelect && this._haEntities.domains) {
-        const domains = Object.keys(this._haEntities.domains).sort();
+      const domainSelect = body.querySelector('#ha-domain-filter');
+      if (domainSelect && self._haEntities.domains) {
+        const domains = Object.keys(self._haEntities.domains).sort();
         domainSelect.innerHTML = '<option value="">All Domains (' + domains.length + ')</option>' +
           domains.map(d => {
-            const count = this._haEntities.domains[d].length;
+            const count = self._haEntities.domains[d].length;
             return `<option value="${d}">${d} (${count})</option>`;
           }).join('');
       }
 
-      this.filterHAEntities();
-    } catch (e) {
-      results.innerHTML = '<div style="color:var(--danger);padding:8px;">Failed to load entities. Is the gateway running?</div>';
-    }
+      self._renderHAResults(body);
+    });
   },
 
-  filterHAEntities() {
-    const results = document.getElementById('ha-results');
-    const countEl = document.getElementById('ha-entity-count');
+  _renderHAResults(container) {
+    const results = container.querySelector('#ha-results');
+    const countEl = container.querySelector('#ha-entity-count');
     if (!results || !this._haEntities?.domains) return;
 
-    const query = (document.getElementById('ha-search')?.value || '').toLowerCase().trim();
-    const domainFilter = document.getElementById('ha-domain-filter')?.value || '';
+    const query = (container.querySelector('#ha-search')?.value || '').toLowerCase().trim();
+    const domainFilter = container.querySelector('#ha-domain-filter')?.value || '';
 
     // Flatten all entities, optionally filtering by domain
     let entities = [];
@@ -678,7 +676,6 @@ const SettingsPage = {
         navigator.clipboard.writeText(id).then(() => {
           App.showToast('Copied: ' + id);
         }).catch(() => {
-          // Fallback for insecure contexts
           App.showToast(id, 3000);
         });
       });
