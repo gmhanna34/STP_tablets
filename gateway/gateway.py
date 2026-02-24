@@ -1159,6 +1159,20 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         logger.warning(f"Could not load macros.yaml: {e}")
         macros_cfg = {}
 
+    # YAML parses bare on:/off:/yes:/no: as boolean True/False keys.
+    # Recursively convert them back to their intended string names.
+    _BOOL_KEY_MAP = {True: "on", False: "off"}
+
+    def _normalize_yaml_keys(obj):
+        if isinstance(obj, dict):
+            return {_BOOL_KEY_MAP.get(k, k) if isinstance(k, bool) else k: _normalize_yaml_keys(v)
+                    for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_normalize_yaml_keys(i) for i in obj]
+        return obj
+
+    macros_cfg = _normalize_yaml_keys(macros_cfg)
+
     macro_defs = macros_cfg.get("macros", {})
     button_defs = macros_cfg.get("buttons", {})
 
@@ -1170,6 +1184,24 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 st = item.get("state")
                 if st and st.get("source") == "ha" and st.get("entity"):
                     ha_state_entities.add(st["entity"])
+                # Also scan toggle state bindings
+                toggle = item.get("toggle")
+                if toggle:
+                    tst = toggle.get("state")
+                    if tst and tst.get("source") == "ha" and tst.get("entity"):
+                        ha_state_entities.add(tst["entity"])
+                # Also scan badge bindings
+                badge = item.get("badge")
+                if badge and badge.get("source") == "ha" and badge.get("entity"):
+                    ha_state_entities.add(badge["entity"])
+                # Also scan disabled_when bindings
+                dw = item.get("disabled_when")
+                if dw and dw.get("source") == "ha" and dw.get("entity"):
+                    ha_state_entities.add(dw["entity"])
+            # Section-level disabled_when
+            sdw = section.get("disabled_when")
+            if sdw and sdw.get("source") == "ha" and sdw.get("entity"):
+                ha_state_entities.add(sdw["entity"])
 
     def _execute_macro(macro_key: str, tablet: str, depth: int = 0,
                        skip_steps: set = None, prefix: str = "") -> dict:
