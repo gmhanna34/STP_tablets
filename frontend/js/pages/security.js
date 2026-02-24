@@ -576,13 +576,16 @@ const SecurityPage = {
     const promises = entities.map(async (eid) => {
       const lock = this._locks.find(l => l.entity_id === eid);
       if (lock && lock.duration_entity && lock.lock_rule_entity) {
+        // Derive domain from entity_id (select.* or input_select.*, number.* or input_number.*)
+        const durDomain = lock.duration_entity.split('.')[0];
+        const ruleDomain = lock.lock_rule_entity.split('.')[0];
         // Set duration then trigger custom rule
-        await fetch('/api/ha/service/input_number/set_value', {
+        await fetch(`/api/ha/service/${durDomain}/set_value`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
           body: JSON.stringify({ entity_id: lock.duration_entity, value: minutes }),
         }).catch(() => null);
-        await fetch('/api/ha/service/input_select/select_option', {
+        await fetch(`/api/ha/service/${ruleDomain}/select_option`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
           body: JSON.stringify({ entity_id: lock.lock_rule_entity, option: 'custom' }),
@@ -700,13 +703,16 @@ const SecurityPage = {
 
       App.showToast(`Unlocking ${lock.friendly_name} for ${selectedMinutes} min...`);
 
-      await fetch('/api/ha/service/input_number/set_value', {
+      const durDomain = lock.duration_entity.split('.')[0];
+      const ruleDomain = lock.lock_rule_entity.split('.')[0];
+
+      await fetch(`/api/ha/service/${durDomain}/set_value`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
         body: JSON.stringify({ entity_id: lock.duration_entity, value: selectedMinutes }),
       }).catch(() => null);
 
-      await fetch('/api/ha/service/input_select/select_option', {
+      await fetch(`/api/ha/service/${ruleDomain}/select_option`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
         body: JSON.stringify({ entity_id: lock.lock_rule_entity, option: 'custom' }),
