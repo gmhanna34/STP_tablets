@@ -51,6 +51,23 @@ const SettingsPage = {
       </div>
 
       <div class="control-section">
+        <div class="section-title">Home Assistant Entities</div>
+        <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+          Browse all HA entities for configuring macros and buttons, or download a YAML reference file.
+        </div>
+        <div class="control-grid" style="grid-template-columns:1fr 1fr;">
+          <button class="btn" id="btn-ha-browse">
+            <span class="material-icons">search</span>
+            <span class="btn-label">Browse Entities</span>
+          </button>
+          <button class="btn" id="btn-ha-yaml">
+            <span class="material-icons">download</span>
+            <span class="btn-label">Download YAML</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="control-section">
         <div class="section-title">System Information</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px;">
           <div>Version:</div><div id="info-version">--</div>
@@ -183,11 +200,12 @@ const SettingsPage = {
     const infoLoc = document.getElementById('info-location');
     if (infoLoc) infoLoc.textContent = Auth.getDisplayName();
 
-    // Health dashboard
-    document.getElementById('btn-open-health')?.addEventListener('click', () => {
-      const url = HealthAPI.getStatusUrl();
-      window.open(url, '_blank');
-    });
+    // Health dashboard (opens in panel overlay)
+    document.getElementById('btn-open-health')?.addEventListener('click', () => this.openHealthPanel());
+
+    // HA Entity Browser (opens in panel overlay)
+    document.getElementById('btn-ha-browse')?.addEventListener('click', () => this.openHABrowserPanel());
+    document.getElementById('btn-ha-yaml')?.addEventListener('click', () => this.downloadHAYaml());
 
     // Logout
     document.getElementById('btn-logout')?.addEventListener('click', () => {
@@ -525,7 +543,182 @@ const SettingsPage = {
     }
   },
 
+  // -----------------------------------------------------------------------
+  // Health Dashboard Panel (iframe embed of existing health dashboard)
+  // -----------------------------------------------------------------------
+
+  openHealthPanel() {
+    const url = HealthAPI.getStatusUrl();
+
+    App.showPanel('System Health', (body) => {
+      body.style.padding = '0';
+      body.innerHTML = `
+        <iframe id="health-iframe" src="${url}"
+          style="width:100%;height:100%;border:none;border-radius:0 0 16px 16px;">
+        </iframe>
+      `;
+    });
+  },
+
+  // -----------------------------------------------------------------------
+  // HA Entity Browser
+  // -----------------------------------------------------------------------
+
+  _haEntities: null,  // cached raw response { domains: { domain: [entities] } }
+
+  async openHABrowserPanel() {
+    const self = this;
+
+    App.showPanel('Home Assistant Entities', async (body) => {
+      // Render search toolbar + results area inside the panel body
+      body.innerHTML = `
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="ha-search" placeholder="Search entities (e.g. switch, ecoflow, climate)..."
+            style="flex:1;min-width:200px;padding:8px 12px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:14px;font-family:inherit;">
+          <select id="ha-domain-filter" style="padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+            <option value="">All Domains</option>
+          </select>
+          <span id="ha-entity-count" style="font-size:12px;opacity:0.6;white-space:nowrap;"></span>
+        </div>
+        <div id="ha-results"></div>
+      `;
+
+      body.querySelector('#ha-search').addEventListener('input', () => self._renderHAResults(body));
+      body.querySelector('#ha-domain-filter').addEventListener('change', () => self._renderHAResults(body));
+
+      // Load data (use cache if available)
+      if (!self._haEntities) {
+        body.querySelector('#ha-results').innerHTML = '<div style="opacity:0.5;padding:8px;">Loading entities...</div>';
+        try {
+          const resp = await fetch('/api/ha/entities', {
+            headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          });
+          self._haEntities = await resp.json();
+        } catch (e) {
+          body.querySelector('#ha-results').innerHTML = '<div style="color:var(--danger);padding:8px;">Failed to load entities. Is the gateway running?</div>';
+          return;
+        }
+      }
+
+      // Populate domain dropdown
+      const domainSelect = body.querySelector('#ha-domain-filter');
+      if (domainSelect && self._haEntities.domains) {
+        const domains = Object.keys(self._haEntities.domains).sort();
+        domainSelect.innerHTML = '<option value="">All Domains (' + domains.length + ')</option>' +
+          domains.map(d => {
+            const count = self._haEntities.domains[d].length;
+            return `<option value="${d}">${d} (${count})</option>`;
+          }).join('');
+      }
+
+      self._renderHAResults(body);
+    });
+  },
+
+  _renderHAResults(container) {
+    const results = container.querySelector('#ha-results');
+    const countEl = container.querySelector('#ha-entity-count');
+    if (!results || !this._haEntities?.domains) return;
+
+    const query = (container.querySelector('#ha-search')?.value || '').toLowerCase().trim();
+    const domainFilter = container.querySelector('#ha-domain-filter')?.value || '';
+
+    // Flatten all entities, optionally filtering by domain
+    let entities = [];
+    const domains = domainFilter
+      ? { [domainFilter]: this._haEntities.domains[domainFilter] || [] }
+      : this._haEntities.domains;
+
+    for (const [domain, items] of Object.entries(domains)) {
+      for (const ent of items) {
+        entities.push({ ...ent, domain });
+      }
+    }
+
+    // Apply text search
+    if (query) {
+      entities = entities.filter(e =>
+        (e.entity_id || '').toLowerCase().includes(query) ||
+        (e.friendly_name || '').toLowerCase().includes(query) ||
+        (e.state || '').toLowerCase().includes(query)
+      );
+    }
+
+    if (countEl) countEl.textContent = `${entities.length} entities`;
+
+    if (entities.length === 0) {
+      results.innerHTML = '<div style="opacity:0.5;padding:8px;">No matching entities found.</div>';
+      return;
+    }
+
+    // Cap at 200 to avoid DOM overload
+    const capped = entities.slice(0, 200);
+    const showMore = entities.length > 200;
+
+    results.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="text-align:left;border-bottom:2px solid var(--border);font-size:11px;color:var(--text-secondary);">
+            <th style="padding:6px 8px;">Entity ID</th>
+            <th style="padding:6px 8px;">Name</th>
+            <th style="padding:6px 8px;">State</th>
+            <th style="padding:6px 8px;">Attributes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${capped.map(e => {
+            const attrs = e.attributes || {};
+            const attrKeys = Object.keys(attrs).slice(0, 5);
+            const attrStr = attrKeys.map(k => `${k}: ${JSON.stringify(attrs[k])}`).join(', ');
+            const truncAttrs = attrStr.length > 120 ? attrStr.substring(0, 120) + '...' : attrStr;
+            return `<tr style="border-bottom:1px solid var(--border);" class="ha-entity-row" data-entity-id="${e.entity_id}">
+              <td style="padding:6px 8px;color:var(--info);cursor:pointer;white-space:nowrap;" title="Click to copy">${e.entity_id}</td>
+              <td style="padding:6px 8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.friendly_name || '--'}</td>
+              <td style="padding:6px 8px;font-weight:bold;">${e.state || '--'}</td>
+              <td style="padding:6px 8px;color:var(--text-secondary);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${attrStr}">${truncAttrs || '--'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      ${showMore ? `<div style="padding:8px;opacity:0.6;text-align:center;">Showing first 200 of ${entities.length} — narrow your search to see more.</div>` : ''}
+    `;
+
+    // Click to copy entity_id
+    results.querySelectorAll('.ha-entity-row td:first-child').forEach(td => {
+      td.addEventListener('click', () => {
+        const id = td.textContent.trim();
+        navigator.clipboard.writeText(id).then(() => {
+          App.showToast('Copied: ' + id);
+        }).catch(() => {
+          App.showToast(id, 3000);
+        });
+      });
+    });
+  },
+
+  async downloadHAYaml() {
+    try {
+      App.showToast('Generating YAML reference...');
+      const resp = await fetch('/api/ha/entities/yaml', {
+        headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+      });
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ha_entities_reference.yaml';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      App.showToast('YAML reference downloaded');
+    } catch (e) {
+      App.showToast('Failed to download YAML', 3000, 'error');
+    }
+  },
+
   destroy() {
     if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
+    this._haEntities = null;
   }
 };

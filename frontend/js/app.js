@@ -400,6 +400,55 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
+  // Panel overlay (page-within-a-page)
+  // -----------------------------------------------------------------------
+
+  /**
+   * Show a panel overlay (~80% of screen, slides up from bottom).
+   * @param {string} title - Panel header title
+   * @param {function(HTMLElement)} renderContent - Called with the panel body element; populate it.
+   * @returns {HTMLElement} The overlay element (call App.closePanel() or overlay.remove() to close)
+   */
+  showPanel(title, renderContent) {
+    // Remove any existing panel
+    this.closePanel();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'panel-overlay';
+    overlay.id = 'panel-overlay';
+    overlay.innerHTML = `
+      <div class="panel-container">
+        <div class="panel-header">
+          <h2>${title}</h2>
+          <button class="panel-close"><span class="material-icons">close</span></button>
+        </div>
+        <div class="panel-body"></div>
+      </div>
+    `;
+
+    // Close on backdrop click
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) this.closePanel();
+    });
+
+    // Close on X button
+    overlay.querySelector('.panel-close').addEventListener('click', () => this.closePanel());
+
+    document.body.appendChild(overlay);
+
+    // Let the caller populate the body
+    const body = overlay.querySelector('.panel-body');
+    if (renderContent) renderContent(body);
+
+    return overlay;
+  },
+
+  closePanel() {
+    const existing = document.getElementById('panel-overlay');
+    if (existing) existing.remove();
+  },
+
+  // -----------------------------------------------------------------------
   // Confirmation dialog for destructive operations
   // -----------------------------------------------------------------------
 
