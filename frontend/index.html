@@ -140,8 +140,14 @@
   <!-- =========================================================
        JAVASCRIPT MODULES
        ========================================================= -->
-  <!-- Socket.IO client (served by Flask-SocketIO from gateway) -->
-  <script src="/socket.io/socket.io.js"></script>
+  <!-- Socket.IO v4 client (must match Flask-SocketIO 5.x / python-socketio 5.x) -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    // Fallback to server-served client if CDN unavailable
+    if (typeof io === 'undefined') {
+      document.write('<script src="/socket.io/socket.io.js"><\/script>');
+    }
+  </script>
 
   <!-- API layer -->
   <script src="js/api/obs.js"></script>
