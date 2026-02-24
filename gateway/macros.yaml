@@ -1125,72 +1125,58 @@ buttons:
 
     - section: "Video"
       items:
-        - label: "TVs"
+        - label: "TVs On"
           icon: "tv"
-          toggle:
-            state:
-              source: ha
-              entity: "switch.bat_chapeltv_1_ac_enabled"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "TVs On"
-              icon: "tv"
-              action: { type: macro, macro: chapel_tv_off }
-              confirm: "Turn off all Chapel TVs?"
-            off:
-              label: "TVs Off"
-              icon: "tv_off"
-              action: { type: macro, macro: chapel_tv_on }
+          action: { type: macro, macro: chapel_tv_on }
+          state:
+            source: ha
+            entity: "switch.bat_chapeltv_1_ac_enabled"
+            on_value: "on"
+            on_style: "active"
           badge:
             source: ha
             entity: "sensor.bat_chapeltv_1_battery_level"
             format: "percent"
+        - label: "TVs Off"
+          icon: "tv_off"
+          action: { type: macro, macro: chapel_tv_off }
+          style: "danger"
+          confirm: "Turn off all Chapel TVs?"
 
     - section: "Audio"
       items:
-        - label: "Audio"
+        - label: "Audio On"
           icon: "mic"
-          toggle:
-            state:
-              source: ha
-              entity: "switch.chapel_audio_power"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "Audio On"
-              icon: "mic"
-              action: { type: macro, macro: chapel_audio_off }
-              confirm: "Turn off Chapel audio?"
-            off:
-              label: "Audio Off"
-              icon: "mic_off"
-              action: { type: macro, macro: chapel_audio_on }
+          action: { type: macro, macro: chapel_audio_on }
+          state:
+            source: ha
+            entity: "switch.chapel_audio_power"
+            on_value: "on"
+            on_style: "active"
+        - label: "Audio Off"
+          icon: "mic_off"
+          action: { type: macro, macro: chapel_audio_off }
+          style: "danger"
 
     - section: "A/C"
       items:
-        - label: "A/C"
+        - label: "A/C On"
           icon: "thermostat"
-          toggle:
-            state:
-              source: ha
-              entity: "climate.chapel_thermostat"
-              on_value: "heat"
-              on_style: "active"
-            on:
-              label: "A/C On"
-              icon: "thermostat"
-              action: { type: macro, macro: chapel_ac_off }
-              confirm: "Turn off Chapel A/C?"
-            off:
-              label: "A/C Off"
-              icon: "thermostat"
-              action: { type: macro, macro: chapel_ac_on }
+          action: { type: macro, macro: chapel_ac_on }
+          state:
+            source: ha
+            entity: "climate.chapel_thermostat"
+            on_value: "heat"
+            on_style: "active"
           badge:
             source: ha
             entity: "climate.chapel_thermostat"
             attribute: "current_temperature"
             format: "temp"
+        - label: "A/C Off"
+          icon: "thermostat"
+          action: { type: macro, macro: chapel_ac_off }
+          style: "danger"
 
     - section: "Video Sources"
       disabled_when:
@@ -1214,104 +1200,59 @@ buttons:
   main:
     - section: "Video"
       items:
-        - label: "Video System"
+        - label: "On / Down"
           icon: "tv"
+          action: { type: macro, macro: main_video_on }
           style: "large"
-          span: 2
-          toggle:
-            state:
-              source: projectors
-              field: "any_on"
-              on_value: "true"
-              on_style: "active"
-            on:
-              label: "Video On / Down"
-              icon: "tv"
-              action: { type: macro, macro: main_video_off }
-              confirm: "Turn OFF the entire video system (all projectors + screens)?"
-            off:
-              label: "Video Off / Up"
-              icon: "tv_off"
-              action: { type: macro, macro: main_video_on }
-        - label: "Projectors"
+        - label: "Off / Up"
+          icon: "tv_off"
+          action: { type: macro, macro: main_video_off }
+          style: "large danger"
+          confirm: "Turn OFF the entire video system (all projectors + screens)?"
+        - label: "Projectors Only On"
           icon: "tv"
-          toggle:
-            state:
-              source: projectors
-              field: "any_on"
-              on_value: "true"
-              on_style: "active"
-            on:
-              label: "Projectors On"
-              icon: "tv"
-              action: { type: macro, macro: main_proj_only_off }
-              confirm: "Turn OFF all projectors?"
-            off:
-              label: "Projectors Off"
-              icon: "tv_off"
-              action: { type: macro, macro: main_proj_only_on }
-        - label: "Portables"
+          action: { type: macro, macro: main_proj_only_on }
+        - label: "Projectors Only Off"
+          icon: "tv_off"
+          action: { type: macro, macro: main_proj_only_off }
+          style: "danger"
+        - label: "Portables Only On"
           icon: "speaker"
-          toggle:
-            state:
-              source: ha
-              entity: "switch.TODO_main_portables_power"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "Portables On"
-              icon: "speaker"
-              action: { type: macro, macro: main_port_only_off }
-              confirm: "Turn OFF all portables?"
-            off:
-              label: "Portables Off"
-              icon: "speaker"
-              action: { type: macro, macro: main_port_only_on }
+          action: { type: macro, macro: main_port_only_on }
+        - label: "Portables Only Off"
+          icon: "speaker"
+          action: { type: macro, macro: main_port_only_off }
+          style: "danger"
 
     - section: "Audio System"
       items:
-        - label: "Audio"
+        - label: "On"
           icon: "mic"
+          action: { type: macro, macro: main_audio_on }
           style: "large"
-          toggle:
-            state:
-              source: ha
-              entity: "switch.wattbox_outlet_1"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "Audio On"
-              icon: "mic"
-              action: { type: macro, macro: main_audio_off }
-              confirm: "Turn OFF the audio system?"
-            off:
-              label: "Audio Off"
-              icon: "mic_off"
-              action: { type: macro, macro: main_audio_on }
+          state:
+            source: ha
+            entity: "switch.wattbox_outlet_1"
+            on_value: "on"
+            on_style: "active"
+        - label: "Off"
+          icon: "mic_off"
+          action: { type: macro, macro: main_audio_off }
+          style: "large danger"
         - label: "AppleTV Restart"
           icon: "restart_alt"
           action: { type: macro, macro: main_appletv_restart }
 
     - section: "A/C"
       items:
-        - label: "A/C"
+        - label: "On"
           icon: "thermostat"
+          action: { type: macro, macro: main_ac_on }
           style: "large"
-          toggle:
-            state:
-              source: ha
-              entity: "climate.TODO_main_thermostat"
-              on_value: "heat"
-              on_style: "active"
-            on:
-              label: "A/C On"
-              icon: "thermostat"
-              action: { type: macro, macro: main_ac_off }
-              confirm: "Turn off Main Church A/C?"
-            off:
-              label: "A/C Off"
-              icon: "thermostat"
-              action: { type: macro, macro: main_ac_on }
+        - label: "Off"
+          icon: "thermostat"
+          action: { type: macro, macro: main_ac_off }
+          style: "large danger"
 
     - section: "Video Sources"
       items:
@@ -1451,66 +1392,36 @@ buttons:
   social:
     - section: "Video"
       items:
-        - label: "Video"
+        - label: "On"
           icon: "tv"
+          action: { type: macro, macro: social_video_on }
           style: "large"
-          toggle:
-            state:
-              source: ha
-              entity: "switch.TODO_social_video_power"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "Video On"
-              icon: "tv"
-              action: { type: macro, macro: social_video_off }
-              confirm: "Turn off Social Hall video?"
-            off:
-              label: "Video Off"
-              icon: "tv_off"
-              action: { type: macro, macro: social_video_on }
+        - label: "Off"
+          icon: "tv_off"
+          action: { type: macro, macro: social_video_off }
+          style: "large danger"
 
     - section: "Audio System"
       items:
-        - label: "Audio"
+        - label: "On"
           icon: "mic"
+          action: { type: macro, macro: social_audio_on }
           style: "large"
-          toggle:
-            state:
-              source: ha
-              entity: "switch.TODO_social_audio_power"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "Audio On"
-              icon: "mic"
-              action: { type: macro, macro: social_audio_off }
-              confirm: "Turn off Social Hall audio?"
-            off:
-              label: "Audio Off"
-              icon: "mic_off"
-              action: { type: macro, macro: social_audio_on }
+        - label: "Off"
+          icon: "mic_off"
+          action: { type: macro, macro: social_audio_off }
+          style: "large danger"
 
     - section: "A/C"
       items:
-        - label: "A/C"
+        - label: "On"
           icon: "thermostat"
+          action: { type: macro, macro: social_ac_on }
           style: "large"
-          toggle:
-            state:
-              source: ha
-              entity: "climate.TODO_social_thermostat"
-              on_value: "heat"
-              on_style: "active"
-            on:
-              label: "A/C On"
-              icon: "thermostat"
-              action: { type: macro, macro: social_ac_off }
-              confirm: "Turn off Social Hall A/C?"
-            off:
-              label: "A/C Off"
-              icon: "thermostat"
-              action: { type: macro, macro: social_ac_on }
+        - label: "Off"
+          icon: "thermostat"
+          action: { type: macro, macro: social_ac_off }
+          style: "large danger"
 
     - section: "Video Sources"
       items:
@@ -1533,45 +1444,25 @@ buttons:
   gym:
     - section: "Video"
       items:
-        - label: "Video"
+        - label: "On"
           icon: "tv"
+          action: { type: macro, macro: gym_video_on }
           style: "large"
-          toggle:
-            state:
-              source: ha
-              entity: "switch.TODO_gym_video_power"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "Video On"
-              icon: "tv"
-              action: { type: macro, macro: gym_video_off }
-              confirm: "Turn off Gym video?"
-            off:
-              label: "Video Off"
-              icon: "tv_off"
-              action: { type: macro, macro: gym_video_on }
+        - label: "Off"
+          icon: "tv_off"
+          action: { type: macro, macro: gym_video_off }
+          style: "large danger"
 
     - section: "Audio"
       items:
-        - label: "Audio"
+        - label: "On"
           icon: "mic"
+          action: { type: macro, macro: gym_audio_on }
           style: "large"
-          toggle:
-            state:
-              source: ha
-              entity: "switch.TODO_gym_audio_power"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "Audio On"
-              icon: "mic"
-              action: { type: macro, macro: gym_audio_off }
-              confirm: "Turn off Gym audio?"
-            off:
-              label: "Audio Off"
-              icon: "mic_off"
-              action: { type: macro, macro: gym_audio_on }
+        - label: "Off"
+          icon: "mic_off"
+          action: { type: macro, macro: gym_audio_off }
+          style: "large danger"
 
     - section: "Video Sources"
       items:
@@ -1586,26 +1477,16 @@ buttons:
           action: { type: macro, macro: gym_source_announcements }
 
   confroom:
-    - section: "TV"
+    - section: "TV Power"
       items:
-        - label: "TV"
+        - label: "TV On"
           icon: "tv"
+          action: { type: macro, macro: confroom_tv_on }
           style: "large"
-          toggle:
-            state:
-              source: ha
-              entity: "switch.TODO_confroom_tv_power"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "TV On"
-              icon: "tv"
-              action: { type: macro, macro: confroom_tv_off }
-              confirm: "Turn off Conference Room TV?"
-            off:
-              label: "TV Off"
-              icon: "tv_off"
-              action: { type: macro, macro: confroom_tv_on }
+        - label: "TV Off"
+          icon: "tv_off"
+          action: { type: macro, macro: confroom_tv_off }
+          style: "large danger"
 
     - section: "TV Input"
       items:
