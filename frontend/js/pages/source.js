@@ -5,18 +5,20 @@ const SourcePage = {
 
   render(container) {
     container.innerHTML = `
-      <div class="page-header">
-        <h1>SOURCE ROUTING</h1>
-        <div class="subtitle">MoIP Video Distribution</div>
-      </div>
-      <div class="text-center" style="margin-bottom:16px;">
-        <button class="btn" id="btn-refresh-routing" style="display:inline-flex;max-width:200px;">
-          <span class="material-icons">refresh</span>
-          <span class="btn-label">Refresh</span>
-        </button>
-      </div>
-      <div id="routing-container">
-        <div class="text-center" style="opacity:0.5;">Loading receiver mappings...</div>
+      <div class="page-grid">
+        <div class="page-header">
+          <h1>SOURCE ROUTING</h1>
+          <div class="subtitle">MoIP Video Distribution</div>
+        </div>
+        <div class="text-center">
+          <button class="btn" id="btn-refresh-routing" style="display:inline-flex;max-width:200px;">
+            <span class="material-icons">refresh</span>
+            <span class="btn-label">Refresh</span>
+          </button>
+        </div>
+        <div id="routing-container">
+          <div class="text-center" style="opacity:0.5;">Loading receiver mappings...</div>
+        </div>
       </div>
     `;
   },

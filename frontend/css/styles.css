@@ -108,14 +108,14 @@ body {
 /* ── Status Bar ───────────────────────────────────────────── */
 
 #status-bar {
-  flex: 0 0 40px;
+  flex: 0 0 36px;
   background: var(--nav-bg);
   color: var(--text-on-nav);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 4px 16px;
-  font-size: 12px;
+  padding: 2px 12px;
+  font-size: 11px;
   z-index: 100;
   box-shadow: var(--shadow-sm);
 }
@@ -173,7 +173,7 @@ body {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 20px;
+  padding: 12px;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
 }
@@ -182,10 +182,60 @@ body {
   animation: fadeIn 0.3s ease-out;
 }
 
+/* ── 12-Column Page Grid ─────────────────────────────────── */
+
+.page-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.page-grid > * {
+  grid-column: 1 / -1; /* default: full width */
+}
+
+/* Explicit column span utilities */
+.col-span-1  { grid-column: span 1; }
+.col-span-2  { grid-column: span 2; }
+.col-span-3  { grid-column: span 3; }
+.col-span-4  { grid-column: span 4; }
+.col-span-5  { grid-column: span 5; }
+.col-span-6  { grid-column: span 6; }
+.col-span-7  { grid-column: span 7; }
+.col-span-8  { grid-column: span 8; }
+.col-span-9  { grid-column: span 9; }
+.col-span-10 { grid-column: span 10; }
+.col-span-11 { grid-column: span 11; }
+.col-span-12 { grid-column: span 12; }
+
+/* Column start positions */
+.col-start-1  { grid-column-start: 1; }
+.col-start-2  { grid-column-start: 2; }
+.col-start-3  { grid-column-start: 3; }
+.col-start-4  { grid-column-start: 4; }
+.col-start-5  { grid-column-start: 5; }
+.col-start-6  { grid-column-start: 6; }
+.col-start-7  { grid-column-start: 7; }
+.col-start-8  { grid-column-start: 8; }
+.col-start-9  { grid-column-start: 9; }
+.col-start-10 { grid-column-start: 10; }
+.col-start-11 { grid-column-start: 11; }
+.col-start-12 { grid-column-start: 12; }
+
+/* On small screens, all spans collapse to full width */
+@media (max-width: 899px) {
+  .page-grid > .col-span-4,
+  .page-grid > .col-span-5,
+  .page-grid > .col-span-6 {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ── Navigation Bar ───────────────────────────────────────── */
 
 #nav-bar {
-  flex: 0 0 80px;
+  flex: 0 0 64px;
   background: var(--nav-bg);
   display: flex;
   justify-content: space-evenly;
@@ -201,10 +251,10 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  padding: 6px 8px;
+  padding: 4px 6px;
   border-radius: 8px;
   transition: all 0.2s;
-  min-width: 70px;
+  min-width: 58px;
   text-decoration: none;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
@@ -214,17 +264,17 @@ body {
 }
 
 .nav-item .material-icons {
-  font-size: 28px;
+  font-size: 24px;
   color: var(--text-on-nav);
   opacity: 0.6;
   transition: all 0.2s;
 }
 
 .nav-item .nav-label {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--text-on-nav);
   opacity: 0.6;
-  margin-top: 2px;
+  margin-top: 1px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
   transition: all 0.2s;
@@ -255,28 +305,28 @@ body {
 }
 
 #church-seal {
-  width: 60px;
-  height: 60px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   object-fit: cover;
-  margin: 0 8px;
+  margin: 0 4px;
 }
 
 /* ── Page Header ──────────────────────────────────────────── */
 
 .page-header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 10px;
 }
 
 .page-header h1 {
-  font-size: 32px;
+  font-size: 24px;
   font-weight: bold;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .page-header .subtitle {
-  font-size: 18px;
+  font-size: 14px;
   color: var(--text-secondary);
 }
 
@@ -284,21 +334,26 @@ body {
 
 .control-section {
   background: var(--surface);
-  border-radius: 10px;
-  padding: 20px;
-  margin-bottom: 20px;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border);
 }
 
+/* Inside page-grid, margin-bottom is handled by grid gap */
+.page-grid > .control-section {
+  margin-bottom: 0;
+}
+
 .section-title {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   text-align: center;
   color: var(--text);
   border-bottom: 2px solid var(--border);
-  padding-bottom: 8px;
+  padding-bottom: 6px;
 }
 
 /* ── Collapsible Sections ─────────────────────────────────── */
@@ -337,8 +392,8 @@ body {
 
 .control-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
 }
 
 /* ── Buttons ──────────────────────────────────────────────── */
@@ -346,18 +401,18 @@ body {
 .btn {
   background: var(--btn-bg);
   border: 1px solid var(--btn-border);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--text);
-  padding: 16px 12px;
-  font-size: 16px;
+  padding: 10px 8px;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 70px;
+  gap: 4px;
+  min-height: 56px;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   text-align: center;
@@ -411,26 +466,26 @@ body {
 }
 
 .btn .material-icons {
-  font-size: 28px;
+  font-size: 22px;
 }
 
 .btn .btn-label {
-  font-size: 14px;
+  font-size: 12px;
   text-align: center;
   line-height: 1.2;
 }
 
 .btn-large {
-  min-height: 90px;
-  font-size: 18px;
+  min-height: 70px;
+  font-size: 16px;
 }
 
 .btn-large .material-icons {
-  font-size: 32px;
+  font-size: 28px;
 }
 
 .btn-large .btn-label {
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .btn-wide {
@@ -625,11 +680,11 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   background: var(--surface-alt);
-  border-radius: 8px;
-  padding: 10px 8px;
-  min-width: 80px;
+  border-radius: 6px;
+  padding: 8px 6px;
+  min-width: 70px;
   flex-shrink: 0;
   border: 1px solid var(--border);
 }
@@ -646,8 +701,8 @@ body {
 
 .channel-fader {
   writing-mode: vertical-lr;
-  height: 120px;
-  width: 30px;
+  height: 100px;
+  width: 28px;
   direction: rtl;
   accent-color: var(--accent);
   -webkit-appearance: none;
@@ -714,8 +769,8 @@ body {
 
 .routing-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
 }
 
 .routing-card {
@@ -754,21 +809,21 @@ body {
 
 .cam-tab-bar {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   justify-content: center;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .cam-tab {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 24px;
+  gap: 4px;
+  padding: 8px 16px;
   border-radius: 8px;
   border: 2px solid var(--btn-border);
   background: var(--btn-bg);
   color: var(--text);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -777,7 +832,7 @@ body {
 }
 
 .cam-tab .material-icons {
-  font-size: 20px;
+  font-size: 18px;
 }
 
 .cam-tab:hover {
@@ -794,8 +849,8 @@ body {
 
 .camera-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
 }
 
 .camera-card {
@@ -859,8 +914,8 @@ body {
 
 .door-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
 }
 
 .door-card {
@@ -1087,17 +1142,17 @@ body {
 
 .scene-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 6px;
 }
 
 .scene-btn {
   background: var(--btn-bg);
   border: 1px solid var(--btn-border);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--text);
-  padding: 10px 8px;
-  font-size: 13px;
+  padding: 8px 6px;
+  font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
@@ -1130,10 +1185,10 @@ body {
 
 .obs-status {
   display: flex;
-  gap: 20px;
+  gap: 12px;
   justify-content: center;
   flex-wrap: wrap;
-  padding: 10px 0;
+  padding: 6px 0;
 }
 
 .status-indicator {
@@ -1435,12 +1490,12 @@ body {
 /* ── Info Text ────────────────────────────────────────────── */
 
 .info-text {
-  font-size: 20px;
+  font-size: 16px;
   text-align: center;
   color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: 1.5;
   max-width: 600px;
-  margin: 40px auto;
+  margin: 20px auto;
 }
 
 /* ── Confirm Dialog ───────────────────────────────────────── */
@@ -1703,7 +1758,7 @@ body {
 
 .toast {
   position: fixed;
-  bottom: 100px;
+  bottom: 80px;
   left: 50%;
   transform: translateX(-50%);
   background: var(--toast-bg);
@@ -1804,74 +1859,78 @@ body {
 /* ── Small screens (phones) ───────────────────────────────── */
 
 @media (max-width: 599px) {
-  .page-header h1    { font-size: 22px; }
-  .page-header .subtitle { font-size: 14px; }
-  .section-title     { font-size: 16px; }
+  .page-header h1    { font-size: 20px; }
+  .page-header .subtitle { font-size: 12px; }
+  .section-title     { font-size: 14px; }
 
   .control-grid {
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 6px;
   }
 
   .btn {
-    padding: 10px 8px;
-    font-size: 13px;
-    min-height: 56px;
+    padding: 8px 6px;
+    font-size: 12px;
+    min-height: 48px;
   }
 
-  .btn .material-icons  { font-size: 22px; }
-  .btn .btn-label       { font-size: 11px; }
-  .btn-large            { min-height: 72px; }
-  .btn-large .material-icons { font-size: 28px; }
+  .btn .material-icons  { font-size: 20px; }
+  .btn .btn-label       { font-size: 10px; }
+  .btn-large            { min-height: 60px; }
+  .btn-large .material-icons { font-size: 24px; }
 
-  .nav-item             { min-width: 44px; padding: 4px 4px; }
-  .nav-item .material-icons { font-size: 22px; }
-  .nav-item .nav-label  { font-size: 8px; }
-  #church-seal          { width: 40px; height: 40px; }
+  .nav-item             { min-width: 40px; padding: 3px 3px; }
+  .nav-item .material-icons { font-size: 20px; }
+  .nav-item .nav-label  { font-size: 7px; }
+  #church-seal          { width: 36px; height: 36px; }
 
-  .camera-grid          { grid-template-columns: 1fr; gap: 12px; }
-  .routing-grid         { grid-template-columns: 1fr; gap: 8px; }
-  .scene-grid           { grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 6px; }
+  .camera-grid          { grid-template-columns: 1fr; gap: 8px; }
+  .routing-grid         { grid-template-columns: 1fr; gap: 6px; }
+  .scene-grid           { grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 4px; }
 
-  .control-section      { padding: 12px; margin-bottom: 12px; }
-  #page-content         { padding: 10px; }
-  .info-text            { font-size: 16px; margin: 20px auto; }
+  .control-section      { padding: 10px; margin-bottom: 8px; }
+  #page-content         { padding: 8px; }
+  .info-text            { font-size: 14px; margin: 12px auto; }
   .temp-value           { font-size: 36px; }
-  .obs-status           { gap: 10px; }
+  .obs-status           { gap: 8px; }
   #pin-modal            { min-width: 260px; padding: 20px; }
+
+  .page-grid            { gap: 6px; }
 }
 
 /* ── Tablets portrait & small tablets ─────────────────────── */
 
 @media (min-width: 600px) and (max-width: 899px) {
-  .page-header h1       { font-size: 26px; }
-  .section-title        { font-size: 18px; }
+  .page-header h1       { font-size: 22px; }
+  .section-title        { font-size: 15px; }
 
   .control-grid {
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 8px;
   }
 
   .btn {
-    padding: 14px 10px;
-    min-height: 64px;
+    padding: 10px 8px;
+    min-height: 56px;
   }
 
-  .btn .material-icons  { font-size: 26px; }
-  .btn-large            { min-height: 84px; }
+  .btn .material-icons  { font-size: 22px; }
+  .btn-large            { min-height: 68px; }
 
-  .nav-item             { min-width: 56px; padding: 4px 6px; }
-  .nav-item .material-icons { font-size: 24px; }
-  .nav-item .nav-label  { font-size: 9px; }
-  #church-seal          { width: 48px; height: 48px; }
+  .nav-item             { min-width: 50px; padding: 4px 5px; }
+  .nav-item .material-icons { font-size: 22px; }
+  .nav-item .nav-label  { font-size: 8px; }
+  #church-seal          { width: 42px; height: 42px; }
 
-  .camera-grid          { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
-  .routing-grid         { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
-  .scene-grid           { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 6px; }
+  .camera-grid          { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .routing-grid         { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .scene-grid           { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 6px; }
 
-  .control-section      { padding: 16px; }
-  #page-content         { padding: 16px; }
+  .control-section      { padding: 12px; }
+  #page-content         { padding: 10px; }
   .temp-value           { font-size: 40px; }
+
+  .page-grid            { gap: 8px; }
 }
 
 /* ── Target tablet landscape & medium screens ─────────────── */
@@ -1879,23 +1938,23 @@ body {
 
 @media (min-width: 900px) and (max-width: 1199px) {
   .control-grid {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
   }
 
   .camera-grid {
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 10px;
   }
 
   .routing-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 8px;
   }
 
   .scene-grid {
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 6px;
   }
 }
 
@@ -1903,30 +1962,30 @@ body {
 
 @media (min-width: 1200px) {
   .control-grid {
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 16px;
-  }
-
-  .camera-grid {
-    grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
-    gap: 20px;
-  }
-
-  .routing-grid {
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 16px;
-  }
-
-  .scene-grid {
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 10px;
   }
 
-  .page-header h1       { font-size: 36px; }
-  .control-section      { padding: 24px; }
+  .camera-grid {
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 12px;
+  }
+
+  .routing-grid {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 10px;
+  }
+
+  .scene-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+  }
+
+  .page-header h1       { font-size: 28px; }
+  .control-section      { padding: 16px; }
 
   #page-content {
-    padding: 24px;
+    padding: 16px;
     max-width: 1400px;
     margin: 0 auto;
     width: 100%;
@@ -1937,30 +1996,32 @@ body {
 
 @media (max-height: 600px) {
   #nav-bar {
-    flex: 0 0 56px;
+    flex: 0 0 52px;
   }
 
-  .nav-item             { padding: 4px 6px; }
-  .nav-item .material-icons { font-size: 22px; }
-  .nav-item .nav-label  { font-size: 8px; margin-top: 1px; }
-  #church-seal          { width: 44px; height: 44px; }
+  .nav-item             { padding: 3px 4px; }
+  .nav-item .material-icons { font-size: 20px; }
+  .nav-item .nav-label  { font-size: 7px; margin-top: 1px; }
+  #church-seal          { width: 38px; height: 38px; }
 
   #status-bar {
-    flex: 0 0 32px;
-    padding: 2px 12px;
-    font-size: 11px;
+    flex: 0 0 28px;
+    padding: 2px 10px;
+    font-size: 10px;
   }
 
-  .clock                { font-size: 15px; }
-  .page-header          { margin-bottom: 14px; }
-  .page-header h1       { font-size: 24px; margin-bottom: 4px; }
-  .page-header .subtitle { font-size: 14px; }
-  .control-section      { padding: 12px; margin-bottom: 12px; }
-  .section-title        { font-size: 17px; margin-bottom: 10px; }
-  #page-content         { padding: 10px; }
+  .clock                { font-size: 14px; }
+  .page-header          { margin-bottom: 8px; }
+  .page-header h1       { font-size: 20px; margin-bottom: 2px; }
+  .page-header .subtitle { font-size: 12px; }
+  .control-section      { padding: 8px; margin-bottom: 8px; }
+  .section-title        { font-size: 14px; margin-bottom: 8px; }
+  #page-content         { padding: 8px; }
 
-  .btn                  { padding: 10px 8px; min-height: 54px; }
-  .btn-large            { min-height: 70px; }
+  .btn                  { padding: 8px 6px; min-height: 48px; }
+  .btn-large            { min-height: 60px; }
   .mixer-channel        { padding: 6px 4px; }
   .channel-fader        { height: 80px; }
+
+  .page-grid            { gap: 6px; }
 }

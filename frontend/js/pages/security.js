@@ -11,61 +11,63 @@ const SecurityPage = {
 
   render(container) {
     container.innerHTML = `
-      <div class="page-header">
-        <h1>SECURITY</h1>
-        <div class="subtitle">Cameras &amp; Access Control</div>
-      </div>
+      <div class="page-grid">
+        <div class="page-header">
+          <h1>SECURITY</h1>
+          <div class="subtitle">Cameras &amp; Access Control</div>
+        </div>
 
-      <div class="cam-tab-bar">
-        <button class="cam-tab active" data-tab="ptz">
-          <span class="material-icons">videocam</span>
-          <span>PTZ Cameras</span>
-        </button>
-        <button class="cam-tab" data-tab="security">
-          <span class="material-icons">shield</span>
-          <span>Security Cameras</span>
-        </button>
-        <button class="cam-tab" data-tab="access">
-          <span class="material-icons">lock</span>
-          <span>Access Control</span>
-        </button>
-      </div>
-
-      <div id="cam-ptz-content">
-        <div class="camera-grid" id="ptz-grid"></div>
-        <div class="text-center mt-16">
-          <button class="btn" id="btn-security-grid" style="display:inline-flex;max-width:300px;">
-            <span class="material-icons">grid_view</span>
-            <span class="btn-label">View Security Grid on Displays</span>
+        <div class="cam-tab-bar">
+          <button class="cam-tab active" data-tab="ptz">
+            <span class="material-icons">videocam</span>
+            <span>PTZ Cameras</span>
+          </button>
+          <button class="cam-tab" data-tab="security">
+            <span class="material-icons">shield</span>
+            <span>Security Cameras</span>
+          </button>
+          <button class="cam-tab" data-tab="access">
+            <span class="material-icons">lock</span>
+            <span>Access Control</span>
           </button>
         </div>
-      </div>
 
-      <div id="cam-security-content" style="display:none;">
-        <div class="camera-grid" id="security-grid">
-          <div style="opacity:0.5;text-align:center;padding:20px;grid-column:1/-1;">Loading security cameras...</div>
+        <div id="cam-ptz-content">
+          <div class="camera-grid" id="ptz-grid"></div>
+          <div class="text-center" style="margin-top:10px;">
+            <button class="btn" id="btn-security-grid" style="display:inline-flex;max-width:300px;">
+              <span class="material-icons">grid_view</span>
+              <span class="btn-label">View Security Grid on Displays</span>
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div id="cam-access-content" style="display:none;">
-        <div class="batch-bar" id="batch-bar" style="display:none;">
-          <button class="btn btn-sm" id="btn-select-all">
-            <span class="material-icons" style="font-size:18px;">select_all</span>
-            <span class="btn-label">Select All</span>
-          </button>
-          <span class="batch-count" id="batch-count">0 selected</span>
-          <div style="flex:1;"></div>
-          <button class="btn btn-sm btn-success" id="btn-batch-lock">
-            <span class="material-icons" style="font-size:18px;">lock</span>
-            <span class="btn-label">Lock Selected</span>
-          </button>
-          <button class="btn btn-sm btn-danger" id="btn-batch-unlock">
-            <span class="material-icons" style="font-size:18px;">lock_open</span>
-            <span class="btn-label">Unlock Selected</span>
-          </button>
+        <div id="cam-security-content" style="display:none;">
+          <div class="camera-grid" id="security-grid">
+            <div style="opacity:0.5;text-align:center;padding:16px;grid-column:1/-1;">Loading security cameras...</div>
+          </div>
         </div>
-        <div class="door-grid" id="door-grid">
-          <div style="opacity:0.5;text-align:center;padding:40px;grid-column:1/-1;">Loading doors...</div>
+
+        <div id="cam-access-content" style="display:none;">
+          <div class="batch-bar" id="batch-bar" style="display:none;">
+            <button class="btn btn-sm" id="btn-select-all">
+              <span class="material-icons" style="font-size:16px;">select_all</span>
+              <span class="btn-label">Select All</span>
+            </button>
+            <span class="batch-count" id="batch-count">0 selected</span>
+            <div style="flex:1;"></div>
+            <button class="btn btn-sm btn-success" id="btn-batch-lock">
+              <span class="material-icons" style="font-size:16px;">lock</span>
+              <span class="btn-label">Lock</span>
+            </button>
+            <button class="btn btn-sm btn-danger" id="btn-batch-unlock">
+              <span class="material-icons" style="font-size:16px;">lock_open</span>
+              <span class="btn-label">Unlock</span>
+            </button>
+          </div>
+          <div class="door-grid" id="door-grid">
+            <div style="opacity:0.5;text-align:center;padding:30px;grid-column:1/-1;">Loading doors...</div>
+          </div>
         </div>
       </div>
     `;

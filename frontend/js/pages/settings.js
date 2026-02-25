@@ -6,170 +6,172 @@ const SettingsPage = {
     const currentLoc = Auth.currentLocation;
 
     container.innerHTML = `
-      <div class="page-header">
-        <h1>SETTINGS</h1>
-      </div>
+      <div class="page-grid">
+        <div class="page-header">
+          <h1>SETTINGS</h1>
+        </div>
 
-      <div class="control-section">
-        <div class="section-title">Tablet Location</div>
-        <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
-          Select which location this tablet is assigned to. This controls which menu items are visible.
-        </div>
-        <div class="control-grid" style="grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));">
-          ${locations.map(loc => `
-            <button class="btn ${loc.key === currentLoc ? 'active' : ''}" data-location="${loc.key}">
-              <span class="material-icons">${loc.key === currentLoc ? 'radio_button_checked' : 'radio_button_unchecked'}</span>
-              <span class="btn-label">${loc.displayName}</span>
-            </button>
-          `).join('')}
-        </div>
-      </div>
-
-      <div class="control-section">
-        <div class="section-title">Audio Mixer (X32)</div>
-        <div id="mixer-container">
-          <div class="text-center" style="opacity:0.5;">Loading mixer status...</div>
-        </div>
-        <div class="mt-16">
-          <div class="section-title" style="font-size:16px;">Mixer Scenes</div>
-          <div class="scene-grid" id="x32-scenes"></div>
-        </div>
-        <div class="mt-16">
-          <div class="section-title" style="font-size:16px;">Aux Channels</div>
-          <div id="aux-container" class="mixer-grid"></div>
-        </div>
-      </div>
-
-      <div class="control-section">
-        <div class="section-title">System Health</div>
-        <div class="text-center">
-          <button class="btn" id="btn-open-health" style="display:inline-flex;max-width:300px;">
-            <span class="material-icons">monitor_heart</span>
-            <span class="btn-label">Open Health Dashboard</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="control-section">
-        <div class="section-title">Home Assistant Entities</div>
-        <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
-          Browse all HA entities for configuring macros and buttons, or download a YAML reference file.
-        </div>
-        <div class="control-grid" style="grid-template-columns:1fr 1fr;">
-          <button class="btn" id="btn-ha-browse">
-            <span class="material-icons">search</span>
-            <span class="btn-label">Browse Entities</span>
-          </button>
-          <button class="btn" id="btn-ha-yaml">
-            <span class="material-icons">download</span>
-            <span class="btn-label">Download YAML</span>
-          </button>
-        </div>
-      </div>
-
-      <div class="control-section">
-        <div class="section-title">System Information</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:14px;">
-          <div>Version:</div><div id="info-version">--</div>
-          <div>Location:</div><div id="info-location">--</div>
-          <div>Connection:</div><div id="info-connection">--</div>
-          <div>OBS Status:</div><div id="info-obs">--</div>
-          <div>X32 Status:</div><div id="info-x32">--</div>
-        </div>
-      </div>
-
-      <div class="control-section">
-        <div class="section-title">Audit Log</div>
-        <div class="text-center" style="margin-bottom:12px;">
-          <button class="btn" id="btn-load-audit" style="display:inline-flex;max-width:300px;">
-            <span class="material-icons">history</span>
-            <span class="btn-label">Load Recent Activity</span>
-          </button>
-        </div>
-        <div id="audit-container" class="hidden">
-          <div class="audit-controls" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
-            <select id="audit-filter" style="padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;">
-              <option value="">All Actions</option>
-              <option value="scene:execute">Scenes</option>
-              <option value="moip:">MoIP</option>
-              <option value="ptz:">PTZ</option>
-              <option value="projector:">Projectors</option>
-              <option value="ha:">Home Assistant</option>
-              <option value="x32:">X32 Mixer</option>
-            </select>
-            <span id="audit-count" style="font-size:12px;opacity:0.6;"></span>
+        <!-- Tablet Location: full width -->
+        <div class="control-section">
+          <div class="section-title">Tablet Location</div>
+          <div style="font-size:12px;color:var(--text-secondary);text-align:center;margin-bottom:8px;">
+            Select which location this tablet is assigned to.
           </div>
-          <div id="audit-log" style="max-height:400px;overflow-y:auto;font-size:12px;font-family:monospace;"></div>
+          <div class="control-grid" style="grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));">
+            ${locations.map(loc => `
+              <button class="btn ${loc.key === currentLoc ? 'active' : ''}" data-location="${loc.key}">
+                <span class="material-icons">${loc.key === currentLoc ? 'radio_button_checked' : 'radio_button_unchecked'}</span>
+                <span class="btn-label">${loc.displayName}</span>
+              </button>
+            `).join('')}
+          </div>
         </div>
-      </div>
 
-      <div class="control-section">
-        <div class="section-title">Scheduled Automations</div>
-        <div id="schedule-container">
-          <div class="text-center" style="opacity:0.5;font-size:14px;">Loading schedules...</div>
+        <!-- Audio Mixer: full width -->
+        <div class="control-section">
+          <div class="section-title">Audio Mixer (X32)</div>
+          <div id="mixer-container">
+            <div class="text-center" style="opacity:0.5;">Loading mixer status...</div>
+          </div>
+          <div style="margin-top:10px;">
+            <div class="section-title" style="font-size:14px;">Mixer Scenes</div>
+            <div class="scene-grid" id="x32-scenes"></div>
+          </div>
+          <div style="margin-top:10px;">
+            <div class="section-title" style="font-size:14px;">Aux Channels</div>
+            <div id="aux-container" class="mixer-grid"></div>
+          </div>
         </div>
-        <div class="mt-16 text-center">
-          <button class="btn" id="btn-add-schedule" style="display:inline-flex;max-width:300px;">
-            <span class="material-icons">add_alarm</span>
-            <span class="btn-label">Add Schedule</span>
-          </button>
+
+        <!-- System Health: left half -->
+        <div class="control-section col-span-6">
+          <div class="section-title">System Health</div>
+          <div class="text-center">
+            <button class="btn" id="btn-open-health" style="display:inline-flex;">
+              <span class="material-icons">monitor_heart</span>
+              <span class="btn-label">Open Health Dashboard</span>
+            </button>
+          </div>
         </div>
-        <div id="schedule-form" class="hidden" style="margin-top:16px;background:#1a1a2e;padding:16px;border-radius:8px;">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <div>
-              <label style="font-size:12px;opacity:0.7;">Name</label>
-              <input type="text" id="sched-name" placeholder="e.g. Sunday Morning Setup"
-                style="width:100%;padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:14px;font-family:inherit;">
+
+        <!-- HA Entities: right half -->
+        <div class="control-section col-span-6">
+          <div class="section-title">Home Assistant</div>
+          <div class="control-grid" style="grid-template-columns:1fr 1fr;">
+            <button class="btn" id="btn-ha-browse">
+              <span class="material-icons">search</span>
+              <span class="btn-label">Browse Entities</span>
+            </button>
+            <button class="btn" id="btn-ha-yaml">
+              <span class="material-icons">download</span>
+              <span class="btn-label">Download YAML</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- System Info: left half -->
+        <div class="control-section col-span-6">
+          <div class="section-title">System Information</div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 8px;font-size:13px;">
+            <div>Version:</div><div id="info-version">--</div>
+            <div>Location:</div><div id="info-location">--</div>
+            <div>Connection:</div><div id="info-connection">--</div>
+            <div>OBS:</div><div id="info-obs">--</div>
+            <div>X32:</div><div id="info-x32">--</div>
+          </div>
+        </div>
+
+        <!-- Security + Reload: right half -->
+        <div class="control-section col-span-6">
+          <div class="section-title">Security</div>
+          <div class="control-grid" style="grid-template-columns:1fr 1fr 1fr;">
+            <button class="btn" id="btn-change-pin"><span class="material-icons">lock</span><span class="btn-label">Change PIN</span></button>
+            <button class="btn" id="btn-logout"><span class="material-icons">logout</span><span class="btn-label">Lock Settings</span></button>
+            <button class="btn" id="btn-reload-app"><span class="material-icons">refresh</span><span class="btn-label">Reload App</span></button>
+          </div>
+        </div>
+
+        <!-- Audit Log: full width -->
+        <div class="control-section">
+          <div class="section-title">Audit Log</div>
+          <div class="text-center" style="margin-bottom:8px;">
+            <button class="btn" id="btn-load-audit" style="display:inline-flex;max-width:300px;">
+              <span class="material-icons">history</span>
+              <span class="btn-label">Load Recent Activity</span>
+            </button>
+          </div>
+          <div id="audit-container" class="hidden">
+            <div class="audit-controls" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+              <select id="audit-filter" style="padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;">
+                <option value="">All Actions</option>
+                <option value="scene:execute">Scenes</option>
+                <option value="moip:">MoIP</option>
+                <option value="ptz:">PTZ</option>
+                <option value="projector:">Projectors</option>
+                <option value="ha:">Home Assistant</option>
+                <option value="x32:">X32 Mixer</option>
+              </select>
+              <span id="audit-count" style="font-size:12px;opacity:0.6;"></span>
             </div>
-            <div>
-              <label style="font-size:12px;opacity:0.7;">Macro</label>
-              <select id="sched-macro" style="width:100%;padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:14px;font-family:inherit;"></select>
-            </div>
-            <div>
-              <label style="font-size:12px;opacity:0.7;">Time</label>
-              <input type="time" id="sched-time" value="08:00"
-                style="width:100%;padding:8px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:14px;font-family:inherit;">
-            </div>
-            <div>
-              <label style="font-size:12px;opacity:0.7;">Days</label>
-              <div id="sched-days" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">
-                <label style="font-size:12px;"><input type="checkbox" value="0" checked> Mon</label>
-                <label style="font-size:12px;"><input type="checkbox" value="1" checked> Tue</label>
-                <label style="font-size:12px;"><input type="checkbox" value="2" checked> Wed</label>
-                <label style="font-size:12px;"><input type="checkbox" value="3" checked> Thu</label>
-                <label style="font-size:12px;"><input type="checkbox" value="4" checked> Fri</label>
-                <label style="font-size:12px;"><input type="checkbox" value="5" checked> Sat</label>
-                <label style="font-size:12px;"><input type="checkbox" value="6" checked> Sun</label>
+            <div id="audit-log" style="max-height:300px;overflow-y:auto;font-size:12px;font-family:monospace;"></div>
+          </div>
+        </div>
+
+        <!-- Schedules: left half -->
+        <div class="control-section col-span-6">
+          <div class="section-title">Scheduled Automations</div>
+          <div id="schedule-container">
+            <div class="text-center" style="opacity:0.5;font-size:13px;">Loading schedules...</div>
+          </div>
+          <div style="margin-top:8px;" class="text-center">
+            <button class="btn" id="btn-add-schedule" style="display:inline-flex;max-width:300px;">
+              <span class="material-icons">add_alarm</span>
+              <span class="btn-label">Add Schedule</span>
+            </button>
+          </div>
+          <div id="schedule-form" class="hidden" style="margin-top:12px;background:#1a1a2e;padding:12px;border-radius:8px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+              <div>
+                <label style="font-size:11px;opacity:0.7;">Name</label>
+                <input type="text" id="sched-name" placeholder="e.g. Sunday Morning Setup"
+                  style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;font-family:inherit;">
+              </div>
+              <div>
+                <label style="font-size:11px;opacity:0.7;">Macro</label>
+                <select id="sched-macro" style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;font-family:inherit;"></select>
+              </div>
+              <div>
+                <label style="font-size:11px;opacity:0.7;">Time</label>
+                <input type="time" id="sched-time" value="08:00"
+                  style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;font-family:inherit;">
+              </div>
+              <div>
+                <label style="font-size:11px;opacity:0.7;">Days</label>
+                <div id="sched-days" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">
+                  <label style="font-size:11px;"><input type="checkbox" value="0" checked> Mon</label>
+                  <label style="font-size:11px;"><input type="checkbox" value="1" checked> Tue</label>
+                  <label style="font-size:11px;"><input type="checkbox" value="2" checked> Wed</label>
+                  <label style="font-size:11px;"><input type="checkbox" value="3" checked> Thu</label>
+                  <label style="font-size:11px;"><input type="checkbox" value="4" checked> Fri</label>
+                  <label style="font-size:11px;"><input type="checkbox" value="5" checked> Sat</label>
+                  <label style="font-size:11px;"><input type="checkbox" value="6" checked> Sun</label>
+                </div>
               </div>
             </div>
+            <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end;">
+              <button class="btn" id="btn-sched-cancel" style="min-height:auto;padding:6px 12px;">Cancel</button>
+              <button class="btn btn-success" id="btn-sched-save" style="min-height:auto;padding:6px 12px;background:#00b050;border-color:#00b050;">Save</button>
+            </div>
           </div>
-          <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;">
-            <button class="btn" id="btn-sched-cancel" style="min-height:auto;padding:8px 16px;">Cancel</button>
-            <button class="btn btn-success" id="btn-sched-save" style="min-height:auto;padding:8px 16px;background:#00b050;border-color:#00b050;">Save</button>
+        </div>
+
+        <!-- Connected Tablets: right half -->
+        <div class="control-section col-span-6">
+          <div class="section-title">Connected Tablets</div>
+          <div id="sessions-container">
+            <div class="text-center" style="opacity:0.5;font-size:13px;">Load audit log to see connected tablets</div>
           </div>
         </div>
-      </div>
-
-      <div class="control-section">
-        <div class="section-title">Connected Tablets</div>
-        <div id="sessions-container">
-          <div class="text-center" style="opacity:0.5;font-size:14px;">Load audit log to see connected tablets</div>
-        </div>
-      </div>
-
-      <div class="control-section">
-        <div class="section-title">Security</div>
-        <div class="control-grid" style="grid-template-columns:1fr 1fr;">
-          <button class="btn" id="btn-change-pin"><span class="material-icons">lock</span><span class="btn-label">Change PIN</span></button>
-          <button class="btn" id="btn-logout"><span class="material-icons">logout</span><span class="btn-label">Lock Settings</span></button>
-        </div>
-      </div>
-
-      <div class="text-center mt-16">
-        <button class="btn" id="btn-reload-app" style="display:inline-flex;max-width:300px;">
-          <span class="material-icons">refresh</span>
-          <span class="btn-label">Reload Application</span>
-        </button>
       </div>
     `;
   },
