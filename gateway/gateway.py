@@ -2111,6 +2111,30 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         )
         emit("heartbeat_ack", {"ok": True})
 
+        # Forward heartbeat to Health Dashboard (fire-and-forget)
+        _forward_heartbeat_to_healthdash(tablet)
+
+    def _forward_heartbeat_to_healthdash(tablet_key: str):
+        """POST a heartbeat to the health dashboard in the background."""
+        hd_cfg = cfg.get("healthdash", {})
+        hd_url = hd_cfg.get("url", "").rstrip("/")
+        if not hd_url:
+            return
+        name_map = hd_cfg.get("tablet_names", {})
+        friendly = name_map.get(tablet_key, tablet_key)
+
+        def _post():
+            try:
+                http_requests.post(
+                    f"{hd_url}/api/heartbeat",
+                    json={"tablet_id": friendly},
+                    timeout=3,
+                )
+            except Exception as exc:
+                logger.debug("Healthdash heartbeat forward failed for %s: %s", friendly, exc)
+
+        eventlet.spawn_n(_post)
+
     # -------------------------------------------------------------------------
     # BACKGROUND STATE POLLERS
     # -------------------------------------------------------------------------

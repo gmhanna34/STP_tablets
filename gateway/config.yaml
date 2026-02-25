@@ -83,6 +83,19 @@ polling:
   obs: 3
   projectors: 30
 
+# --- Health Dashboard heartbeat forwarding ------------------------------------
+healthdash:
+  url: "http://127.0.0.1:20855"
+  # Map internal tablet keys → friendly names shown on health dashboard
+  tablet_names:
+    Tablet_Mainchurch: "Main Church Tablet"
+    Tablet_Chapel: "Chapel Tablet"
+    Tablet_SocialHall: "Social Hall Tablet"
+    Tablet_ConferenceRoom: "Conference Room Tablet"
+    Tablet_Gym: "Gym Tablet"
+    Tablet_Lobby: "Lobby Tablet"
+    Tablet_Office: "Office Tablet"
+
 # --- Audit logging (SQLite) ---------------------------------------------------
 database:
   path: "stp_gateway.db"
