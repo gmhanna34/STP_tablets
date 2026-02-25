@@ -124,13 +124,15 @@ const MacroAPI = {
 
   resolveState(stateBinding) {
     if (!stateBinding) return null;
-    const { source, entity, field, on_value } = stateBinding;
+    const { source, entity, field, on_value, off_value } = stateBinding;
 
     if (source === 'ha') {
       const haStates = this._stateCache.ha || {};
       const entityState = haStates[entity];
       if (!entityState) return null;
-      return String(entityState.state) === String(on_value);
+      const current = String(entityState.state);
+      if (off_value !== undefined) return current !== String(off_value);
+      return current === String(on_value);
     }
 
     // For obs, x32, projectors, moip — resolve dot-path in cached state
@@ -139,7 +141,9 @@ const MacroAPI = {
 
     const value = field.split('.').reduce((obj, key) => obj && obj[key], sourceData);
     if (value === undefined) return null;
-    return String(value) === String(on_value);
+    const current = String(value);
+    if (off_value !== undefined) return current !== String(off_value);
+    return current === String(on_value);
   },
 
   // Resolve raw value from state cache (for badges and disabled_when)
@@ -681,12 +685,23 @@ const MacroAPI = {
     const attrs = state.attributes || {};
     const friendlyName = attrs.friendly_name || entityId;
     const currentTemp = attrs.current_temperature != null ? Math.round(attrs.current_temperature) : '--';
-    const targetTemp = attrs.temperature != null ? Math.round(attrs.temperature) : 72;
-    const hvacMode = state.state || 'off';  // heat, cool, heat_cool, off, fan_only
+    // Target temp: single setpoint, or midpoint of dual setpoint, or sensible default
+    let targetTemp = 72;
+    if (attrs.temperature != null) {
+      targetTemp = Math.round(attrs.temperature);
+    } else if (attrs.target_temp_high != null && attrs.target_temp_low != null) {
+      targetTemp = Math.round((attrs.target_temp_high + attrs.target_temp_low) / 2);
+    } else if (currentTemp !== '--') {
+      targetTemp = currentTemp; // Use current as starting point when no target is set
+    }
+    const hvacMode = state.state || 'off';
     const hvacModes = attrs.hvac_modes || ['off', 'heat', 'cool'];
-    const minTemp = attrs.min_temp || 50;
-    const maxTemp = attrs.max_temp || 90;
-    const hvacAction = attrs.hvac_action || '';  // heating, cooling, idle, off
+    const minTemp = attrs.min_temp || 45;
+    const maxTemp = attrs.max_temp || 95;
+    const hvacAction = attrs.hvac_action || '';
+    const humidity = attrs.current_humidity;
+
+    console.log('Thermostat parsed:', { currentTemp, targetTemp, hvacMode, hvacAction, minTemp, maxTemp, hvacModes, humidity });
 
     const self = this;
     let _target = targetTemp;
@@ -699,7 +714,7 @@ const MacroAPI = {
       body.style.flexDirection = 'column';
       body.style.alignItems = 'center';
 
-      body.innerHTML = self._thermostatHTML(_target, currentTemp, _mode, hvacAction, minTemp, maxTemp, hvacModes);
+      body.innerHTML = self._thermostatHTML(_target, currentTemp, _mode, hvacAction, minTemp, maxTemp, hvacModes, humidity);
       self._wireThermostatEvents(body, entityId, {
         get target() { return _target; },
         set target(v) { _target = v; },
@@ -718,13 +733,17 @@ const MacroAPI = {
           const a = s.attributes || {};
           const curEl = body.querySelector('#thermo-current');
           const actionEl = body.querySelector('#thermo-action');
+          const humEl = body.querySelector('#thermo-humidity');
           if (curEl && a.current_temperature != null) {
             curEl.textContent = Math.round(a.current_temperature) + '\u00B0';
           }
           if (actionEl) {
             actionEl.textContent = self._hvacActionLabel(a.hvac_action || '');
           }
-        } catch (e) { /* silent */ }
+          if (humEl && a.current_humidity != null) {
+            humEl.textContent = Math.round(a.current_humidity) + '% humidity';
+          }
+        } catch (e) { console.error('Thermostat poll error:', e); }
       }, 5000);
     });
 
@@ -738,7 +757,7 @@ const MacroAPI = {
     observer.observe(document.body, { childList: true });
   },
 
-  _thermostatHTML(target, current, mode, action, minTemp, maxTemp, modes) {
+  _thermostatHTML(target, current, mode, action, minTemp, maxTemp, modes, humidity) {
     const CX = 140, CY = 140, R = 120;
     const START_ANGLE = 135, END_ANGLE = 405; // 270° arc
     const RANGE = END_ANGLE - START_ANGLE;
@@ -787,13 +806,12 @@ const MacroAPI = {
           <!-- Draggable indicator dot -->
           <circle cx="${dotX}" cy="${dotY}" r="16" fill="${modeColor}" stroke="#fff" stroke-width="3" id="thermo-dot" style="cursor:grab;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));"/>
           <!-- Center text -->
-          <text x="${CX}" y="${CY - 24}" text-anchor="middle" fill="var(--text-secondary)" font-size="13" id="thermo-action">${this._hvacActionLabel(action)}</text>
+          <text x="${CX}" y="${CY - 28}" text-anchor="middle" fill="var(--text-secondary)" font-size="13" id="thermo-action">${this._hvacActionLabel(action)}</text>
           <text x="${CX}" y="${CY + 8}" text-anchor="middle" fill="var(--text)" font-size="48" font-weight="700" id="thermo-target">${target}\u00B0</text>
-          <text x="${CX}" y="${CY + 30}" text-anchor="middle" fill="var(--text-secondary)" font-size="13">TARGET</text>
-          <text x="${CX}" y="${CY + 56}" text-anchor="middle" fill="var(--text-secondary)" font-size="16" id="thermo-current">
-            ${current}\u00B0
-          </text>
-          <text x="${CX}" y="${CY + 72}" text-anchor="middle" fill="var(--text-secondary)" font-size="11">CURRENT</text>
+          <text x="${CX}" y="${CY + 28}" text-anchor="middle" fill="var(--text-secondary)" font-size="13">TARGET</text>
+          <text x="${CX}" y="${CY + 52}" text-anchor="middle" fill="var(--text-secondary)" font-size="16" id="thermo-current">${current}\u00B0</text>
+          <text x="${CX}" y="${CY + 68}" text-anchor="middle" fill="var(--text-secondary)" font-size="11">CURRENT</text>
+          ${humidity != null ? `<text x="${CX}" y="${CY + 86}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" id="thermo-humidity">${Math.round(humidity)}% humidity</text>` : ''}
         </svg>
         <!-- +/- buttons flanking the dial -->
         <button class="thermo-adj-btn thermo-adj-minus" id="thermo-minus">
@@ -836,7 +854,8 @@ const MacroAPI = {
       case 'idle': return 'IDLE';
       case 'drying': return 'DRYING';
       case 'fan': return 'FAN';
-      default: return '';
+      case 'off': return 'OFF';
+      default: return action ? action.toUpperCase() : '';
     }
   },
 
