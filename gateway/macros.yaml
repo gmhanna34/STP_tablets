@@ -1493,6 +1493,23 @@ buttons:
           icon: "settings_input_hdmi"
           action: { type: macro, macro: confroom_hdmi2 }
 
+    - section: "A/C"
+      items:
+        - label: "Thermostat"
+          icon: "thermostat"
+          action: { type: thermostat, entity: "climate.sunday_school" }
+          style: "large"
+          state:
+            source: ha
+            entity: "climate.sunday_school"
+            off_value: "off"
+            on_style: "active"
+          badge:
+            source: ha
+            entity: "climate.sunday_school"
+            attribute: "current_temperature"
+            format: "temp"
+
     - section: "Video Sources"
       items:
         - label: "Laptop"
