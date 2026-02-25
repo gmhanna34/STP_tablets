@@ -346,6 +346,39 @@ body {
   margin-bottom: 0;
 }
 
+/* ── Section Link (small text link that opens a panel) ───── */
+
+.section-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  align-self: center;
+  justify-self: start;
+}
+
+.section-link:hover {
+  background: rgba(255, 140, 0, 0.1);
+  text-decoration: underline;
+}
+
+.section-link .material-icons {
+  font-size: 16px;
+}
+
+/* Narrow sections: force 1-column grid */
+.control-section.col-span-3 .control-grid,
+.control-section.col-span-4 .control-grid {
+  grid-template-columns: 1fr;
+}
+
 .section-title {
   font-size: 16px;
   font-weight: 600;
