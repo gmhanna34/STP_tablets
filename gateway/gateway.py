@@ -1270,12 +1270,23 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
 
     @app.route("/api/ha/entities")
     def ha_entities():
-        """Return all HA entities grouped by domain."""
+        """Return HA entities grouped by domain.
+
+        Query params:
+            domain  – filter to a single domain (e.g. 'switch')
+            q       – text search across entity_id / friendly_name
+            summary – if '1' (default when no filters), return only domain
+                      names + counts, no entity details.  When a domain or
+                      search query is supplied the full entity list is returned
+                      automatically.
+        """
         if mock_mode:
             return jsonify({"total": 0, "domains": {}, "mock": True}), 200
 
         domain_filter = request.args.get("domain", "").strip()
         search = request.args.get("q", "").strip().lower()
+        # Default to summary mode when no filters are applied
+        summary_only = (not domain_filter and not search)
 
         try:
             all_entities, err = _fetch_all_ha_entities()
@@ -1299,24 +1310,30 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             if domain not in domains:
                 domains[domain] = {"count": 0, "entities": []}
 
-            domains[domain]["entities"].append({
-                "entity_id": eid,
-                "state": entity.get("state", "unknown"),
-                "friendly_name": friendly,
-                "device_class": attrs.get("device_class", ""),
-                "attributes": attrs,
-                "last_changed": entity.get("last_changed", ""),
-            })
             domains[domain]["count"] += 1
+
+            if not summary_only:
+                domains[domain]["entities"].append({
+                    "entity_id": eid,
+                    "state": entity.get("state", "unknown"),
+                    "friendly_name": friendly,
+                    "device_class": attrs.get("device_class", ""),
+                    "attributes": attrs,
+                    "last_changed": entity.get("last_changed", ""),
+                })
 
         # Sort domains alphabetically, entities by entity_id within each domain
         sorted_domains = {}
         for d in sorted(domains.keys()):
-            domains[d]["entities"].sort(key=lambda e: e["entity_id"])
+            if not summary_only:
+                domains[d]["entities"].sort(key=lambda e: e["entity_id"])
+            else:
+                domains[d].pop("entities", None)
             sorted_domains[d] = domains[d]
 
         total = sum(d["count"] for d in sorted_domains.values())
-        return jsonify({"total": total, "domains": sorted_domains}), 200
+        return jsonify({"total": total, "domains": sorted_domains,
+                        "summary": summary_only}), 200
 
     @app.route("/api/ha/entities/yaml")
     def ha_entities_yaml():
