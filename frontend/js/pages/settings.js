@@ -564,13 +564,13 @@ const SettingsPage = {
   // HA Entity Browser
   // -----------------------------------------------------------------------
 
-  _haEntities: null,  // cached raw response { domains: { domain: [entities] } }
+  _haDomainSummary: null,  // { domain: count } — lightweight, fetched once
+  _haSearchTimer: null,
 
   async openHABrowserPanel() {
     const self = this;
 
     App.showPanel('Home Assistant Entities', async (body) => {
-      // Render search toolbar + results area inside the panel body
       body.innerHTML = `
         <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
           <input type="text" id="ha-search" placeholder="Search entities (e.g. switch, ecoflow, climate)..."
@@ -580,68 +580,107 @@ const SettingsPage = {
           </select>
           <span id="ha-entity-count" style="font-size:12px;opacity:0.6;white-space:nowrap;"></span>
         </div>
-        <div id="ha-results"></div>
+        <div id="ha-results">
+          <div style="opacity:0.5;padding:20px;text-align:center;">
+            Select a domain or type a search query to browse entities.
+          </div>
+        </div>
       `;
 
-      body.querySelector('#ha-search').addEventListener('input', () => self._renderHAResults(body));
-      body.querySelector('#ha-domain-filter').addEventListener('change', () => self._renderHAResults(body));
+      // Debounced search: wait 400ms after typing stops, require 2+ chars
+      body.querySelector('#ha-search').addEventListener('input', () => {
+        clearTimeout(self._haSearchTimer);
+        self._haSearchTimer = setTimeout(() => self._fetchAndRenderEntities(body), 400);
+      });
+      body.querySelector('#ha-domain-filter').addEventListener('change', () => self._fetchAndRenderEntities(body));
 
-      // Load data (use cache if available)
-      if (!self._haEntities) {
-        body.querySelector('#ha-results').innerHTML = '<div style="opacity:0.5;padding:8px;">Loading entities...</div>';
+      // Load domain summary (lightweight — just names + counts)
+      if (!self._haDomainSummary) {
         try {
           const resp = await fetch('/api/ha/entities', {
             headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
           });
-          self._haEntities = await resp.json();
+          const data = await resp.json();
+          if (data.domains) {
+            self._haDomainSummary = {};
+            for (const [d, info] of Object.entries(data.domains)) {
+              self._haDomainSummary[d] = info.count;
+            }
+          }
         } catch (e) {
-          body.querySelector('#ha-results').innerHTML = '<div style="color:var(--danger);padding:8px;">Failed to load entities. Is the gateway running?</div>';
+          body.querySelector('#ha-results').innerHTML = '<div style="color:var(--danger);padding:8px;">Failed to load domains. Is the gateway running?</div>';
           return;
         }
       }
 
       // Populate domain dropdown
       const domainSelect = body.querySelector('#ha-domain-filter');
-      if (domainSelect && self._haEntities.domains) {
-        const domains = Object.keys(self._haEntities.domains).sort();
-        domainSelect.innerHTML = '<option value="">All Domains (' + domains.length + ')</option>' +
-          domains.map(d => {
-            const count = self._haEntities.domains[d].length;
-            return `<option value="${d}">${d} (${count})</option>`;
-          }).join('');
+      if (domainSelect && self._haDomainSummary) {
+        const totalEntities = Object.values(self._haDomainSummary).reduce((a, b) => a + b, 0);
+        const domains = Object.keys(self._haDomainSummary).sort();
+        domainSelect.innerHTML = '<option value="">All Domains (' + totalEntities + ' entities)</option>' +
+          domains.map(d => `<option value="${d}">${d} (${self._haDomainSummary[d]})</option>`).join('');
       }
 
-      self._renderHAResults(body);
+      const countEl = body.querySelector('#ha-entity-count');
+      if (countEl && self._haDomainSummary) {
+        const total = Object.values(self._haDomainSummary).reduce((a, b) => a + b, 0);
+        countEl.textContent = `${total} total entities`;
+      }
     });
   },
 
-  _renderHAResults(container) {
+  async _fetchAndRenderEntities(container) {
     const results = container.querySelector('#ha-results');
     const countEl = container.querySelector('#ha-entity-count');
-    if (!results || !this._haEntities?.domains) return;
+    if (!results) return;
 
-    const query = (container.querySelector('#ha-search')?.value || '').toLowerCase().trim();
+    const query = (container.querySelector('#ha-search')?.value || '').trim();
     const domainFilter = container.querySelector('#ha-domain-filter')?.value || '';
 
-    // Flatten all entities, optionally filtering by domain
-    let entities = [];
-    const domains = domainFilter
-      ? { [domainFilter]: this._haEntities.domains[domainFilter] || [] }
-      : this._haEntities.domains;
-
-    for (const [domain, items] of Object.entries(domains)) {
-      for (const ent of items) {
-        entities.push({ ...ent, domain });
+    // Require at least a domain selection or 2+ char search
+    if (!domainFilter && query.length < 2) {
+      results.innerHTML = '<div style="opacity:0.5;padding:20px;text-align:center;">Select a domain or type at least 2 characters to search.</div>';
+      if (countEl && this._haDomainSummary) {
+        const total = Object.values(this._haDomainSummary).reduce((a, b) => a + b, 0);
+        countEl.textContent = `${total} total entities`;
       }
+      return;
     }
 
-    // Apply text search
-    if (query) {
-      entities = entities.filter(e =>
-        (e.entity_id || '').toLowerCase().includes(query) ||
-        (e.friendly_name || '').toLowerCase().includes(query) ||
-        (e.state || '').toLowerCase().includes(query)
-      );
+    results.innerHTML = '<div style="opacity:0.5;padding:8px;">Loading entities...</div>';
+
+    // Build query params — let the gateway do the filtering
+    const params = new URLSearchParams();
+    if (domainFilter) params.set('domain', domainFilter);
+    if (query) params.set('q', query);
+
+    try {
+      const resp = await fetch(`/api/ha/entities?${params.toString()}`, {
+        headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+      });
+      const data = await resp.json();
+      if (data.error) {
+        results.innerHTML = `<div style="color:var(--danger);padding:8px;">${data.error}</div>`;
+        return;
+      }
+      this._renderHAResults(container, data);
+    } catch (e) {
+      results.innerHTML = '<div style="color:var(--danger);padding:8px;">Failed to load entities.</div>';
+    }
+  },
+
+  _renderHAResults(container, data) {
+    const results = container.querySelector('#ha-results');
+    const countEl = container.querySelector('#ha-entity-count');
+    if (!results || !data?.domains) return;
+
+    // Flatten all entities from the filtered response
+    let entities = [];
+    for (const [domain, info] of Object.entries(data.domains)) {
+      for (const ent of (info.entities || [])) {
+        entities.push({ ...ent, domain });
+      }
     }
 
     if (countEl) countEl.textContent = `${entities.length} entities`;
@@ -719,6 +758,7 @@ const SettingsPage = {
 
   destroy() {
     if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
-    this._haEntities = null;
+    this._haDomainSummary = null;
+    clearTimeout(this._haSearchTimer);
   }
 };
