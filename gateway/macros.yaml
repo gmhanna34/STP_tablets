@@ -1160,9 +1160,9 @@ buttons:
 
     - section: "A/C"
       items:
-        - label: "A/C On"
+        - label: "Thermostat"
           icon: "thermostat"
-          action: { type: macro, macro: chapel_ac_on }
+          action: { type: thermostat, entity: "climate.chapel_thermostat" }
           state:
             source: ha
             entity: "climate.chapel_thermostat"
@@ -1173,10 +1173,6 @@ buttons:
             entity: "climate.chapel_thermostat"
             attribute: "current_temperature"
             format: "temp"
-        - label: "A/C Off"
-          icon: "thermostat"
-          action: { type: macro, macro: chapel_ac_off }
-          style: "danger"
 
     - section: "Video Sources"
       disabled_when:
@@ -1245,14 +1241,10 @@ buttons:
 
     - section: "A/C"
       items:
-        - label: "On"
+        - label: "Thermostat"
           icon: "thermostat"
-          action: { type: macro, macro: main_ac_on }
+          action: { type: thermostat, entity: "climate.TODO_main_thermostat" }
           style: "large"
-        - label: "Off"
-          icon: "thermostat"
-          action: { type: macro, macro: main_ac_off }
-          style: "large danger"
 
     - section: "Video Sources"
       items:
@@ -1414,14 +1406,10 @@ buttons:
 
     - section: "A/C"
       items:
-        - label: "On"
+        - label: "Thermostat"
           icon: "thermostat"
-          action: { type: macro, macro: social_ac_on }
+          action: { type: thermostat, entity: "climate.TODO_social_thermostat" }
           style: "large"
-        - label: "Off"
-          icon: "thermostat"
-          action: { type: macro, macro: social_ac_off }
-          style: "large danger"
 
     - section: "Video Sources"
       items:

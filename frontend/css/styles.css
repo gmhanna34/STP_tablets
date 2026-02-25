@@ -1155,42 +1155,82 @@ body {
 .status-dot.offline  { background: #999; }
 .status-dot.idle     { background: var(--ok); }
 
-/* ── Thermostat ───────────────────────────────────────────── */
+/* ── Thermostat Dial Panel ────────────────────────────────── */
 
-.thermostat-display {
+.thermo-dial-wrap {
+  position: relative;
   display: flex;
-  flex-direction: column;
+  justify-content: center;
   align-items: center;
-  padding: 20px 0;
+  margin: 8px 0 20px;
 }
 
-.temp-value {
-  font-size: 48px;
-  font-weight: bold;
-  line-height: 1.1;
+.thermo-dial-wrap svg {
+  display: block;
+  max-width: 280px;
+  width: 100%;
+  height: auto;
 }
 
-.temp-mode {
-  font-size: 14px;
-  color: var(--text-secondary);
+.thermo-adj-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  z-index: 2;
+}
+
+.thermo-adj-btn:active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.thermo-adj-minus { left: -12px; }
+.thermo-adj-plus  { right: -12px; }
+
+.thermo-mode-bar {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
   margin-top: 4px;
 }
 
-.thermostat-controls {
+.thermo-mode-btn {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 16px;
-  justify-content: center;
-  margin-top: 16px;
+  gap: 2px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 2px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  transition: all 0.15s;
+  min-width: 60px;
 }
 
-.thermostat-controls .btn {
-  min-height: auto;
-  width: 50px;
-  height: 50px;
-  padding: 0;
-  font-size: 24px;
-  border-radius: 50%;
+.thermo-mode-btn:hover {
+  border-color: var(--accent);
+}
+
+.thermo-mode-btn.active {
+  border-color: transparent;
+  font-weight: 600;
 }
 
 /* ── PIN Entry Overlay ────────────────────────────────────── */
