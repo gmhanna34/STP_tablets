@@ -5,11 +5,13 @@ const GymPage = {
 
   render(container) {
     container.innerHTML = `
-      <div class="page-header">
-        <h1>GYM</h1>
-      </div>
-      <div id="gym-macro-buttons">
-        <div class="text-center" style="opacity:0.5;">Loading controls...</div>
+      <div class="page-grid">
+        <div class="page-header">
+          <h1>GYM</h1>
+        </div>
+        <div id="gym-macro-buttons">
+          <div class="text-center" style="opacity:0.5;">Loading controls...</div>
+        </div>
       </div>
     `;
   },

@@ -5,11 +5,13 @@ const ChapelPage = {
 
   render(container) {
     container.innerHTML = `
-      <div class="page-header">
-        <h1>CHAPEL</h1>
-      </div>
-      <div id="chapel-macro-buttons">
-        <div class="text-center" style="opacity:0.5;">Loading controls...</div>
+      <div class="page-grid">
+        <div class="page-header">
+          <h1>CHAPEL</h1>
+        </div>
+        <div id="chapel-macro-buttons">
+          <div class="text-center" style="opacity:0.5;">Loading controls...</div>
+        </div>
       </div>
     `;
   },
