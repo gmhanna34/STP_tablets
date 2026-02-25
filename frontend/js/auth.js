@@ -1,7 +1,8 @@
 // Authentication & Permission Management
 const Auth = {
   permissions: null,
-  currentLocation: null,
+  currentLocation: null,   // slug from URL path, e.g. "chapel", "av-room"
+  currentRole: null,        // resolved role key, e.g. "full_access", "chapel"
   isAuthenticated: false,
 
   async init() {
@@ -9,7 +10,7 @@ const Auth = {
       // Load permissions from gateway config endpoint (no static JSON files)
       const resp = await fetch('/api/config');
       const config = await resp.json();
-      this.permissions = config.permissions || { locations: {}, defaultLocation: 'Tablet_Mainchurch' };
+      this.permissions = config.permissions || { roles: {}, locations: {}, defaultRole: 'full_access' };
     } catch (e) {
       console.error('Failed to load permissions:', e);
       // Fallback: try static file (for development without gateway)
@@ -17,17 +18,15 @@ const Auth = {
         const resp = await fetch('config/permissions.json');
         this.permissions = await resp.json();
       } catch (e2) {
-        this.permissions = { locations: {}, defaultLocation: 'Tablet_Mainchurch' };
+        this.permissions = { roles: {}, locations: {}, defaultRole: 'full_access' };
       }
     }
 
-    // Check saved location
-    const saved = localStorage.getItem('tabletLocation');
-    if (saved && this.permissions.locations[saved]) {
-      this.currentLocation = saved;
-    } else {
-      this.currentLocation = this.permissions.defaultLocation;
-    }
+    // Resolve location from URL path
+    this._resolveLocation();
+
+    // Resolve role: localStorage override > location default > global default
+    this._resolveRole();
 
     // Check for existing session
     const sessionToken = sessionStorage.getItem('authToken');
@@ -36,45 +35,120 @@ const Auth = {
     }
   },
 
+  _resolveLocation() {
+    // Read location slug from URL path (first segment after /)
+    const pathSegment = window.location.pathname.replace(/^\//, '').split('/')[0].toLowerCase();
+    const locations = this.permissions.locations || {};
+
+    if (pathSegment && locations[pathSegment]) {
+      this.currentLocation = pathSegment;
+    } else {
+      // Unknown path or "/" — fall back to null (will use defaultRole)
+      this.currentLocation = null;
+    }
+  },
+
+  _resolveRole() {
+    // Priority: localStorage override > location's defaultRole > global defaultRole
+    const override = localStorage.getItem('tabletRole');
+    const roles = this.permissions.roles || {};
+
+    if (override && roles[override]) {
+      this.currentRole = override;
+      return;
+    }
+
+    // Clear stale override if role no longer exists
+    if (override) localStorage.removeItem('tabletRole');
+
+    const locations = this.permissions.locations || {};
+    if (this.currentLocation && locations[this.currentLocation]) {
+      this.currentRole = locations[this.currentLocation].defaultRole || this.permissions.defaultRole || 'full_access';
+    } else {
+      this.currentRole = this.permissions.defaultRole || 'full_access';
+    }
+  },
+
+  getRoleConfig() {
+    if (!this.permissions || !this.currentRole) return null;
+    return (this.permissions.roles || {})[this.currentRole] || null;
+  },
+
   getLocationConfig() {
     if (!this.permissions || !this.currentLocation) return null;
-    return this.permissions.locations[this.currentLocation] || null;
+    return (this.permissions.locations || {})[this.currentLocation] || null;
+  },
+
+  getTabletId() {
+    // Unique identity based on URL-derived location slug
+    return this.currentLocation || 'unknown';
   },
 
   getDisplayName() {
     const loc = this.getLocationConfig();
-    return loc ? loc.displayName : 'Unknown Location';
+    if (loc) return loc.displayName;
+    return 'Unknown Location';
+  },
+
+  getRoleDisplayName() {
+    const role = this.getRoleConfig();
+    return role ? role.displayName : 'Unknown Role';
+  },
+
+  isRoleOverridden() {
+    // Returns true if the user has manually overridden the role via Settings
+    const override = localStorage.getItem('tabletRole');
+    if (!override) return false;
+    const loc = this.getLocationConfig();
+    if (!loc) return true; // overriding on unknown location
+    return override !== loc.defaultRole;
   },
 
   hasPermission(page) {
-    const loc = this.getLocationConfig();
-    if (!loc) return true; // Fail open if no config
-    return loc.permissions[page] !== false;
+    const role = this.getRoleConfig();
+    if (!role) return true; // Fail open if no config
+    return role.permissions[page] !== false;
   },
 
   getAllowedPages() {
-    const loc = this.getLocationConfig();
-    if (!loc) return [];
-    return Object.entries(loc.permissions)
+    const role = this.getRoleConfig();
+    if (!role) return [];
+    return Object.entries(role.permissions)
       .filter(([_, allowed]) => allowed)
       .map(([page]) => page);
   },
 
-  setLocation(locationKey) {
-    if (this.permissions.locations[locationKey]) {
-      this.currentLocation = locationKey;
-      localStorage.setItem('tabletLocation', locationKey);
-      localStorage.setItem('tabletId', locationKey);
+  setRole(roleKey) {
+    const roles = this.permissions.roles || {};
+    if (roles[roleKey]) {
+      this.currentRole = roleKey;
+      localStorage.setItem('tabletRole', roleKey);
+      localStorage.setItem('tabletId', this.getTabletId());
       return true;
     }
     return false;
   },
 
-  getLocations() {
-    if (!this.permissions) return [];
-    return Object.entries(this.permissions.locations).map(([key, config]) => ({
+  resetRole() {
+    localStorage.removeItem('tabletRole');
+    this._resolveRole();
+    localStorage.setItem('tabletId', this.getTabletId());
+  },
+
+  getRoles() {
+    if (!this.permissions || !this.permissions.roles) return [];
+    return Object.entries(this.permissions.roles).map(([key, config]) => ({
       key,
       displayName: config.displayName
+    }));
+  },
+
+  getLocations() {
+    if (!this.permissions || !this.permissions.locations) return [];
+    return Object.entries(this.permissions.locations).map(([key, config]) => ({
+      key,
+      displayName: config.displayName,
+      defaultRole: config.defaultRole
     }));
   },
 

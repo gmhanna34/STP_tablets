@@ -1,7 +1,7 @@
 {
-  "locations": {
-    "Tablet_Mainchurch": {
-      "displayName": "Main Church (Full Access)",
+  "roles": {
+    "full_access": {
+      "displayName": "Full Access",
       "permissions": {
         "home": true,
         "main": true,
@@ -15,7 +15,7 @@
         "settings": true
       }
     },
-    "Tablet_Chapel": {
+    "chapel": {
       "displayName": "Chapel",
       "permissions": {
         "home": true,
@@ -30,7 +30,7 @@
         "settings": true
       }
     },
-    "Tablet_SocialHall": {
+    "social_hall": {
       "displayName": "Social Hall",
       "permissions": {
         "home": true,
@@ -45,7 +45,7 @@
         "settings": true
       }
     },
-    "Tablet_ConferenceRoom": {
+    "conference_room": {
       "displayName": "Conference Room",
       "permissions": {
         "home": true,
@@ -60,7 +60,7 @@
         "settings": true
       }
     },
-    "Tablet_Gym": {
+    "gym": {
       "displayName": "Gym",
       "permissions": {
         "home": true,
@@ -75,7 +75,7 @@
         "settings": true
       }
     },
-    "Tablet_Lobby": {
+    "lobby": {
       "displayName": "Lobby",
       "permissions": {
         "home": true,
@@ -90,7 +90,7 @@
         "settings": true
       }
     },
-    "Tablet_Office": {
+    "office": {
       "displayName": "Offices",
       "permissions": {
         "home": true,
@@ -106,6 +106,18 @@
       }
     }
   },
-  "defaultLocation": "Tablet_Mainchurch",
+  "locations": {
+    "chapel":      { "displayName": "Chapel",          "defaultRole": "chapel" },
+    "social-hall": { "displayName": "Social Hall",     "defaultRole": "social_hall" },
+    "av-room":     { "displayName": "A/V Room",        "defaultRole": "full_access" },
+    "conf-room":   { "displayName": "Conference Room", "defaultRole": "conference_room" },
+    "gym":         { "displayName": "Gym",             "defaultRole": "gym" },
+    "lobby":       { "displayName": "Lobby",           "defaultRole": "lobby" },
+    "office":      { "displayName": "Offices",         "defaultRole": "office" },
+    "test":        { "displayName": "Test Device",     "defaultRole": "full_access" },
+    "pc":          { "displayName": "PC",              "defaultRole": "full_access" },
+    "admin":       { "displayName": "Admin",           "defaultRole": "full_access" }
+  },
+  "defaultRole": "full_access",
   "settingsPIN": "1234"
 }

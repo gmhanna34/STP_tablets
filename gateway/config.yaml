@@ -86,8 +86,19 @@ polling:
 # --- Health Dashboard heartbeat forwarding ------------------------------------
 healthdash:
   url: "http://127.0.0.1:20855"
-  # Map internal tablet keys → friendly names shown on health dashboard
+  # Map location slugs → friendly names shown on health dashboard
   tablet_names:
+    chapel: "Chapel Tablet"
+    social-hall: "Social Hall Tablet"
+    av-room: "A/V Room Tablet"
+    conf-room: "Conference Room Tablet"
+    gym: "Gym Tablet"
+    lobby: "Lobby Tablet"
+    office: "Office Tablet"
+    test: "Test Device"
+    pc: "PC"
+    admin: "Admin"
+    # Backwards compat: old-style keys (until all tablets are migrated)
     Tablet_Mainchurch: "Main Church Tablet"
     Tablet_Chapel: "Chapel Tablet"
     Tablet_SocialHall: "Social Hall Tablet"

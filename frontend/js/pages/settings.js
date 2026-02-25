@@ -2,8 +2,10 @@ const SettingsPage = {
   pollTimer: null,
 
   render(container) {
-    const locations = Auth.getLocations();
-    const currentLoc = Auth.currentLocation;
+    const roles = Auth.getRoles();
+    const currentRole = Auth.currentRole;
+    const locationName = Auth.getDisplayName();
+    const isOverridden = Auth.isRoleOverridden();
 
     container.innerHTML = `
       <div class="page-header">
@@ -13,16 +15,35 @@ const SettingsPage = {
       <div class="control-section">
         <div class="section-title">Tablet Location</div>
         <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
-          Select which location this tablet is assigned to. This controls which menu items are visible.
+          This tablet's location is determined by its URL. Change by updating the Fully Kiosk start URL.
+        </div>
+        <div style="padding:12px;background:#1a1a2e;border-radius:8px;font-size:16px;font-weight:bold;text-align:center;">
+          <span class="material-icons" style="vertical-align:middle;margin-right:6px;">place</span>
+          ${locationName}
+        </div>
+      </div>
+
+      <div class="control-section">
+        <div class="section-title">Permission Role</div>
+        <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+          Controls which menu items are visible. Defaults to the location's role but can be overridden.
+          ${isOverridden ? '<br><span style="color:#ff9800;">Currently overridden from default.</span>' : ''}
         </div>
         <div class="control-grid" style="grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));">
-          ${locations.map(loc => `
-            <button class="btn ${loc.key === currentLoc ? 'active' : ''}" data-location="${loc.key}">
-              <span class="material-icons">${loc.key === currentLoc ? 'radio_button_checked' : 'radio_button_unchecked'}</span>
-              <span class="btn-label">${loc.displayName}</span>
+          ${roles.map(role => `
+            <button class="btn ${role.key === currentRole ? 'active' : ''}" data-role="${role.key}">
+              <span class="material-icons">${role.key === currentRole ? 'radio_button_checked' : 'radio_button_unchecked'}</span>
+              <span class="btn-label">${role.displayName}</span>
             </button>
           `).join('')}
         </div>
+        ${isOverridden ? `
+        <div class="mt-16 text-center">
+          <button class="btn" id="btn-reset-role" style="display:inline-flex;max-width:300px;">
+            <span class="material-icons">restart_alt</span>
+            <span class="btn-label">Reset to Default Role</span>
+          </button>
+        </div>` : ''}
       </div>
 
       <div class="control-section">
@@ -175,17 +196,26 @@ const SettingsPage = {
   },
 
   init() {
-    // Location selection
-    document.querySelectorAll('[data-location]').forEach(btn => {
+    // Role selection
+    document.querySelectorAll('[data-role]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const loc = btn.dataset.location;
-        Auth.setLocation(loc);
+        const role = btn.dataset.role;
+        Auth.setRole(role);
         Router.updateNavVisibility();
         // Re-render to show updated selection
         Router.navigate('settings');
         App.updateStatusBar();
-        App.showToast('Location set to: ' + Auth.getDisplayName());
+        App.showToast('Role set to: ' + Auth.getRoleDisplayName());
       });
+    });
+
+    // Reset role to location default
+    document.getElementById('btn-reset-role')?.addEventListener('click', () => {
+      Auth.resetRole();
+      Router.updateNavVisibility();
+      Router.navigate('settings');
+      App.updateStatusBar();
+      App.showToast('Role reset to default: ' + Auth.getRoleDisplayName());
     });
 
     // Load mixer
