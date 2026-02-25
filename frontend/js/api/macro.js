@@ -659,9 +659,22 @@ const MacroAPI = {
       const resp = await fetch(`/api/ha/states/${entityId}`, {
         headers: { 'X-Tablet-ID': this.tabletId },
       });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        console.error('Thermostat state fetch failed:', resp.status, errText);
+        App.showToast(`Failed to load thermostat (${resp.status})`, 'error');
+        return;
+      }
       state = await resp.json();
+      console.log('Thermostat state:', JSON.stringify(state).substring(0, 500));
     } catch (e) {
+      console.error('Thermostat fetch error:', e);
       App.showToast('Failed to load thermostat state', 'error');
+      return;
+    }
+
+    if (state.error) {
+      App.showToast(`Thermostat error: ${state.error}`, 'error');
       return;
     }
 
@@ -863,11 +876,16 @@ const MacroAPI = {
     const scheduleSet = () => {
       clearTimeout(sendTimer);
       sendTimer = setTimeout(async () => {
-        await fetch(`/api/ha/service/climate/set_temperature`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': self.tabletId },
-          body: JSON.stringify({ entity_id: entityId, temperature: state.target }),
-        }).catch(() => null);
+        const payload = { entity_id: entityId, temperature: state.target };
+        console.log('Setting temperature:', payload);
+        try {
+          const r = await fetch(`/api/ha/service/climate/set_temperature`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': self.tabletId },
+            body: JSON.stringify(payload),
+          });
+          console.log('set_temperature response:', r.status, await r.text());
+        } catch (e) { console.error('set_temperature error:', e); }
       }, 600);
     };
 
@@ -956,11 +974,16 @@ const MacroAPI = {
         // Update arc/dot color
         updateVisual();
 
-        await fetch(`/api/ha/service/climate/set_hvac_mode`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': self.tabletId },
-          body: JSON.stringify({ entity_id: entityId, hvac_mode: newMode }),
-        }).catch(() => null);
+        const modePayload = { entity_id: entityId, hvac_mode: newMode };
+        console.log('Setting HVAC mode:', modePayload);
+        try {
+          const r = await fetch(`/api/ha/service/climate/set_hvac_mode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': self.tabletId },
+            body: JSON.stringify(modePayload),
+          });
+          console.log('set_hvac_mode response:', r.status, await r.text());
+        } catch (e) { console.error('set_hvac_mode error:', e); }
 
         App.showToast(`Mode: ${newMode.charAt(0).toUpperCase() + newMode.slice(1)}`);
       });
