@@ -124,13 +124,15 @@ const MacroAPI = {
 
   resolveState(stateBinding) {
     if (!stateBinding) return null;
-    const { source, entity, field, on_value } = stateBinding;
+    const { source, entity, field, on_value, off_value } = stateBinding;
 
     if (source === 'ha') {
       const haStates = this._stateCache.ha || {};
       const entityState = haStates[entity];
       if (!entityState) return null;
-      return String(entityState.state) === String(on_value);
+      const current = String(entityState.state);
+      if (off_value !== undefined) return current !== String(off_value);
+      return current === String(on_value);
     }
 
     // For obs, x32, projectors, moip — resolve dot-path in cached state
@@ -139,7 +141,9 @@ const MacroAPI = {
 
     const value = field.split('.').reduce((obj, key) => obj && obj[key], sourceData);
     if (value === undefined) return null;
-    return String(value) === String(on_value);
+    const current = String(value);
+    if (off_value !== undefined) return current !== String(off_value);
+    return current === String(on_value);
   },
 
   // Resolve raw value from state cache (for badges and disabled_when)
