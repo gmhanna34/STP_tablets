@@ -92,7 +92,7 @@ const App = {
       return;
     }
 
-    const tabletId = localStorage.getItem('tabletId') || 'WebApp';
+    const tabletId = Auth.getTabletId();
     this._reconnectAttempt = 0;
 
     this.socket = io({
@@ -184,8 +184,9 @@ const App = {
     this._heartbeatInterval = setInterval(() => {
       if (this.socket && this.socket.connected) {
         this.socket.emit('heartbeat', {
-          tablet: tabletId,
+          tablet: Auth.getTabletId(),
           displayName: Auth.getDisplayName(),
+          role: Auth.currentRole,
           currentPage: Router.currentPage,
         });
       }
@@ -232,7 +233,11 @@ const App = {
       versionEl.textContent = `Version: ${this.settings?.app?.version || '26-006'} - Web App`;
     }
     if (tabletEl) {
-      tabletEl.textContent = Auth.currentLocation?.replace('Tablet_', '') || 'Unknown';
+      let label = Auth.getDisplayName();
+      if (Auth.isRoleOverridden()) {
+        label += ` (${Auth.getRoleDisplayName()})`;
+      }
+      tabletEl.textContent = label;
     }
 
     this.setConnectionStatus('Connecting...', false);

@@ -331,7 +331,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             permissions_data = json.load(f)
     except Exception:
         logger.warning(f"Could not load permissions from {permissions_path}, using defaults")
-        permissions_data = {"locations": {}, "defaultLocation": "Tablet_Mainchurch"}
+        permissions_data = {"roles": {}, "locations": {}, "defaultRole": "full_access"}
+
+    # Pre-compute known location slugs for catch-all route
+    _known_location_slugs = set((permissions_data.get("locations") or {}).keys())
 
     # Load devices config from frontend config
     devices_path = os.path.join(static_dir, "config", "devices.json")
@@ -364,6 +367,13 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             or request.args.get("tablet")
             or "Unknown"
         )
+
+    def _tablet_role() -> str:
+        """Get the tablet's current role from header, falling back to defaultRole."""
+        role = request.headers.get("X-Tablet-Role", "")
+        if role and role in (permissions_data.get("roles") or {}):
+            return role
+        return permissions_data.get("defaultRole", "full_access")
 
     def _ip_allowed(ip: str) -> bool:
         return any(ip.startswith(pfx) for pfx in allowed_ips)
@@ -648,13 +658,32 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     # -------------------------------------------------------------------------
 
     def _check_permission(tablet_id: str, required_page: str) -> Optional[tuple]:
-        """Returns an error response tuple if permission denied, None if OK."""
-        loc = permissions_data.get("locations", {}).get(tablet_id)
-        if not loc:
-            return None  # Unknown tablet = allow (fail open, same as current behavior)
-        perms = loc.get("permissions", {})
-        if perms.get(required_page) is False:
-            return jsonify({"error": "Permission denied", "page": required_page}), 403
+        """Returns an error response tuple if permission denied, None if OK.
+
+        Uses the X-Tablet-Role header (new) or falls back to looking up
+        the tablet_id as an old-style location key for backwards compat.
+        """
+        roles = permissions_data.get("roles", {})
+
+        # New path: check X-Tablet-Role header
+        role_key = request.headers.get("X-Tablet-Role", "")
+        if role_key and role_key in roles:
+            perms = roles[role_key].get("permissions", {})
+            if perms.get(required_page) is False:
+                return jsonify({"error": "Permission denied", "page": required_page}), 403
+            return None
+
+        # Backwards compat: old-style location key (e.g. Tablet_Mainchurch)
+        old_locations = permissions_data.get("locations", {})
+        # If the tablet_id matches an old-format key with a "permissions" sub-object
+        loc = old_locations.get(tablet_id) if isinstance(old_locations.get(tablet_id, {}), dict) else None
+        if loc and "permissions" in loc:
+            perms = loc.get("permissions", {})
+            if perms.get(required_page) is False:
+                return jsonify({"error": "Permission denied", "page": required_page}), 403
+            return None
+
+        # Unknown tablet / no role header = allow (fail open)
         return None
 
     # -------------------------------------------------------------------------
@@ -670,6 +699,13 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         # Don't serve /api/ paths as static files
         if filepath.startswith("api/"):
             return jsonify({"error": "Not found"}), 404
+
+        # Location slug catch-all: serve index.html for known location paths
+        # so the SPA frontend can read the path and resolve the location
+        slug = filepath.strip("/").split("/")[0].lower()
+        if slug in _known_location_slugs:
+            return send_from_directory(static_dir, "index.html")
+
         full = os.path.join(static_dir, filepath)
         if os.path.isfile(full):
             return send_from_directory(static_dir, filepath)
@@ -2103,9 +2139,11 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     @socketio.on("heartbeat")
     def on_heartbeat(data):
         tablet = data.get("tablet", "Unknown")
+        display_name = data.get("displayName", "")
+        role = data.get("role", "")
         db.upsert_session(
             tablet,
-            display_name=data.get("displayName", ""),
+            display_name=display_name,
             socket_id=request.sid,
             current_page=data.get("currentPage", ""),
         )
