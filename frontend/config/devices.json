@@ -142,8 +142,8 @@
       { "id": 25, "name": "Hall_RackInput", "location": "SocialHall" },
       { "id": 26, "name": "Lounge", "location": "Lounge" },
       { "id": 27, "name": "HamalRoom", "location": "Hamal" },
-      { "id": 28, "name": "ConfRoom_Left", "location": "Conference Room" }
-      { "id": 29, "name": "ConfRoom_Right", "location": "Conference Room" }
+      { "id": 28, "name": "ConfRoom_Left", "location": "Conference Room" },
+      { "id": 29, "name": "ConfRoom_Right", "location": "Conference Room" },
       { "id": 30, "name": "SS_7th8th", "location": "Sunday School" },
       { "id": 31, "name": "AV_CenterMonitor", "location": "AV Room" },
       { "id": 32, "name": "AV_X32ReceiveToX32", "location": "AV Room" },
@@ -151,9 +151,9 @@
       { "id": 34, "name": "MainChurch_PortableTV", "location": "Main Church" },
       { "id": 35, "name": "MainChurch_CryRoom", "location": "Main Church" },
       { "id": 36, "name": "MainChurch_FrontLeft", "location": "Main Church" },
-      { "id": 37, "name": "MainChurch_FrontRight", "location": "Main Church" }
-      { "id": 38, "name": "MainChurch_RearRight", "location": "Main Church" }
-      { "id": 39, "name": "MainChurch_RearLeft", "location": "Main Church" }
+      { "id": 37, "name": "MainChurch_FrontRight", "location": "Main Church" },
+      { "id": 38, "name": "MainChurch_RearRight", "location": "Main Church" },
+      { "id": 39, "name": "MainChurch_RearLeft", "location": "Main Church" },
       { "id": 40, "name": "AV_AnnounceAudioInput", "location": "AV Room" },
       { "id": 41, "name": "Spare", "location": "AV Room" },
       { "id": 42, "name": "ATEMAudioInput", "location": "AV Room" },

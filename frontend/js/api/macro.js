@@ -202,76 +202,33 @@ const MacroAPI = {
       return;
     }
 
-    container.innerHTML = sections.map(section => {
+    // Use page-grid so sections can sit side-by-side via cols
+    container.classList.add('page-grid');
+
+    container.innerHTML = sections.map((section, secIdx) => {
+      const isLink = section.display === 'link';
+      const cols = section.cols ? Math.min(section.cols, 12) : 12;
+      const colStyle = cols < 12 ? ` col-span-${cols}` : '';
+
+      // "link" sections render as small text links (not full card)
+      if (isLink) {
+        return `<a class="section-link${colStyle}" data-link-section="${secIdx}" href="#">
+          <span class="material-icons">chevron_right</span>
+          <span>${this._escapeHtml(section.section || '')}</span>
+        </a>`;
+      }
+
       const isCollapsed = section.collapsed === true;
       const collapseClass = isCollapsed ? ' collapsed' : '';
       const collapseAttr = isCollapsed ? ' data-collapsible="true"' : '';
       const sectionDisabled = this._checkDisabledWhen(section.disabled_when);
 
       return `
-      <div class="control-section${collapseClass}"${collapseAttr}>
+      <div class="control-section${collapseClass}${colStyle}"${collapseAttr}>
         <div class="section-title${isCollapsed ? ' section-title-toggle' : ''}">${section.section || ''}${isCollapsed ? '<span class="material-icons section-toggle-icon">expand_more</span>' : ''}</div>
-        <div class="control-grid${isCollapsed ? ' section-content-collapsed' : ''}">
+        <div class="control-grid${isCollapsed ? ' section-content-collapsed' : ''}" style="grid-template-columns: repeat(${cols <= 4 ? 1 : 'auto-fit'}, ${cols <= 4 ? '1fr' : 'minmax(120px, 1fr)'});">
           ${(section.items || []).map((item, idx) => {
-            const spanStyle = item.span ? `grid-column: span ${item.span};` : '';
-
-            // Toggle buttons: resolve current appearance from state
-            let label = item.label || '';
-            let icon = item.icon || '';
-            let styleClasses = this._resolveStyleClasses(item);
-            let stateClass = '';
-            let confirmAttr = this._resolveConfirm(item, macros);
-            let confirmSteps = item.confirm_steps ? ' data-confirm-steps="true"' : '';
-            let isToggle = '';
-            let badgeHtml = '';
-            let longPressAttr = '';
-
-            if (item.toggle) {
-              const isOn = this.resolveState(item.toggle.state);
-              const resolved = isOn ? item.toggle.on : item.toggle.off;
-              label = resolved.label || label;
-              icon = resolved.icon || icon;
-              if (resolved.style) {
-                styleClasses = resolved.style.split(' ').filter(Boolean).map(s => `btn-${s}`).join(' ');
-              } else {
-                styleClasses = '';
-              }
-              if (isOn && item.toggle.state?.on_style) {
-                stateClass = item.toggle.state.on_style;
-              }
-              confirmAttr = resolved.confirm || '';
-              if (resolved.confirm_steps) confirmSteps = ' data-confirm-steps="true"';
-              isToggle = ' data-toggle="true"';
-            } else {
-              const stateActive = this.resolveState(item.state);
-              stateClass = stateActive === true ? (item.state?.on_style || 'active') : '';
-            }
-
-            // Badge
-            if (item.badge) {
-              const val = this.resolveValue(item.badge);
-              const formatted = this._formatBadge(val, item.badge.format);
-              badgeHtml = `<span class="btn-badge">${formatted}</span>`;
-            }
-
-            // Long press
-            if (item.long_press) longPressAttr = ' data-long-press="true"';
-
-            // Disabled (section-level or button-level)
-            const btnDisabled = sectionDisabled || this._checkDisabledWhen(item.disabled_when);
-            const disabledAttr = btnDisabled ? ' disabled' : '';
-            const disabledClass = btnDisabled ? ' btn-disabled-state' : '';
-
-            return `<button class="btn ${styleClasses} ${stateClass}${disabledClass}"
-                      data-macro-btn="${idx}"
-                      data-section="${this._escapeHtml(section.section || '')}"
-                      ${confirmAttr ? `data-confirm="${this._escapeHtml(confirmAttr)}"` : ''}
-                      ${confirmSteps}${isToggle}${longPressAttr}${disabledAttr}
-                      style="${spanStyle}">
-              ${icon ? `<span class="material-icons">${icon}</span>` : ''}
-              <span class="btn-label">${label}</span>
-              ${badgeHtml}
-            </button>`;
+            return this._renderButton(item, idx, section, macros, sectionDisabled);
           }).join('')}
         </div>
       </div>`;
@@ -289,7 +246,82 @@ const MacroAPI = {
       });
     });
 
+    // Attach "link" section handlers — open panel with section buttons
+    container.querySelectorAll('[data-link-section]').forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const secIdx = parseInt(link.dataset.linkSection);
+        const section = sections[secIdx];
+        if (!section) return;
+        this._openSectionPanel(section, macros);
+      });
+    });
+
     // Attach click / long-press handlers
+    this._attachButtonHandlers(container, sections);
+  },
+
+  // Render a single button HTML
+  _renderButton(item, idx, section, macros, sectionDisabled) {
+    const spanStyle = item.span ? `grid-column: span ${item.span};` : '';
+
+    let label = item.label || '';
+    let icon = item.icon || '';
+    let styleClasses = this._resolveStyleClasses(item);
+    let stateClass = '';
+    let confirmAttr = this._resolveConfirm(item, macros);
+    let confirmSteps = item.confirm_steps ? ' data-confirm-steps="true"' : '';
+    let isToggle = '';
+    let badgeHtml = '';
+    let longPressAttr = '';
+
+    if (item.toggle) {
+      const isOn = this.resolveState(item.toggle.state);
+      const resolved = isOn ? item.toggle.on : item.toggle.off;
+      label = resolved.label || label;
+      icon = resolved.icon || icon;
+      if (resolved.style) {
+        styleClasses = resolved.style.split(' ').filter(Boolean).map(s => `btn-${s}`).join(' ');
+      } else {
+        styleClasses = '';
+      }
+      if (isOn && item.toggle.state?.on_style) {
+        stateClass = item.toggle.state.on_style;
+      }
+      confirmAttr = resolved.confirm || '';
+      if (resolved.confirm_steps) confirmSteps = ' data-confirm-steps="true"';
+      isToggle = ' data-toggle="true"';
+    } else {
+      const stateActive = this.resolveState(item.state);
+      stateClass = stateActive === true ? (item.state?.on_style || 'active') : '';
+    }
+
+    if (item.badge) {
+      const val = this.resolveValue(item.badge);
+      const formatted = this._formatBadge(val, item.badge.format);
+      badgeHtml = `<span class="btn-badge">${formatted}</span>`;
+    }
+
+    if (item.long_press) longPressAttr = ' data-long-press="true"';
+
+    const btnDisabled = sectionDisabled || this._checkDisabledWhen(item.disabled_when);
+    const disabledAttr = btnDisabled ? ' disabled' : '';
+    const disabledClass = btnDisabled ? ' btn-disabled-state' : '';
+
+    return `<button class="btn ${styleClasses} ${stateClass}${disabledClass}"
+              data-macro-btn="${idx}"
+              data-section="${this._escapeHtml(section.section || '')}"
+              ${confirmAttr ? `data-confirm="${this._escapeHtml(confirmAttr)}"` : ''}
+              ${confirmSteps}${isToggle}${longPressAttr}${disabledAttr}
+              style="${spanStyle}">
+      ${icon ? `<span class="material-icons">${icon}</span>` : ''}
+      <span class="btn-label">${label}</span>
+      ${badgeHtml}
+    </button>`;
+  },
+
+  // Attach click/long-press handlers to all buttons in a container
+  _attachButtonHandlers(container, sections) {
     container.querySelectorAll('[data-macro-btn]').forEach(btn => {
       const sectionName = btn.dataset.section;
       const idx = parseInt(btn.dataset.macroBtnIdx || btn.dataset.macroBtn);
@@ -305,6 +337,23 @@ const MacroAPI = {
           await this._handleButtonClick(btn, item);
         });
       }
+    });
+  },
+
+  // Open a panel with a section's buttons rendered inside
+  _openSectionPanel(section, macros) {
+    const sectionDisabled = this._checkDisabledWhen(section.disabled_when);
+
+    App.showPanel(section.section || 'Settings', (body) => {
+      const grid = document.createElement('div');
+      grid.className = 'control-grid';
+      grid.innerHTML = (section.items || []).map((item, idx) => {
+        return this._renderButton(item, idx, section, macros, sectionDisabled);
+      }).join('');
+      body.appendChild(grid);
+
+      // Attach handlers to the buttons inside the panel
+      this._attachButtonHandlers(body, [section]);
     });
   },
 

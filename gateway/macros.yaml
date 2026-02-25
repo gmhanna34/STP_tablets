@@ -1112,6 +1112,7 @@ buttons:
           confirm_steps: true
 
     - section: "Video"
+      cols: 4
       items:
         - label: "TVs On"
           icon: "tv"
@@ -1132,6 +1133,7 @@ buttons:
           confirm: "Turn off all Chapel TVs?"
 
     - section: "Audio"
+      cols: 4
       items:
         - label: "Audio On"
           icon: "mic"
@@ -1147,6 +1149,7 @@ buttons:
           style: "danger"
 
     - section: "A/C"
+      cols: 4
       items:
         - label: "Thermostat"
           icon: "thermostat"
@@ -1183,6 +1186,7 @@ buttons:
 
   main:
     - section: "Video"
+      cols: 4
       items:
         - label: "On / Down"
           icon: "tv"
@@ -1209,6 +1213,7 @@ buttons:
           style: "danger"
 
     - section: "Audio System"
+      cols: 4
       items:
         - label: "On"
           icon: "mic"
@@ -1228,6 +1233,7 @@ buttons:
           action: { type: macro, macro: main_appletv_restart }
 
     - section: "A/C"
+      cols: 4
       items:
         - label: "Thermostat"
           icon: "thermostat"
@@ -1269,7 +1275,8 @@ buttons:
           action: { type: macro, macro: main_source_google_streamer }
 
     - section: "Advanced Display Settings"
-      collapsed: true
+      display: "link"
+      cols: 4
       items:
         - label: "PRJ Front Left"
           icon: "tv"
@@ -1337,7 +1344,8 @@ buttons:
               action: { type: macro, macro: main_epson4_on }
 
     - section: "Advanced Power Settings"
-      collapsed: true
+      display: "link"
+      cols: 4
       items:
         - label: "WattBox 1"
           icon: "power"
@@ -1373,7 +1381,8 @@ buttons:
               action: { type: macro, macro: main_wattbox2_on }
 
     - section: "Baptism / Wedding"
-      collapsed: true
+      display: "link"
+      cols: 4
       items:
         - label: "Baptism Camera View"
           icon: "videocam"
@@ -1381,6 +1390,7 @@ buttons:
 
   social:
     - section: "Video"
+      cols: 4
       items:
         - label: "On"
           icon: "tv"
@@ -1392,6 +1402,7 @@ buttons:
           style: "large danger"
 
     - section: "Audio System"
+      cols: 4
       items:
         - label: "On"
           icon: "mic"
@@ -1403,6 +1414,7 @@ buttons:
           style: "large danger"
 
     - section: "A/C"
+      cols: 4
       items:
         - label: "Thermostat"
           icon: "thermostat"
@@ -1439,6 +1451,7 @@ buttons:
 
   gym:
     - section: "Video"
+      cols: 4
       items:
         - label: "On"
           icon: "tv"
@@ -1450,6 +1463,7 @@ buttons:
           style: "large danger"
 
     - section: "Audio"
+      cols: 4
       items:
         - label: "On"
           icon: "mic"
@@ -1474,6 +1488,7 @@ buttons:
 
   confroom:
     - section: "TV Power"
+      cols: 4
       items:
         - label: "TV On"
           icon: "tv"
@@ -1485,6 +1500,7 @@ buttons:
           style: "large danger"
 
     - section: "TV Input"
+      cols: 4
       items:
         - label: "HDMI 1"
           icon: "settings_input_hdmi"
@@ -1494,6 +1510,7 @@ buttons:
           action: { type: macro, macro: confroom_hdmi2 }
 
     - section: "A/C"
+      cols: 4
       items:
         - label: "Thermostat"
           icon: "thermostat"
