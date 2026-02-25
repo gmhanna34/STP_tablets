@@ -414,6 +414,12 @@ const MacroAPI = {
         });
         App.showToast(displayLabel || 'HA service called');
 
+      } else if (action.type === 'thermostat') {
+        btn.classList.remove('loading');
+        btn.disabled = false;
+        this._openThermostatPanel(action.entity);
+        return;
+
       } else if (action.type === 'navigate') {
         Router.navigate(action.page);
 
@@ -638,5 +644,327 @@ const MacroAPI = {
         btn.classList.toggle('btn-disabled-state', shouldDisable);
       }
     });
-  }
+  },
+
+  // -----------------------------------------------------------------------
+  // Thermostat Panel — Nest-style circular dial
+  // -----------------------------------------------------------------------
+
+  async _openThermostatPanel(entityId) {
+    if (!entityId) return;
+
+    // Fetch current state from HA
+    let state = null;
+    try {
+      const resp = await fetch(`/api/ha/states/${entityId}`, {
+        headers: { 'X-Tablet-ID': this.tabletId },
+      });
+      state = await resp.json();
+    } catch (e) {
+      App.showToast('Failed to load thermostat state', 'error');
+      return;
+    }
+
+    const attrs = state.attributes || {};
+    const friendlyName = attrs.friendly_name || entityId;
+    const currentTemp = attrs.current_temperature != null ? Math.round(attrs.current_temperature) : '--';
+    const targetTemp = attrs.temperature != null ? Math.round(attrs.temperature) : 72;
+    const hvacMode = state.state || 'off';  // heat, cool, heat_cool, off, fan_only
+    const hvacModes = attrs.hvac_modes || ['off', 'heat', 'cool'];
+    const minTemp = attrs.min_temp || 50;
+    const maxTemp = attrs.max_temp || 90;
+    const hvacAction = attrs.hvac_action || '';  // heating, cooling, idle, off
+
+    const self = this;
+    let _target = targetTemp;
+    let _mode = hvacMode;
+    let _pollTimer = null;
+
+    App.showPanel(friendlyName, (body) => {
+      body.style.padding = '24px';
+      body.style.display = 'flex';
+      body.style.flexDirection = 'column';
+      body.style.alignItems = 'center';
+
+      body.innerHTML = self._thermostatHTML(_target, currentTemp, _mode, hvacAction, minTemp, maxTemp, hvacModes);
+      self._wireThermostatEvents(body, entityId, {
+        get target() { return _target; },
+        set target(v) { _target = v; },
+        get mode() { return _mode; },
+        set mode(v) { _mode = v; },
+        minTemp, maxTemp
+      });
+
+      // Poll for live updates
+      _pollTimer = setInterval(async () => {
+        try {
+          const r = await fetch(`/api/ha/states/${entityId}`, {
+            headers: { 'X-Tablet-ID': self.tabletId },
+          });
+          const s = await r.json();
+          const a = s.attributes || {};
+          const curEl = body.querySelector('#thermo-current');
+          const actionEl = body.querySelector('#thermo-action');
+          if (curEl && a.current_temperature != null) {
+            curEl.textContent = Math.round(a.current_temperature) + '\u00B0';
+          }
+          if (actionEl) {
+            actionEl.textContent = self._hvacActionLabel(a.hvac_action || '');
+          }
+        } catch (e) { /* silent */ }
+      }, 5000);
+    });
+
+    // Clean up on panel close
+    const observer = new MutationObserver(() => {
+      if (!document.getElementById('panel-overlay')) {
+        if (_pollTimer) clearInterval(_pollTimer);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true });
+  },
+
+  _thermostatHTML(target, current, mode, action, minTemp, maxTemp, modes) {
+    const CX = 140, CY = 140, R = 120;
+    const START_ANGLE = 135, END_ANGLE = 405; // 270° arc
+    const RANGE = END_ANGLE - START_ANGLE;
+
+    const frac = (target - minTemp) / (maxTemp - minTemp);
+    const angle = START_ANGLE + frac * RANGE;
+
+    // Arc path helper
+    const arcPath = (startDeg, endDeg, r) => {
+      const s = (startDeg - 90) * Math.PI / 180;
+      const e = (endDeg - 90) * Math.PI / 180;
+      const x1 = CX + r * Math.cos(s), y1 = CY + r * Math.sin(s);
+      const x2 = CX + r * Math.cos(e), y2 = CY + r * Math.sin(e);
+      const largeArc = (endDeg - startDeg) > 180 ? 1 : 0;
+      return `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`;
+    };
+
+    // Indicator dot position
+    const dotAngle = (angle - 90) * Math.PI / 180;
+    const dotX = CX + R * Math.cos(dotAngle);
+    const dotY = CY + R * Math.sin(dotAngle);
+
+    // Color based on mode
+    const modeColor = mode === 'heat' ? '#ff6b35' : mode === 'cool' ? '#4dabf7' : '#888';
+    const activeColor = mode === 'heat' ? '#ff6b35' : mode === 'cool' ? '#4dabf7' : 'var(--accent)';
+
+    // Mode buttons
+    const modeIcons = { off: 'power_settings_new', heat: 'local_fire_department', cool: 'ac_unit', heat_cool: 'thermostat_auto', fan_only: 'air' };
+    const modeLabels = { off: 'Off', heat: 'Heat', cool: 'Cool', heat_cool: 'Auto', fan_only: 'Fan' };
+    const modeButtons = modes.map(m =>
+      `<button class="thermo-mode-btn${m === mode ? ' active' : ''}" data-mode="${m}" style="${m === mode ? `background:${modeIcons[m] ? activeColor : 'var(--accent)'};color:#fff;` : ''}">
+        <span class="material-icons" style="font-size:20px;">${modeIcons[m] || 'thermostat'}</span>
+        <span>${modeLabels[m] || m}</span>
+      </button>`
+    ).join('');
+
+    return `
+      <div class="thermo-dial-wrap">
+        <svg width="280" height="280" viewBox="0 0 280 280" id="thermo-svg">
+          <!-- Background arc (track) -->
+          <path d="${arcPath(START_ANGLE, END_ANGLE, R)}" fill="none" stroke="var(--border)" stroke-width="12" stroke-linecap="round"/>
+          <!-- Active arc (filled to target) -->
+          <path d="${arcPath(START_ANGLE, Math.min(angle, END_ANGLE), R)}" fill="none" stroke="${modeColor}" stroke-width="12" stroke-linecap="round" id="thermo-arc"/>
+          <!-- Tick marks -->
+          ${this._thermoTicks(CX, CY, R, minTemp, maxTemp, START_ANGLE, RANGE)}
+          <!-- Draggable indicator dot -->
+          <circle cx="${dotX}" cy="${dotY}" r="16" fill="${modeColor}" stroke="#fff" stroke-width="3" id="thermo-dot" style="cursor:grab;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));"/>
+          <!-- Center text -->
+          <text x="${CX}" y="${CY - 24}" text-anchor="middle" fill="var(--text-secondary)" font-size="13" id="thermo-action">${this._hvacActionLabel(action)}</text>
+          <text x="${CX}" y="${CY + 8}" text-anchor="middle" fill="var(--text)" font-size="48" font-weight="700" id="thermo-target">${target}\u00B0</text>
+          <text x="${CX}" y="${CY + 30}" text-anchor="middle" fill="var(--text-secondary)" font-size="13">TARGET</text>
+          <text x="${CX}" y="${CY + 56}" text-anchor="middle" fill="var(--text-secondary)" font-size="16" id="thermo-current">
+            ${current}\u00B0
+          </text>
+          <text x="${CX}" y="${CY + 72}" text-anchor="middle" fill="var(--text-secondary)" font-size="11">CURRENT</text>
+        </svg>
+        <!-- +/- buttons flanking the dial -->
+        <button class="thermo-adj-btn thermo-adj-minus" id="thermo-minus">
+          <span class="material-icons">remove</span>
+        </button>
+        <button class="thermo-adj-btn thermo-adj-plus" id="thermo-plus">
+          <span class="material-icons">add</span>
+        </button>
+      </div>
+
+      <div class="thermo-mode-bar">
+        ${modeButtons}
+      </div>
+    `;
+  },
+
+  _thermoTicks(cx, cy, r, minT, maxT, startAngle, range) {
+    let ticks = '';
+    const outerR = r + 18, innerR = r + 10;
+    for (let t = minT; t <= maxT; t += 5) {
+      const frac = (t - minT) / (maxT - minT);
+      const deg = startAngle + frac * range;
+      const rad = (deg - 90) * Math.PI / 180;
+      const x1 = cx + innerR * Math.cos(rad), y1 = cy + innerR * Math.sin(rad);
+      const x2 = cx + outerR * Math.cos(rad), y2 = cy + outerR * Math.sin(rad);
+      const isMajor = t % 10 === 0;
+      ticks += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--text-secondary)" stroke-width="${isMajor ? 2 : 1}" opacity="${isMajor ? 0.6 : 0.25}"/>`;
+      if (isMajor) {
+        const lx = cx + (outerR + 12) * Math.cos(rad), ly = cy + (outerR + 12) * Math.sin(rad);
+        ticks += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="central" fill="var(--text-secondary)" font-size="10" opacity="0.5">${t}</text>`;
+      }
+    }
+    return ticks;
+  },
+
+  _hvacActionLabel(action) {
+    switch (action) {
+      case 'heating': return 'HEATING';
+      case 'cooling': return 'COOLING';
+      case 'idle': return 'IDLE';
+      case 'drying': return 'DRYING';
+      case 'fan': return 'FAN';
+      default: return '';
+    }
+  },
+
+  _wireThermostatEvents(body, entityId, state) {
+    const svg = body.querySelector('#thermo-svg');
+    const dot = body.querySelector('#thermo-dot');
+    const arc = body.querySelector('#thermo-arc');
+    const targetText = body.querySelector('#thermo-target');
+    const CX = 140, CY = 140, R = 120;
+    const START_ANGLE = 135, END_ANGLE = 405, RANGE = END_ANGLE - START_ANGLE;
+
+    let sendTimer = null;
+    const self = this;
+
+    const modeColor = () => state.mode === 'heat' ? '#ff6b35' : state.mode === 'cool' ? '#4dabf7' : '#888';
+
+    const updateVisual = () => {
+      const frac = (state.target - state.minTemp) / (state.maxTemp - state.minTemp);
+      const angle = START_ANGLE + Math.max(0, Math.min(1, frac)) * RANGE;
+      const rad = (angle - 90) * Math.PI / 180;
+      const dx = CX + R * Math.cos(rad), dy = CY + R * Math.sin(rad);
+      if (dot) { dot.setAttribute('cx', dx); dot.setAttribute('cy', dy); dot.setAttribute('fill', modeColor()); }
+      if (targetText) targetText.textContent = state.target + '\u00B0';
+
+      // Redraw active arc
+      if (arc) {
+        const s = (START_ANGLE - 90) * Math.PI / 180;
+        const e = (angle - 90) * Math.PI / 180;
+        const x1 = CX + R * Math.cos(s), y1 = CY + R * Math.sin(s);
+        const x2 = CX + R * Math.cos(e), y2 = CY + R * Math.sin(e);
+        const largeArc = (angle - START_ANGLE) > 180 ? 1 : 0;
+        arc.setAttribute('d', `M ${x1} ${y1} A ${R} ${R} 0 ${largeArc} 1 ${x2} ${y2}`);
+        arc.setAttribute('stroke', modeColor());
+      }
+    };
+
+    const scheduleSet = () => {
+      clearTimeout(sendTimer);
+      sendTimer = setTimeout(async () => {
+        await fetch(`/api/ha/service/climate/set_temperature`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': self.tabletId },
+          body: JSON.stringify({ entity_id: entityId, temperature: state.target }),
+        }).catch(() => null);
+      }, 600);
+    };
+
+    // +/- buttons
+    body.querySelector('#thermo-minus')?.addEventListener('click', () => {
+      if (state.target > state.minTemp) { state.target--; updateVisual(); scheduleSet(); }
+    });
+    body.querySelector('#thermo-plus')?.addEventListener('click', () => {
+      if (state.target < state.maxTemp) { state.target++; updateVisual(); scheduleSet(); }
+    });
+
+    // Drag on SVG
+    if (svg) {
+      let dragging = false;
+
+      const angleFromPoint = (clientX, clientY) => {
+        const rect = svg.getBoundingClientRect();
+        const scaleX = 280 / rect.width, scaleY = 280 / rect.height;
+        const x = (clientX - rect.left) * scaleX - CX;
+        const y = (clientY - rect.top) * scaleY - CY;
+        let deg = Math.atan2(y, x) * 180 / Math.PI + 90;
+        if (deg < 0) deg += 360;
+        if (deg < START_ANGLE - 10) deg += 360; // wrap for the gap
+        return deg;
+      };
+
+      const setFromAngle = (deg) => {
+        const clamped = Math.max(START_ANGLE, Math.min(END_ANGLE, deg));
+        const frac = (clamped - START_ANGLE) / RANGE;
+        state.target = Math.round(state.minTemp + frac * (state.maxTemp - state.minTemp));
+        updateVisual();
+      };
+
+      const onStart = (e) => {
+        const t = e.target;
+        if (t === dot || t.closest?.('#thermo-dot')) { dragging = true; e.preventDefault(); }
+      };
+      const onMove = (e) => {
+        if (!dragging) return;
+        e.preventDefault();
+        const pt = e.touches ? e.touches[0] : e;
+        setFromAngle(angleFromPoint(pt.clientX, pt.clientY));
+      };
+      const onEnd = () => {
+        if (dragging) { dragging = false; scheduleSet(); }
+      };
+
+      svg.addEventListener('mousedown', onStart);
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onEnd);
+      svg.addEventListener('touchstart', onStart, { passive: false });
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onEnd);
+
+      // Tap on arc area to set directly
+      svg.addEventListener('click', (e) => {
+        if (dragging) return;
+        const rect = svg.getBoundingClientRect();
+        const scaleX = 280 / rect.width, scaleY = 280 / rect.height;
+        const x = (e.clientX - rect.left) * scaleX - CX;
+        const y = (e.clientY - rect.top) * scaleY - CY;
+        const dist = Math.sqrt(x * x + y * y);
+        if (dist > R - 25 && dist < R + 30) {
+          setFromAngle(angleFromPoint(e.clientX, e.clientY));
+          scheduleSet();
+        }
+      });
+    }
+
+    // Mode buttons
+    body.querySelectorAll('.thermo-mode-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const newMode = btn.dataset.mode;
+        state.mode = newMode;
+
+        // Update button styles
+        body.querySelectorAll('.thermo-mode-btn').forEach(b => {
+          b.classList.remove('active');
+          b.style.background = '';
+          b.style.color = '';
+        });
+        btn.classList.add('active');
+        btn.style.background = modeColor();
+        btn.style.color = '#fff';
+
+        // Update arc/dot color
+        updateVisual();
+
+        await fetch(`/api/ha/service/climate/set_hvac_mode`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': self.tabletId },
+          body: JSON.stringify({ entity_id: entityId, hvac_mode: newMode }),
+        }).catch(() => null);
+
+        App.showToast(`Mode: ${newMode.charAt(0).toUpperCase() + newMode.slice(1)}`);
+      });
+    });
+  },
+
 };
