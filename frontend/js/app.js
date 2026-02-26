@@ -114,6 +114,7 @@ const App = {
       this.socket.emit('join', { room: 'x32' });
       this.socket.emit('join', { room: 'obs' });
       this.socket.emit('join', { room: 'projectors' });
+      this.socket.emit('join', { room: 'camlytics' });
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -158,6 +159,10 @@ const App = {
 
     this.socket.on('state:projectors', (data) => {
       this.refreshCurrentPage('projectors');
+    });
+
+    this.socket.on('state:camlytics', (data) => {
+      this.refreshCurrentPage('camlytics');
     });
 
     // Scene progress — show real-time feedback during server-side scene execution
