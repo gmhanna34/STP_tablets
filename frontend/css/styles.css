@@ -127,7 +127,7 @@ body {
 }
 
 .health-badge {
-  display: inline-flex;
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
   width: 20px;
@@ -139,6 +139,7 @@ body {
   line-height: 1;
   text-align: center;
   color: #fff;
+  cursor: pointer;
 }
 
 .health-down    { background: var(--down); }

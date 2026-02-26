@@ -700,15 +700,17 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if filepath.startswith("api/"):
             return jsonify({"error": "Not found"}), 404
 
-        # Location slug catch-all: serve index.html for known location paths
-        # so the SPA frontend can read the path and resolve the location
-        slug = filepath.strip("/").split("/")[0].lower()
-        if slug in _known_location_slugs:
-            return send_from_directory(static_dir, "index.html")
-
+        # First, try to serve the exact static file (JS, CSS, images, etc.)
         full = os.path.join(static_dir, filepath)
         if os.path.isfile(full):
             return send_from_directory(static_dir, filepath)
+
+        # Location slug catch-all: serve index.html ONLY for bare location slugs
+        # (e.g. /chapel, /av-room) — not for sub-paths like /chapel/js/app.js
+        slug = filepath.strip("/").lower()
+        if slug in _known_location_slugs:
+            return send_from_directory(static_dir, "index.html")
+
         return jsonify({"error": "Not found"}), 404
 
     # -------------------------------------------------------------------------
