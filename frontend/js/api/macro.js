@@ -1121,44 +1121,39 @@ const MacroAPI = {
 
   _camlyticsHTML(s) {
     return `
-      <div class="camlytics-grid">
-        <div class="camlytics-card camlytics-card-primary">
+      <div class="camlytics-hero">
+        <div class="camlytics-card camlytics-card-hero">
           <div class="camlytics-card-label">Peak Bldg Occupancy</div>
           <div class="camlytics-card-value" id="cam-occ-adj">${s.occupancy_adjusted}</div>
           <div class="camlytics-card-raw">Raw: <span id="cam-occ-raw">${s.occupancy_raw}</span></div>
         </div>
-        <div class="camlytics-card">
+        <div class="camlytics-card camlytics-card-hero">
           <div class="camlytics-card-label">Communion Count</div>
           <div class="camlytics-card-value" id="cam-comm-adj">${s.communion_adjusted}</div>
           <div class="camlytics-card-raw">Raw: <span id="cam-comm-raw">${s.communion_raw}</span></div>
         </div>
-        <div class="camlytics-card">
-          <div class="camlytics-card-label">Building Entry Count</div>
-          <div class="camlytics-card-value" id="cam-enter-adj">${s.enter_adjusted}</div>
-          <div class="camlytics-card-raw">Raw: <span id="cam-enter-raw">${s.enter_raw}</span></div>
-        </div>
-        <div class="camlytics-card">
-          <div class="camlytics-card-label">Live Occupancy</div>
-          <div class="camlytics-card-value" id="cam-occ-live">${s.occupancy_live}</div>
-        </div>
+      </div>
+
+      <div class="camlytics-secondary">
+        <span class="camlytics-secondary-item">Entry Count: <strong id="cam-enter-adj">${s.enter_adjusted}</strong> <span class="camlytics-secondary-raw">(Raw: <span id="cam-enter-raw">${s.enter_raw}</span>)</span></span>
+        <span class="camlytics-secondary-item">Live Occupancy: <strong id="cam-occ-live">${s.occupancy_live}</strong></span>
       </div>
 
       <div class="camlytics-buffers">
-        <h3 class="camlytics-buffers-title">Buffer Adjustments</h3>
         <div class="camlytics-buffer-row" data-buffer="occupancy">
-          <span class="camlytics-buffer-label">Occupancy Buffer</span>
+          <span class="camlytics-buffer-label">Occ</span>
           <button class="camlytics-buffer-btn" data-dir="minus"><span class="material-icons">remove</span></button>
           <span class="camlytics-buffer-value" id="cam-buf-occupancy">${s.occupancy_buffer}%</span>
           <button class="camlytics-buffer-btn" data-dir="plus"><span class="material-icons">add</span></button>
         </div>
         <div class="camlytics-buffer-row" data-buffer="communion">
-          <span class="camlytics-buffer-label">Communion Buffer</span>
+          <span class="camlytics-buffer-label">Comm</span>
           <button class="camlytics-buffer-btn" data-dir="minus"><span class="material-icons">remove</span></button>
           <span class="camlytics-buffer-value" id="cam-buf-communion">${s.communion_buffer}%</span>
           <button class="camlytics-buffer-btn" data-dir="plus"><span class="material-icons">add</span></button>
         </div>
         <div class="camlytics-buffer-row" data-buffer="enter">
-          <span class="camlytics-buffer-label">Entry Buffer</span>
+          <span class="camlytics-buffer-label">Entry</span>
           <button class="camlytics-buffer-btn" data-dir="minus"><span class="material-icons">remove</span></button>
           <span class="camlytics-buffer-value" id="cam-buf-enter">${s.enter_buffer}%</span>
           <button class="camlytics-buffer-btn" data-dir="plus"><span class="material-icons">add</span></button>
