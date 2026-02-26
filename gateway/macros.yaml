@@ -980,77 +980,155 @@ macros:
         rx: 27
 
   # ---------------------------------------------------------------------------
-  # CONFERENCE ROOM
+  # CONFERENCE ROOM (Two independent TVs: Left=RX28, Right=RX29)
   # ---------------------------------------------------------------------------
 
-  confroom_tv_on:
-    label: "Conference Room TV On"
+  # --- Left TV (RX 28 = ConfRoom_Left) ---
+
+  confroom_left_tv_on:
+    label: "Left TV On"
     icon: "tv"
     steps:
       - type: moip_ir
-        receiver: 10
+        receiver: 28
         code: "IRPowerOn"
-        message: "Sending power-on to Conference Room TV"
-
-  confroom_tv_off:
-    label: "Conference Room TV Off"
-    icon: "tv_off"
-    confirm: "Turn off Conference Room TV?"
-    steps:
+        message: "Sending power-on to Conference Room Left TV"
+      - type: delay
+        seconds: 5
+        message: "Waiting for TV to initialize"
       - type: moip_ir
-        receiver: 10
-        code: "IRPowerOff"
-        message: "Powering off Conference Room TV"
-
-  confroom_hdmi1:
-    label: "HDMI 1"
-    icon: "settings_input_hdmi"
-    steps:
-      - type: moip_ir
-        receiver: 10
+        receiver: 28
         code: "IRSourceHDMI1"
-        message: "Setting Conference Room TV to HDMI 1"
+        message: "Setting Left TV to HDMI 1"
 
-  confroom_hdmi2:
-    label: "HDMI 2"
-    icon: "settings_input_hdmi"
+  confroom_left_tv_off:
+    label: "Left TV Off"
+    icon: "tv_off"
+    confirm: "Turn off Conference Room Left TV?"
     steps:
       - type: moip_ir
-        receiver: 10
-        code: "IRSourceHDMI2"
-        message: "Setting Conference Room TV to HDMI 2"
+        receiver: 28
+        code: "IRPowerOff"
+        message: "Powering off Conference Room Left TV"
 
-  confroom_source_laptop:
-    label: "Conference Room Laptop"
+  confroom_left_source_laptop:
+    label: "Left TV Laptop"
     icon: "computer"
     steps:
       - type: moip_switch
         tx: 5
-        rx: 10
+        rx: 28
 
-  confroom_source_livestream:
-    label: "Conference Room Live Stream"
+  confroom_left_source_livestream:
+    label: "Left TV Live Stream"
     icon: "live_tv"
     steps:
       - type: moip_switch
         tx: 8
-        rx: 10
+        rx: 28
 
-  confroom_source_logo:
-    label: "Conference Room LOGO"
+  confroom_left_source_logo:
+    label: "Left TV LOGO"
     icon: "image"
     steps:
       - type: moip_switch
         tx: 16
-        rx: 10
+        rx: 28
 
-  confroom_source_announcements:
-    label: "Conference Room Announcements"
+  confroom_left_source_announcements:
+    label: "Left TV Announcements"
     icon: "announcement"
     steps:
       - type: moip_switch
         tx: 9
-        rx: 10
+        rx: 28
+
+  # --- Right TV (RX 29 = ConfRoom_Right) ---
+
+  confroom_right_tv_on:
+    label: "Right TV On"
+    icon: "tv"
+    steps:
+      - type: moip_ir
+        receiver: 29
+        code: "IRPowerOn"
+        message: "Sending power-on to Conference Room Right TV"
+      - type: delay
+        seconds: 5
+        message: "Waiting for TV to initialize"
+      - type: moip_ir
+        receiver: 29
+        code: "IRSourceHDMI1"
+        message: "Setting Right TV to HDMI 1"
+
+  confroom_right_tv_off:
+    label: "Right TV Off"
+    icon: "tv_off"
+    confirm: "Turn off Conference Room Right TV?"
+    steps:
+      - type: moip_ir
+        receiver: 29
+        code: "IRPowerOff"
+        message: "Powering off Conference Room Right TV"
+
+  confroom_right_source_laptop:
+    label: "Right TV Laptop"
+    icon: "computer"
+    steps:
+      - type: moip_switch
+        tx: 5
+        rx: 29
+
+  confroom_right_source_livestream:
+    label: "Right TV Live Stream"
+    icon: "live_tv"
+    steps:
+      - type: moip_switch
+        tx: 8
+        rx: 29
+
+  confroom_right_source_logo:
+    label: "Right TV LOGO"
+    icon: "image"
+    steps:
+      - type: moip_switch
+        tx: 16
+        rx: 29
+
+  confroom_right_source_announcements:
+    label: "Right TV Announcements"
+    icon: "announcement"
+    steps:
+      - type: moip_switch
+        tx: 9
+        rx: 29
+
+  # --- Video Conference System ---
+
+  confroom_vidconf_on:
+    label: "Video Conference On"
+    icon: "video_call"
+    steps:
+      # TODO: Replace with actual HA entity for video conference system power
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.TODO_confroom_vidconf_power" }
+        on_fail: skip
+        message: "Video conference power entity not configured yet"
+
+  confroom_vidconf_off:
+    label: "Video Conference Off"
+    icon: "call_end"
+    confirm: "Turn off Video Conference system?"
+    steps:
+      # TODO: Replace with actual HA entity for video conference system power
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.TODO_confroom_vidconf_power" }
+        on_fail: skip
+        message: "Video conference power entity not configured yet"
 
 
 # =============================================================================
@@ -1074,7 +1152,53 @@ macros:
 #                entity   — HA entity_id (for ha source)
 #                field    — Dot-path into cached state (for other sources)
 #                on_value — Value that means "active"
+#                off_value — Value that means "inactive" (alternative to on_value)
 #                on_style — CSS class when active: "active", "live", "recording"
+#
+#     STATE BINDING EXAMPLES BY SOURCE:
+#
+#     "ha" — Home Assistant entity state
+#       state:
+#         source: ha
+#         entity: "switch.chapel_audio_power"
+#         on_value: "on"                         # active when entity state == "on"
+#         on_style: "active"
+#
+#     "ha" — Climate (active when NOT off)
+#       state:
+#         source: ha
+#         entity: "climate.mainchurch"
+#         off_value: "off"                       # active when state != "off"
+#         on_style: "active"
+#
+#     "obs" — OBS streaming/recording state
+#       state:
+#         source: obs
+#         field: "streaming"                     # dot-path into OBS state cache
+#         on_value: "true"
+#         on_style: "live"
+#
+#     "x32" — Behringer X32 mixer state
+#       state:
+#         source: x32
+#         field: "channels.ch01.mute"            # dot-path into X32 state cache
+#         on_value: "0"                          # 0 = unmuted (active), 1 = muted
+#         on_style: "active"
+#
+#     "moip" — MoIP video matrix (which TX is routed to an RX)
+#       state:
+#         source: moip
+#         field: "47.transmitter_id"             # RX 47's current transmitter
+#         on_value: "14"                         # active when TX 14 is routed to RX 47
+#         on_style: "active"
+#       (The field is "<receiver_id>.transmitter_id" — check devices.json for IDs)
+#
+#     "projectors" — Epson projector power state
+#       state:
+#         source: projectors
+#         field: "epson1.power"                  # dot-path into projector cache
+#         on_value: "on"
+#         on_style: "active"
 #   collapsed — If true, section starts collapsed (click title to expand)
 #
 # NEW FEATURES:
@@ -1174,15 +1298,35 @@ buttons:
         - label: "Apple TV"
           icon: "cast"
           action: { type: macro, macro: chapel_source_appletv }
+          state:
+            source: moip
+            field: "47.transmitter_id"
+            on_value: "14"
+            on_style: "active"
         - label: "Live Stream"
           icon: "live_tv"
           action: { type: macro, macro: chapel_source_livestream }
+          state:
+            source: moip
+            field: "47.transmitter_id"
+            on_value: "8"
+            on_style: "active"
         - label: "LOGO"
           icon: "image"
           action: { type: macro, macro: chapel_source_logo }
+          state:
+            source: moip
+            field: "47.transmitter_id"
+            on_value: "16"
+            on_style: "active"
         - label: "Announcements"
           icon: "announcement"
           action: { type: macro, macro: chapel_source_announcements }
+          state:
+            source: moip
+            field: "47.transmitter_id"
+            on_value: "9"
+            on_style: "active"
 
   main:
     - section: "Video"
@@ -1255,24 +1399,59 @@ buttons:
         - label: "Left Podium"
           icon: "computer"
           action: { type: macro, macro: main_source_left_podium }
+          state:
+            source: moip
+            field: "36.transmitter_id"
+            on_value: "22"
+            on_style: "active"
         - label: "Right Podium"
           icon: "computer"
           action: { type: macro, macro: main_source_right_podium }
+          state:
+            source: moip
+            field: "36.transmitter_id"
+            on_value: "23"
+            on_style: "active"
         - label: "Announcements"
           icon: "announcement"
           action: { type: macro, macro: main_source_announcements }
+          state:
+            source: moip
+            field: "36.transmitter_id"
+            on_value: "9"
+            on_style: "active"
         - label: "LOGO"
           icon: "image"
           action: { type: macro, macro: main_source_logo }
+          state:
+            source: moip
+            field: "36.transmitter_id"
+            on_value: "16"
+            on_style: "active"
         - label: "Live Stream"
           icon: "live_tv"
           action: { type: macro, macro: main_source_livestream }
+          state:
+            source: moip
+            field: "36.transmitter_id"
+            on_value: "8"
+            on_style: "active"
         - label: "Apple TV"
           icon: "cast"
           action: { type: macro, macro: main_source_appletv }
+          state:
+            source: moip
+            field: "36.transmitter_id"
+            on_value: "24"
+            on_style: "active"
         - label: "Google Streamer"
           icon: "cast_connected"
           action: { type: macro, macro: main_source_google_streamer }
+          state:
+            source: moip
+            field: "36.transmitter_id"
+            on_value: "25"
+            on_style: "active"
 
     - section: "Advanced Display Settings"
       display: "link"
@@ -1436,18 +1615,43 @@ buttons:
         - label: "Apple TV"
           icon: "cast"
           action: { type: macro, macro: social_source_appletv }
+          state:
+            source: moip
+            field: "11.transmitter_id"
+            on_value: "6"
+            on_style: "active"
         - label: "Live Stream"
           icon: "live_tv"
           action: { type: macro, macro: social_source_livestream }
+          state:
+            source: moip
+            field: "11.transmitter_id"
+            on_value: "8"
+            on_style: "active"
         - label: "LOGO"
           icon: "image"
           action: { type: macro, macro: social_source_logo }
+          state:
+            source: moip
+            field: "11.transmitter_id"
+            on_value: "16"
+            on_style: "active"
         - label: "Announcements"
           icon: "announcement"
           action: { type: macro, macro: social_source_announcements }
+          state:
+            source: moip
+            field: "11.transmitter_id"
+            on_value: "9"
+            on_style: "active"
         - label: "Camera"
           icon: "videocam"
           action: { type: macro, macro: social_source_camera }
+          state:
+            source: moip
+            field: "11.transmitter_id"
+            on_value: "2"
+            on_style: "active"
 
   gym:
     - section: "Video"
@@ -1479,35 +1683,64 @@ buttons:
         - label: "Live Stream"
           icon: "live_tv"
           action: { type: macro, macro: gym_source_livestream }
+          state:
+            source: moip
+            field: "9.transmitter_id"
+            on_value: "8"
+            on_style: "active"
         - label: "LOGO"
           icon: "image"
           action: { type: macro, macro: gym_source_logo }
+          state:
+            source: moip
+            field: "9.transmitter_id"
+            on_value: "16"
+            on_style: "active"
         - label: "Announcements"
           icon: "announcement"
           action: { type: macro, macro: gym_source_announcements }
+          state:
+            source: moip
+            field: "9.transmitter_id"
+            on_value: "9"
+            on_style: "active"
 
   confroom:
-    - section: "TV Power"
+    - section: "Left TV"
       cols: 4
       items:
-        - label: "TV On"
+        - label: "On"
           icon: "tv"
-          action: { type: macro, macro: confroom_tv_on }
+          action: { type: macro, macro: confroom_left_tv_on }
           style: "large"
-        - label: "TV Off"
+        - label: "Off"
           icon: "tv_off"
-          action: { type: macro, macro: confroom_tv_off }
+          action: { type: macro, macro: confroom_left_tv_off }
           style: "large danger"
 
-    - section: "TV Input"
+    - section: "Right TV"
       cols: 4
       items:
-        - label: "HDMI 1"
-          icon: "settings_input_hdmi"
-          action: { type: macro, macro: confroom_hdmi1 }
-        - label: "HDMI 2"
-          icon: "settings_input_hdmi"
-          action: { type: macro, macro: confroom_hdmi2 }
+        - label: "On"
+          icon: "tv"
+          action: { type: macro, macro: confroom_right_tv_on }
+          style: "large"
+        - label: "Off"
+          icon: "tv_off"
+          action: { type: macro, macro: confroom_right_tv_off }
+          style: "large danger"
+
+    - section: "Video Conference"
+      cols: 4
+      items:
+        - label: "On"
+          icon: "video_call"
+          action: { type: macro, macro: confroom_vidconf_on }
+          style: "large"
+        - label: "Off"
+          icon: "call_end"
+          action: { type: macro, macro: confroom_vidconf_off }
+          style: "large danger"
 
     - section: "A/C"
       cols: 4
@@ -1527,17 +1760,72 @@ buttons:
             attribute: "current_temperature"
             format: "temp"
 
-    - section: "Video Sources"
+    - section: "Left TV Sources"
       items:
         - label: "Laptop"
           icon: "computer"
-          action: { type: macro, macro: confroom_source_laptop }
+          action: { type: macro, macro: confroom_left_source_laptop }
+          state:
+            source: moip
+            field: "28.transmitter_id"
+            on_value: "5"
+            on_style: "active"
         - label: "Live Stream"
           icon: "live_tv"
-          action: { type: macro, macro: confroom_source_livestream }
+          action: { type: macro, macro: confroom_left_source_livestream }
+          state:
+            source: moip
+            field: "28.transmitter_id"
+            on_value: "8"
+            on_style: "active"
         - label: "LOGO"
           icon: "image"
-          action: { type: macro, macro: confroom_source_logo }
+          action: { type: macro, macro: confroom_left_source_logo }
+          state:
+            source: moip
+            field: "28.transmitter_id"
+            on_value: "16"
+            on_style: "active"
         - label: "Announcements"
           icon: "announcement"
-          action: { type: macro, macro: confroom_source_announcements }
+          action: { type: macro, macro: confroom_left_source_announcements }
+          state:
+            source: moip
+            field: "28.transmitter_id"
+            on_value: "9"
+            on_style: "active"
+
+    - section: "Right TV Sources"
+      items:
+        - label: "Laptop"
+          icon: "computer"
+          action: { type: macro, macro: confroom_right_source_laptop }
+          state:
+            source: moip
+            field: "29.transmitter_id"
+            on_value: "5"
+            on_style: "active"
+        - label: "Live Stream"
+          icon: "live_tv"
+          action: { type: macro, macro: confroom_right_source_livestream }
+          state:
+            source: moip
+            field: "29.transmitter_id"
+            on_value: "8"
+            on_style: "active"
+        - label: "LOGO"
+          icon: "image"
+          action: { type: macro, macro: confroom_right_source_logo }
+          state:
+            source: moip
+            field: "29.transmitter_id"
+            on_value: "16"
+            on_style: "active"
+        - label: "Announcements"
+          icon: "announcement"
+          action: { type: macro, macro: confroom_right_source_announcements }
+          state:
+            source: moip
+            field: "29.transmitter_id"
+            on_value: "9"
+            on_style: "active"
