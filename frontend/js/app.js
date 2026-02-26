@@ -266,21 +266,35 @@ const App = {
       const warnEl = document.getElementById('health-warning-count');
       const healthyEl = document.getElementById('health-healthy-count');
 
-      if (downEl) {
-        downEl.textContent = state.downCount;
-        downEl.style.display = state.downCount > 0 ? 'inline-block' : 'none';
-      }
-      if (warnEl) {
-        warnEl.textContent = state.warningCount;
-        warnEl.style.display = state.warningCount > 0 ? 'inline-block' : 'none';
-      }
-      if (healthyEl) {
-        healthyEl.textContent = state.healthyCount;
-        healthyEl.style.display = state.healthyCount > 0 ? 'inline-block' : 'none';
-      }
+      if (downEl) downEl.textContent = state.downCount;
+      if (warnEl) warnEl.textContent = state.warningCount;
+      if (healthyEl) healthyEl.textContent = state.healthyCount;
     };
     update();
     this.healthTimer = setInterval(update, 30000);
+
+    // Make health pills clickable — open health dashboard panel
+    const healthSection = document.getElementById('status-health');
+    if (healthSection) {
+      healthSection.style.cursor = 'pointer';
+      healthSection.addEventListener('click', () => this.openHealthDashPanel());
+    }
+  },
+
+  openHealthDashPanel() {
+    const url = HealthAPI.getStatusUrl();
+    if (!url) {
+      this.showToast('Health dashboard URL not configured');
+      return;
+    }
+    this.showPanel('System Health', (body) => {
+      body.style.padding = '0';
+      body.innerHTML = `
+        <iframe src="${url}"
+          style="width:100%;height:100%;border:none;border-radius:0 0 16px 16px;">
+        </iframe>
+      `;
+    });
   },
 
   // -----------------------------------------------------------------------

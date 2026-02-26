@@ -46,22 +46,6 @@ const SettingsPage = {
         </div>` : ''}
       </div>
 
-        <!-- Tablet Location: full width -->
-        <div class="control-section">
-          <div class="section-title">Tablet Location</div>
-          <div style="font-size:12px;color:var(--text-secondary);text-align:center;margin-bottom:8px;">
-            Select which location this tablet is assigned to.
-          </div>
-          <div class="control-grid" style="grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));">
-            ${locations.map(loc => `
-              <button class="btn ${loc.key === currentLoc ? 'active' : ''}" data-location="${loc.key}">
-                <span class="material-icons">${loc.key === currentLoc ? 'radio_button_checked' : 'radio_button_unchecked'}</span>
-                <span class="btn-label">${loc.displayName}</span>
-              </button>
-            `).join('')}
-          </div>
-        </div>
-
         <!-- Audio Mixer: full width -->
         <div class="control-section">
           <div class="section-title">Audio Mixer (X32)</div>
