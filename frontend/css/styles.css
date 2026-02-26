@@ -127,7 +127,7 @@ body {
 }
 
 .health-badge {
-  display: inline-flex !important;
+  display: none;
   align-items: center;
   justify-content: center;
   width: 20px;
