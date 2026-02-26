@@ -724,6 +724,25 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             "mock_mode": mock_mode,
         }), 200
 
+    @app.route("/api/healthdash/summary")
+    def api_healthdash_summary():
+        """Proxy the health dashboard /api/summary endpoint so tablets don't
+        need direct access to the healthdash service (avoids CORS issues)."""
+        hd_cfg = cfg.get("healthdash", {})
+        hd_url = hd_cfg.get("url", "").rstrip("/")
+        if not hd_url:
+            return jsonify({"error": "Health dashboard not configured"}), 503
+        try:
+            resp = http_requests.get(
+                f"{hd_url}/api/summary",
+                timeout=5,
+            )
+            return Response(resp.content, status=resp.status_code,
+                            content_type=resp.headers.get("Content-Type", "application/json"))
+        except Exception as exc:
+            logger.debug("Healthdash summary proxy failed: %s", exc)
+            return jsonify({"error": "Health dashboard unreachable"}), 503
+
     @app.route("/api/config")
     def api_config():
         """Returns merged config for the frontend (devices, permissions, settings).
