@@ -271,9 +271,18 @@ const App = {
       const warnEl = document.getElementById('health-warning-count');
       const healthyEl = document.getElementById('health-healthy-count');
 
-      if (downEl) downEl.textContent = state.downCount;
-      if (warnEl) warnEl.textContent = state.warningCount;
-      if (healthyEl) healthyEl.textContent = state.healthyCount;
+      if (downEl) {
+        downEl.textContent = state.downCount;
+        downEl.style.display = state.downCount > 0 ? 'inline-flex' : 'none';
+      }
+      if (warnEl) {
+        warnEl.textContent = state.warningCount;
+        warnEl.style.display = state.warningCount > 0 ? 'inline-flex' : 'none';
+      }
+      if (healthyEl) {
+        healthyEl.textContent = state.healthyCount;
+        healthyEl.style.display = state.healthyCount > 0 ? 'inline-flex' : 'none';
+      }
     };
     update();
     this.healthTimer = setInterval(update, 30000);
