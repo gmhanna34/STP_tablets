@@ -19,6 +19,7 @@ const MacroAPI = {
     socket.on('state:x32', (data) => { this._stateCache.x32 = data; this._notifyListeners(); });
     socket.on('state:projectors', (data) => { this._stateCache.projectors = data; this._notifyListeners(); });
     socket.on('state:moip', (data) => { this._stateCache.moip = data; this._notifyListeners(); });
+    socket.on('state:camlytics', (data) => { this._stateCache.camlytics = data; this._notifyListeners(); });
 
     // Macro progress events
     socket.on('macro:progress', (data) => {
@@ -471,6 +472,12 @@ const MacroAPI = {
         btn.classList.remove('loading');
         btn.disabled = false;
         this._openThermostatPanel(action.entity);
+        return;
+
+      } else if (action.type === 'camlytics_panel') {
+        btn.classList.remove('loading');
+        btn.disabled = false;
+        this._openCamlyticsPanel();
         return;
 
       } else if (action.type === 'navigate') {
@@ -1054,6 +1061,159 @@ const MacroAPI = {
         } catch (e) { console.error('set_hvac_mode error:', e); }
 
         App.showToast(`Mode: ${newMode.charAt(0).toUpperCase() + newMode.slice(1)}`);
+      });
+    });
+  },
+
+  // -----------------------------------------------------------------------
+  // Camlytics People Count Panel
+  // -----------------------------------------------------------------------
+
+  async _openCamlyticsPanel() {
+    let state = null;
+    try {
+      const resp = await fetch('/api/camlytics/state', {
+        headers: { 'X-Tablet-ID': this.tabletId },
+      });
+      if (resp.ok) state = await resp.json();
+    } catch (e) {
+      console.error('Camlytics state fetch error:', e);
+    }
+    if (!state || Object.keys(state).length === 0) {
+      state = {
+        communion_raw: 0, communion_adjusted: 0, communion_buffer: 0,
+        occupancy_raw: 0, occupancy_adjusted: 0, occupancy_live: 0, occupancy_buffer: 0,
+        enter_raw: 0, enter_adjusted: 0, enter_buffer: 0,
+      };
+    }
+
+    const self = this;
+    let _pollTimer = null;
+
+    App.showPanel('People Counts', (body) => {
+      body.style.padding = '24px';
+      body.innerHTML = self._camlyticsHTML(state);
+      self._wireCamlyticsEvents(body, state);
+
+      // Poll for live updates
+      _pollTimer = setInterval(async () => {
+        try {
+          const r = await fetch('/api/camlytics/state', {
+            headers: { 'X-Tablet-ID': self.tabletId },
+          });
+          if (!r.ok) return;
+          const s = await r.json();
+          Object.assign(state, s);
+          self._updateCamlyticsValues(body, s);
+        } catch (e) { console.error('Camlytics poll error:', e); }
+      }, 5000);
+    });
+
+    // Clean up on panel close
+    const observer = new MutationObserver(() => {
+      if (!document.getElementById('panel-overlay')) {
+        if (_pollTimer) clearInterval(_pollTimer);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true });
+  },
+
+  _camlyticsHTML(s) {
+    return `
+      <div class="camlytics-grid">
+        <div class="camlytics-card camlytics-card-primary">
+          <div class="camlytics-card-label">Peak Bldg Occupancy</div>
+          <div class="camlytics-card-value" id="cam-occ-adj">${s.occupancy_adjusted}</div>
+          <div class="camlytics-card-raw">Raw: <span id="cam-occ-raw">${s.occupancy_raw}</span></div>
+        </div>
+        <div class="camlytics-card">
+          <div class="camlytics-card-label">Communion Count</div>
+          <div class="camlytics-card-value" id="cam-comm-adj">${s.communion_adjusted}</div>
+          <div class="camlytics-card-raw">Raw: <span id="cam-comm-raw">${s.communion_raw}</span></div>
+        </div>
+        <div class="camlytics-card">
+          <div class="camlytics-card-label">Building Entry Count</div>
+          <div class="camlytics-card-value" id="cam-enter-adj">${s.enter_adjusted}</div>
+          <div class="camlytics-card-raw">Raw: <span id="cam-enter-raw">${s.enter_raw}</span></div>
+        </div>
+        <div class="camlytics-card">
+          <div class="camlytics-card-label">Live Occupancy</div>
+          <div class="camlytics-card-value" id="cam-occ-live">${s.occupancy_live}</div>
+        </div>
+      </div>
+
+      <div class="camlytics-buffers">
+        <h3 class="camlytics-buffers-title">Buffer Adjustments</h3>
+        <div class="camlytics-buffer-row" data-buffer="occupancy">
+          <span class="camlytics-buffer-label">Occupancy Buffer</span>
+          <button class="camlytics-buffer-btn" data-dir="minus"><span class="material-icons">remove</span></button>
+          <span class="camlytics-buffer-value" id="cam-buf-occupancy">${s.occupancy_buffer}%</span>
+          <button class="camlytics-buffer-btn" data-dir="plus"><span class="material-icons">add</span></button>
+        </div>
+        <div class="camlytics-buffer-row" data-buffer="communion">
+          <span class="camlytics-buffer-label">Communion Buffer</span>
+          <button class="camlytics-buffer-btn" data-dir="minus"><span class="material-icons">remove</span></button>
+          <span class="camlytics-buffer-value" id="cam-buf-communion">${s.communion_buffer}%</span>
+          <button class="camlytics-buffer-btn" data-dir="plus"><span class="material-icons">add</span></button>
+        </div>
+        <div class="camlytics-buffer-row" data-buffer="enter">
+          <span class="camlytics-buffer-label">Entry Buffer</span>
+          <button class="camlytics-buffer-btn" data-dir="minus"><span class="material-icons">remove</span></button>
+          <span class="camlytics-buffer-value" id="cam-buf-enter">${s.enter_buffer}%</span>
+          <button class="camlytics-buffer-btn" data-dir="plus"><span class="material-icons">add</span></button>
+        </div>
+      </div>
+    `;
+  },
+
+  _updateCamlyticsValues(body, s) {
+    const set = (id, val) => { const el = body.querySelector('#' + id); if (el) el.textContent = val; };
+    set('cam-occ-adj', s.occupancy_adjusted);
+    set('cam-occ-raw', s.occupancy_raw);
+    set('cam-comm-adj', s.communion_adjusted);
+    set('cam-comm-raw', s.communion_raw);
+    set('cam-enter-adj', s.enter_adjusted);
+    set('cam-enter-raw', s.enter_raw);
+    set('cam-occ-live', s.occupancy_live);
+    set('cam-buf-occupancy', s.occupancy_buffer + '%');
+    set('cam-buf-communion', s.communion_buffer + '%');
+    set('cam-buf-enter', s.enter_buffer + '%');
+  },
+
+  _wireCamlyticsEvents(body, state) {
+    const self = this;
+    const STEP = 2.5;
+
+    body.querySelectorAll('.camlytics-buffer-row').forEach(row => {
+      const bufType = row.dataset.buffer;
+
+      row.querySelectorAll('.camlytics-buffer-btn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const dir = btn.dataset.dir;
+          const key = bufType + '_buffer';
+          let current = parseFloat(state[key]) || 0;
+          current = dir === 'plus' ? current + STEP : current - STEP;
+
+          // Clamp to -50..+100 range
+          current = Math.max(-50, Math.min(100, current));
+          // Round to avoid floating point drift
+          current = Math.round(current * 10) / 10;
+
+          state[key] = current;
+          const valEl = body.querySelector('#cam-buf-' + bufType);
+          if (valEl) valEl.textContent = current + '%';
+
+          try {
+            await fetch('/api/camlytics/buffer', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': self.tabletId },
+              body: JSON.stringify({ type: bufType, value: current }),
+            });
+          } catch (e) {
+            console.error('Camlytics buffer update error:', e);
+          }
+        });
       });
     });
   },

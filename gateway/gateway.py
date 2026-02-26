@@ -324,6 +324,15 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     settings_pin = sec_cfg.get("settings_pin", "1234")
     remote_auth = sec_cfg.get("remote_auth", {})
 
+    # Camlytics runtime buffer state (resets to config defaults on restart)
+    cam_cfg = cfg.get("camlytics", {})
+    camlytics_buffers = {
+        "communion": float(cam_cfg.get("communion_buffer_default", -5)),
+        "occupancy": float(cam_cfg.get("occupancy_buffer_default", 20)),
+        "enter": float(cam_cfg.get("enter_buffer_default", 0)),
+    }
+    camlytics_lock = threading.Lock()
+
     # Load permissions from frontend config
     permissions_path = os.path.join(static_dir, "config", "permissions.json")
     try:
@@ -2058,7 +2067,35 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             "x32": state_cache.get("x32"),
             "projectors": state_cache.get("projectors"),
             "moip": state_cache.get("moip"),
+            "camlytics": state_cache.get("camlytics"),
         }), 200
+
+    # -------------------------------------------------------------------------
+    # CAMLYTICS API ENDPOINTS
+    # -------------------------------------------------------------------------
+
+    @app.route("/api/camlytics/state")
+    def api_camlytics_state():
+        """Return current Camlytics counts and buffer values."""
+        return jsonify(state_cache.get("camlytics") or {}), 200
+
+    @app.route("/api/camlytics/buffer", methods=["POST"])
+    def api_camlytics_buffer():
+        """Update a Camlytics buffer value. Body: {"type": "communion"|"occupancy"|"enter", "value": 5}"""
+        data = request.get_json(silent=True) or {}
+        buf_type = data.get("type", "")
+        buf_value = data.get("value")
+        if buf_type not in ("communion", "occupancy", "enter") or buf_value is None:
+            return jsonify({"error": "type and value required"}), 400
+        try:
+            buf_value = float(buf_value)
+        except (ValueError, TypeError):
+            return jsonify({"error": "value must be a number"}), 400
+        with camlytics_lock:
+            camlytics_buffers[buf_type] = buf_value
+        tablet = _tablet_id()
+        logger.info(f"[{tablet}] Camlytics buffer update: {buf_type} = {buf_value}%")
+        return jsonify({"success": True, "buffer": buf_type, "value": buf_value}), 200
 
     # -------------------------------------------------------------------------
     # SCHEDULE API ENDPOINTS
@@ -2127,7 +2164,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     @socketio.on("join")
     def on_join(data):
         room = data.get("room", "")
-        if room in ("moip", "x32", "obs", "projectors", "ha", "macros"):
+        if room in ("moip", "x32", "obs", "projectors", "ha", "macros", "camlytics"):
             join_room(room)
             logger.debug(f"sid={request.sid} joined room={room}")
 
@@ -2281,6 +2318,91 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                     states[entity_id] = {"state": "unavailable", "attributes": {}}
             return states
 
+        def _get_camlytics_raw(url):
+            """Fetch a raw counter value from a Camlytics cloud report URL.
+
+            Handles three response formats:
+            1. report.data.counter (simple counter)
+            2. report.data.series[0].data (chart data — find peak in window)
+            3. report.counter (fallback)
+            """
+            if not url:
+                return 0
+            try:
+                resp = http_requests.get(url, timeout=2)
+                body = resp.json()
+                report = body.get("report", {}) if isinstance(body, dict) else {}
+                data = report.get("data", {}) if isinstance(report, dict) else {}
+
+                # Format 1: simple counter
+                if isinstance(data, dict) and data.get("counter") is not None:
+                    return int(data["counter"]) or 0
+
+                # Format 2: chart series data — find peak within window
+                if isinstance(data, dict) and "series" in data:
+                    series = data["series"]
+                    if series and isinstance(series, list) and series[0].get("data"):
+                        chart_points = series[0]["data"]
+                        window_hours = float(cam_cfg.get("peak_window_hours", 2))
+                        intervals = round(window_hours * 4)
+                        start = max(0, len(chart_points) - intervals)
+                        peak = 0
+                        for point in chart_points[start:]:
+                            v = int(point.get("value", 0)) if isinstance(point, dict) else 0
+                            if v > peak:
+                                peak = v
+                        return peak
+
+                # Format 3: fallback counter at report level
+                if report.get("counter") is not None:
+                    return int(report["counter"]) or 0
+            except Exception:
+                pass
+            return 0
+
+        def poll_camlytics():
+            """Poll Camlytics cloud APIs for people counts, apply buffers."""
+            if mock_mode:
+                return {
+                    "communion_raw": 0, "communion_adjusted": 0, "communion_buffer": -5,
+                    "occupancy_raw": 0, "occupancy_adjusted": 0, "occupancy_live": 0, "occupancy_buffer": 20,
+                    "enter_raw": 0, "enter_adjusted": 0, "enter_buffer": 0,
+                }
+
+            with camlytics_lock:
+                buffers = dict(camlytics_buffers)
+
+            # Communion
+            comm_raw = _get_camlytics_raw(cam_cfg.get("communion_url", ""))
+            comm_mult = 1 + (buffers["communion"] / 100)
+            comm_adj = max(0, round(comm_raw * comm_mult))
+
+            # Occupancy: take max of peak and live for the "high water mark"
+            peak_val = _get_camlytics_raw(cam_cfg.get("occupancy_url_peak", ""))
+            live_val = _get_camlytics_raw(cam_cfg.get("occupancy_url_live", ""))
+            occ_raw = max(peak_val, live_val)
+            occ_mult = 1 + (buffers["occupancy"] / 100)
+            occ_adj = max(0, round(occ_raw * occ_mult))
+            occ_live_adj = max(0, round(live_val * occ_mult))
+
+            # Building entry
+            enter_raw = _get_camlytics_raw(cam_cfg.get("enter_url", ""))
+            enter_mult = 1 + (buffers["enter"] / 100)
+            enter_adj = max(0, round(enter_raw * enter_mult))
+
+            return {
+                "communion_raw": comm_raw,
+                "communion_adjusted": comm_adj,
+                "communion_buffer": buffers["communion"],
+                "occupancy_raw": occ_raw,
+                "occupancy_adjusted": occ_adj,
+                "occupancy_live": occ_live_adj,
+                "occupancy_buffer": buffers["occupancy"],
+                "enter_raw": enter_raw,
+                "enter_adjusted": enter_adj,
+                "enter_buffer": buffers["enter"],
+            }
+
         pollers = [
             ("x32", poll_cfg.get("x32", 5), poll_x32),
             ("moip", poll_cfg.get("moip", 10), poll_moip),
@@ -2290,6 +2412,11 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
 
         if ha_state_entities:
             pollers.append(("ha", poll_cfg.get("ha", 15), poll_ha_states))
+
+        # Camlytics poller (only if at least one URL is configured)
+        if cam_cfg.get("communion_url") or cam_cfg.get("occupancy_url_peak") or cam_cfg.get("occupancy_url_live"):
+            cam_interval = cam_cfg.get("poll_interval", 5)
+            pollers.append(("camlytics", cam_interval, poll_camlytics))
 
         # HA device cache refresh (cameras + locks list, every 5 min)
         def _ha_cache_loop():
