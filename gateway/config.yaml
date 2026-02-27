@@ -75,11 +75,11 @@ security:
 # --- Camlytics people counting ------------------------------------------------
 camlytics:
   communion_url: "https://cloud.camlytics.com/feed/report/814c480b4a6d221401093b5bb77aff30"
-  communion_buffer_default: -5        # Percentage buffer (e.g. -5 means subtract 5%)
+  communion_buffer_default: 5        # Percentage buffer (e.g. -5 means subtract 5%)
   occupancy_url_peak: "https://cloud.camlytics.com/feed/report/4f82c3553002b39064ef61fc87cb8621"
   occupancy_url_live: "https://cloud.camlytics.com/feed/report/1acd7636230cc6af595f30ecef335519"
-  occupancy_buffer_default: 20        # Percentage buffer (e.g. 20 means add 20%)
-  enter_url: ""                       # Not yet configured
+  occupancy_buffer_default: 12.5        # Percentage buffer (e.g. 20 means add 20%)
+  enter_url: "https://cloud.camlytics.com/feed/report/521d0d268ead8cfeef6950a8676c8976" 
   enter_buffer_default: 0
   peak_window_hours: 2                # Look-back window for peak detection in chart data
   poll_interval: 5                    # Seconds between Camlytics API polls
