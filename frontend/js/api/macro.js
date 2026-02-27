@@ -1222,11 +1222,12 @@ const MacroAPI = {
   // -----------------------------------------------------------------------
 
   _setScreensaverTimeout(seconds) {
-    fetch('/api/fully/screensaver', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': this.tabletId },
-      body: JSON.stringify({ timeout: seconds }),
-    }).catch(e => console.warn('Fully Kiosk screensaver command failed:', e));
+    const base = 'http://127.0.0.1:2323/?password=admin';
+    // Fire-and-forget GET via Image (avoids CORS restrictions)
+    new Image().src = `${base}&cmd=setStringSetting&key=timeToScreensaverV2&value=${seconds}&_t=${Date.now()}`;
+    if (seconds > 60) {
+      new Image().src = `${base}&cmd=stopScreensaver&_t=${Date.now()}`;
+    }
   },
 
 };
