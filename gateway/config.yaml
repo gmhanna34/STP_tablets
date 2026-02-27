@@ -51,7 +51,7 @@ projectors:
 # --- Fully Kiosk Browser (screensaver control) -------------------------------
 fully_kiosk:
   port: 2323
-  password: "YOUR_PASSWORD"
+  password: "admin"
   screensaver_default: 20         # Normal screensaver timeout (seconds)
   screensaver_extended: 10800     # Extended timeout when panel is open (seconds)
 
