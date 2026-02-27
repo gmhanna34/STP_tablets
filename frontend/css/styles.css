@@ -1452,6 +1452,22 @@ body {
   .camlytics-secondary { flex-direction: column; align-items: center; gap: 4px; }
 }
 
+/* ── Stream Page Footer Links ─────────────────────────────── */
+
+.stream-footer-link {
+  font-size: 13px;
+  color: var(--sp-dark);
+  text-decoration: none;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+
+.stream-footer-link:hover,
+.stream-footer-link:active {
+  opacity: 1;
+  text-decoration: underline;
+}
+
 @media (min-width: 1200px) {
   .camlytics-grid { grid-template-columns: repeat(4, 1fr); }
 }
