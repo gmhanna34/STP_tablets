@@ -106,6 +106,11 @@ const StreamPage = {
             </div>
           </div>
         </div>
+
+        <!-- Footer links -->
+        <div class="control-section" style="grid-column:1/-1;text-align:center;padding:8px 0;">
+          <a href="#" class="stream-footer-link" id="link-obs-web">Web Control Popup</a>
+        </div>
       </div>
     `;
   },
@@ -182,6 +187,20 @@ const StreamPage = {
         const preset = btn.dataset.preset;
         const camKey = this.getCurrentCameraKey();
         if (camKey) PtzAPI.callPreset(camKey, preset);
+      });
+    });
+
+    // Footer links
+    document.getElementById('link-obs-web')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      App.showPanel('Web Control Popup', (body) => {
+        body.style.padding = '0';
+        body.innerHTML = `
+          <iframe src="http://obs-web.niek.tv/#ws://external.stpauloc.org:4455"
+            style="width:100%;height:100%;border:none;border-radius:0 0 16px 16px;"
+            allow="fullscreen">
+          </iframe>
+        `;
       });
     });
 
