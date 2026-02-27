@@ -48,6 +48,13 @@ projectors:
   epson3: { ip: "192.168.1.236", name: "PRJ_RearLeft" }
   epson4: { ip: "192.168.1.235", name: "PRJ_RearRight" }
 
+# --- Fully Kiosk Browser (screensaver control) -------------------------------
+fully_kiosk:
+  port: 2323
+  password: "YOUR_PASSWORD"
+  screensaver_default: 20         # Normal screensaver timeout (seconds)
+  screensaver_extended: 10800     # Extended timeout when panel is open (seconds)
+
 # --- Home Assistant proxy -----------------------------------------------------
 home_assistant:
   url: "https://kvakvzhbshejxozsdlo6yyl2l7ugbibc.ui.nabu.casa"

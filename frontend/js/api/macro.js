@@ -1090,6 +1090,9 @@ const MacroAPI = {
     const self = this;
     let _pollTimer = null;
 
+    // Keep screen on while People Counts panel is open
+    self._setScreensaverTimeout(10800);
+
     App.showPanel('People Counts', (body) => {
       body.style.padding = '24px';
       body.innerHTML = self._camlyticsHTML(state);
@@ -1113,6 +1116,7 @@ const MacroAPI = {
     const observer = new MutationObserver(() => {
       if (!document.getElementById('panel-overlay')) {
         if (_pollTimer) clearInterval(_pollTimer);
+        self._setScreensaverTimeout(20);  // Restore default screensaver
         observer.disconnect();
       }
     });
@@ -1211,6 +1215,18 @@ const MacroAPI = {
         });
       });
     });
+  },
+
+  // -----------------------------------------------------------------------
+  // Fully Kiosk screensaver control
+  // -----------------------------------------------------------------------
+
+  _setScreensaverTimeout(seconds) {
+    fetch('/api/fully/screensaver', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': this.tabletId },
+      body: JSON.stringify({ timeout: seconds }),
+    }).catch(e => console.warn('Fully Kiosk screensaver command failed:', e));
   },
 
 };
