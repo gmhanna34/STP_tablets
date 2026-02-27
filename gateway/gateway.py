@@ -1161,7 +1161,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         """Set the Fully Kiosk screensaver timeout on the requesting tablet.
 
         POST JSON: { "timeout": <seconds> }
-        Uses the request's remote IP to target the tablet's Fully Kiosk REST API.
+        Targets 127.0.0.1 since the gateway runs on the tablet alongside Fully Kiosk.
         """
         fk = cfg.get("fully_kiosk", {})
         port = fk.get("port", 2323)
@@ -1174,12 +1174,11 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
 
         timeout = int(timeout)
         tablet = _tablet_id()
-        client_ip = request.remote_addr or ""
 
         if mock_mode:
             return jsonify({"success": True, "tablet": tablet, "timeout": timeout, "mock": True}), 200
 
-        base_url = f"http://{client_ip}:{port}/?password={password}"
+        base_url = f"http://127.0.0.1:{port}/?password={password}"
         start = time.time()
 
         try:
@@ -1192,22 +1191,21 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 http_requests.get(f"{base_url}&cmd=stopScreensaver", timeout=5)
 
             latency = (time.time() - start) * 1000
-            db.log_action(tablet, "fully:screensaver", client_ip, str(timeout),
+            db.log_action(tablet, "fully:screensaver", "127.0.0.1", str(timeout),
                           f"timeout={timeout}s", latency)
-            logger.info(f"Fully Kiosk screensaver set to {timeout}s on {client_ip} [{tablet}]")
+            logger.info(f"Fully Kiosk screensaver set to {timeout}s [{tablet}]")
             return jsonify({
                 "success": True,
                 "tablet": tablet,
-                "ip": client_ip,
                 "timeout": timeout,
                 "latency_ms": round(latency, 1),
             }), 200
         except http_requests.Timeout:
-            logger.warning(f"Fully Kiosk timeout for {client_ip} [{tablet}]")
-            return jsonify({"error": "Fully Kiosk timeout", "ip": client_ip}), 504
+            logger.warning(f"Fully Kiosk timeout [{tablet}]")
+            return jsonify({"error": "Fully Kiosk timeout"}), 504
         except http_requests.ConnectionError:
-            logger.warning(f"Fully Kiosk unreachable at {client_ip} [{tablet}]")
-            return jsonify({"error": "Fully Kiosk unreachable", "ip": client_ip}), 503
+            logger.warning(f"Fully Kiosk unreachable [{tablet}]")
+            return jsonify({"error": "Fully Kiosk unreachable"}), 503
 
     # -------------------------------------------------------------------------
     # HOME ASSISTANT PROXY
