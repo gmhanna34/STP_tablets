@@ -334,20 +334,17 @@ macros:
     icon: "restart_alt"
     confirm: "Restart the Main Church AppleTV?"
     steps:
-      # TODO: Replace with actual HA entity for AppleTV restart
       - type: ha_service
         domain: "switch"
         service: "turn_off"
-        data: { entity_id: "switch.TODO_main_appletv_power" }
-        on_fail: skip
-        message: "AppleTV power entity not configured yet"
+        data: { entity_id: "switch.sw_022_spare" }
       - type: delay
         seconds: 5
         message: "Waiting for power cycle"
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.TODO_main_appletv_power" }
+        data: { entity_id: "switch.sw_022_spare" }
         on_fail: skip
 
   # --- Main Church video source macros (inline MoIP switches) ---
@@ -561,9 +558,7 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.TODO_main_appletv_power" }
-        on_fail: skip
-        message: "AppleTV power entity not configured yet"
+        data: { entity_id: "switch.sw_022_spare" }
       - type: moip_switch
         tx: 24
         rx: 34
@@ -613,9 +608,7 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.TODO_main_appletv_power" }
-        on_fail: skip
-        message: "AppleTV power entity not configured yet"
+        data: { entity_id: "switch.sw_022_spare" }
       - type: moip_switch
         tx: 27
         rx: 47    # Chapel_HDMITransmitter
