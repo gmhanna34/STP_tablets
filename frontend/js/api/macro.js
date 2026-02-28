@@ -254,7 +254,11 @@ const MacroAPI = {
         const secIdx = parseInt(link.dataset.linkSection);
         const section = sections[secIdx];
         if (!section) return;
-        this._openSectionPanel(section, macros);
+        if (section.panel === 'power') {
+          this.openPowerPanel(section.page || '');
+        } else {
+          this._openSectionPanel(section, macros);
+        }
       });
     });
 
@@ -1305,13 +1309,13 @@ const MacroAPI = {
           const raw = e.friendly_name || e.entity_id.split('.').pop() || e.entity_id;
           const name = raw.replace(/^sw[_ ]|^wb[_ ]|^bat[_ ]/i, '').replace(/_/g, ' ');
           const isOn = e.state === 'on';
-          return `<div class="switch-card${isOn ? ' switch-on' : ''}">
+          return `<div class="switch-card ${isOn ? 'switch-on' : 'switch-off'}">
             <div class="switch-info">
-              <span class="status-dot" style="background:${isOn ? 'var(--ok)' : 'var(--down)'};width:8px;height:8px;border-radius:50%;display:inline-block;"></span>
+              <span class="status-dot ${isOn ? 'idle' : 'offline'}"></span>
               <span class="switch-name">${name}</span>
             </div>
-            <button class="btn switch-toggle${isOn ? ' on' : ' off'}" data-entity="${e.entity_id}">
-              <span class="material-icons">power_settings_new</span>
+            <button class="btn switch-toggle ${isOn ? 'active' : ''}" data-entity="${e.entity_id}">
+              <span class="material-icons">${isOn ? 'toggle_on' : 'toggle_off'}</span>
             </button>
           </div>`;
         }).join('');

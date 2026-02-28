@@ -2002,6 +2002,22 @@ macros:
         code: "IRSourceHDMI2"
         message: "Switching Right TV to Apple TV (HDMI 2)"
 
+  confroom_left_source_google_streamer:
+    label: "Left TV Google Streamer"
+    icon: "cast_connected"
+    steps:
+      - type: moip_switch
+        tx: 25
+        rx: 28
+
+  confroom_right_source_google_streamer:
+    label: "Right TV Google Streamer"
+    icon: "cast_connected"
+    steps:
+      - type: moip_switch
+        tx: 25
+        rx: 29
+
   # --- Video Conference System ---
 
   confroom_vidconf_on:
@@ -2268,7 +2284,7 @@ buttons:
             on_value: "9"
             on_style: "active"
         - label: "Google Streamer"
-          icon: "chromecast"
+          icon: "cast_connected"
           action: { type: macro, macro: chapel_source_google_streamer }
           state:
             source: moip
@@ -2283,6 +2299,12 @@ buttons:
             field: "47.transmitter_id"
             on_value: "8"
             on_style: "active"
+
+    - section: "Advanced Power Settings"
+      display: "link"
+      panel: "power"
+      page: "chapel"
+      items: []
 
   main:
     - section: "Video"
@@ -2432,7 +2454,7 @@ buttons:
             on_value: "27"
             on_style: "active"
         - label: "Google Streamer"
-          icon: "chromecast"
+          icon: "cast_connected"
           action: { type: macro, macro: main_source_google_streamer }
           state:
             source: moip
@@ -2525,40 +2547,9 @@ buttons:
 
     - section: "Advanced Power Settings"
       display: "link"
-      cols: 4
-      items:
-        - label: "WattBox 1"
-          icon: "power"
-          toggle:
-            state:
-              source: ha
-              entity: "switch.wattbox_outlet_1"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "WattBox 1 On"
-              icon: "power"
-              action: { type: macro, macro: main_wattbox1_off }
-            off:
-              label: "WattBox 1 Off"
-              icon: "power_off"
-              action: { type: macro, macro: main_wattbox1_on }
-        - label: "WattBox 2"
-          icon: "power"
-          toggle:
-            state:
-              source: ha
-              entity: "switch.wattbox_outlet_2"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "WattBox 2 On"
-              icon: "power"
-              action: { type: macro, macro: main_wattbox2_off }
-            off:
-              label: "WattBox 2 Off"
-              icon: "power_off"
-              action: { type: macro, macro: main_wattbox2_on }
+      panel: "power"
+      page: "main"
+      items: []
 
     - section: "Baptism / Wedding"
       display: "link"
@@ -2681,6 +2672,12 @@ buttons:
             on_value: "1"
             on_style: "active"
 
+    - section: "Advanced Power Settings"
+      display: "link"
+      panel: "power"
+      page: "social"
+      items: []
+
   gym:
     - section: "Video"
       cols: 4
@@ -2724,6 +2721,12 @@ buttons:
             field: "9.transmitter_id"
             on_value: "9"
             on_style: "active"
+
+    - section: "Advanced Power Settings"
+      display: "link"
+      panel: "power"
+      page: "gym"
+      items: []
 
   confroom:
     - section: "Left TV"
@@ -2828,6 +2831,14 @@ buttons:
         - label: "Apple TV"
           icon: "cast"
           action: { type: macro, macro: confroom_left_source_appletv }
+        - label: "Google Streamer"
+          icon: "cast_connected"
+          action: { type: macro, macro: confroom_left_source_google_streamer }
+          state:
+            source: moip
+            field: "28.transmitter_id"
+            on_value: "25"
+            on_style: "active"
 
     - section: "Right TV Sources"
       items:
@@ -2874,3 +2885,17 @@ buttons:
         - label: "Apple TV"
           icon: "cast"
           action: { type: macro, macro: confroom_right_source_appletv }
+        - label: "Google Streamer"
+          icon: "cast_connected"
+          action: { type: macro, macro: confroom_right_source_google_streamer }
+          state:
+            source: moip
+            field: "29.transmitter_id"
+            on_value: "25"
+            on_style: "active"
+
+    - section: "Advanced Power Settings"
+      display: "link"
+      panel: "power"
+      page: "confroom"
+      items: []

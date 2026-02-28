@@ -30,15 +30,28 @@ const StreamPage = {
           </div>
         </div>
 
-        <!-- Scenes: full width -->
-        <div class="control-section">
+        <!-- Scenes: left half -->
+        <div class="control-section col-span-6">
           <div class="section-title">Scenes</div>
           <div class="scene-grid" id="scene-grid">
             <div class="text-center" style="grid-column:1/-1;opacity:0.5;">Loading scenes...</div>
           </div>
         </div>
 
-        <!-- Stream & Record: left half -->
+        <!-- Active Camera Snapshot: right half, click to open PTZ controls -->
+        <div class="control-section col-span-6" style="grid-row: span 2;">
+          <div class="section-title">Active Camera</div>
+          <div class="camera-card">
+            <div class="camera-header" id="camera-label">No active camera</div>
+            <div class="camera-feed" id="camera-feed" style="cursor:pointer;">
+              <span class="material-icons">videocam</span>
+              <div style="font-size:11px;margin-top:4px;">Waiting for scene...</div>
+            </div>
+          </div>
+          <div class="text-center" style="font-size:11px;opacity:0.5;margin-top:4px;">Tap image to open camera controls</div>
+        </div>
+
+        <!-- Stream & Record: left half, below Scenes -->
         <div class="control-section col-span-6">
           <div class="section-title">Stream & Record</div>
           <div class="control-grid" style="grid-template-columns:repeat(2, 1fr);">
@@ -49,10 +62,10 @@ const StreamPage = {
           </div>
         </div>
 
-        <!-- Slides & Advanced: right half -->
-        <div class="control-section col-span-6">
+        <!-- Slides & Advanced: full width -->
+        <div class="control-section">
           <div class="section-title">Slides & Advanced</div>
-          <div class="control-grid" style="grid-template-columns:repeat(3, 1fr);">
+          <div class="control-grid" style="grid-template-columns:repeat(6, 1fr);">
             <button class="btn" id="btn-slides-on"><span class="material-icons">slideshow</span><span class="btn-label">Slides On</span></button>
             <button class="btn" id="btn-slides-off"><span class="material-icons">block</span><span class="btn-label">Slides Off</span></button>
             <button class="btn" id="btn-slides-toggle"><span class="material-icons">swap_horiz</span><span class="btn-label">Toggle</span></button>
@@ -62,25 +75,11 @@ const StreamPage = {
           </div>
         </div>
 
-        <!-- Active Camera Snapshot: click to open PTZ controls -->
-        <div class="control-section">
-          <div class="section-title">Active Camera</div>
-          <div style="max-width:500px;">
-            <div class="camera-card">
-              <div class="camera-header" id="camera-label">No active camera</div>
-              <div class="camera-feed" id="camera-feed" style="cursor:pointer;">
-                <span class="material-icons">videocam</span>
-                <div style="font-size:11px;margin-top:4px;">Waiting for scene...</div>
-              </div>
-            </div>
-            <div class="text-center" style="font-size:11px;opacity:0.5;margin-top:4px;">Tap image to open camera controls</div>
-          </div>
-        </div>
-
-        <!-- Footer links -->
-        <div class="control-section" style="grid-column:1/-1;text-align:center;padding:8px 0;">
-          <a href="#" class="stream-footer-link" id="link-obs-web">Web Control Popup</a>
-        </div>
+        <!-- Footer link -->
+        <a class="section-link" href="#" id="link-obs-web" style="justify-self:center;">
+          <span class="material-icons">chevron_right</span>
+          <span>Web Control Popup</span>
+        </a>
       </div>
     `;
   },
