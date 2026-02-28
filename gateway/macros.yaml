@@ -2358,51 +2358,6 @@ buttons:
             attribute: "current_temperature"
             format: "temp"
 
-    - section: "People Counts"
-      cols: 4
-      items:
-        - label: "Occupancy"
-          icon: "groups"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "occupancy_adjusted"
-        - label: "Communion"
-          icon: "how_to_reg"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "communion_adjusted"
-
-    - section: "For Advanced People Count Settings, click here"
-      display: "link"
-      cols: 4
-      items:
-        - label: "Peak Bldg Occupancy"
-          icon: "groups"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "occupancy_adjusted"
-        - label: "Communion Count"
-          icon: "how_to_reg"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "communion_adjusted"
-        - label: "Building Entry Count"
-          icon: "sensor_door"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "enter_adjusted"
-        - label: "Live Occupancy"
-          icon: "person"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "occupancy_live"
-
     - section: "Video Sources"
       items:
         - label: "Left Podium"
@@ -2462,6 +2417,51 @@ buttons:
             on_value: "25"
             on_style: "active"
 
+    - section: "People Counts"
+      cols: 12
+      items:
+        - label: "Occupancy"
+          icon: "groups"
+          action: { type: camlytics_panel }
+          badge:
+            source: camlytics
+            field: "occupancy_adjusted"
+        - label: "Communion"
+          icon: "how_to_reg"
+          action: { type: camlytics_panel }
+          badge:
+            source: camlytics
+            field: "communion_adjusted"
+            
+    - section: "Advanced People Count Settings"
+      display: "link"
+      cols: 4
+      items:
+        - label: "Peak Bldg Occupancy"
+          icon: "groups"
+          action: { type: camlytics_panel }
+          badge:
+            source: camlytics
+            field: "occupancy_adjusted"
+        - label: "Communion Count"
+          icon: "how_to_reg"
+          action: { type: camlytics_panel }
+          badge:
+            source: camlytics
+            field: "communion_adjusted"
+        - label: "Building Entry Count"
+          icon: "sensor_door"
+          action: { type: camlytics_panel }
+          badge:
+            source: camlytics
+            field: "enter_adjusted"
+        - label: "Live Occupancy"
+          icon: "person"
+          action: { type: camlytics_panel }
+          badge:
+            source: camlytics
+            field: "occupancy_live"
+            
     - section: "Advanced Display Settings"
       display: "link"
       cols: 4
