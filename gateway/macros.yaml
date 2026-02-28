@@ -886,57 +886,272 @@ macros:
   social_source_appletv:
     label: "Social Hall Apple TV"
     icon: "cast"
+    description: "Route Social Hall AppleTV (TX 6) to all Social Hall displays"
     steps:
       - type: moip_switch
         tx: 6
-        rx: 7
+        rx: 11    # VideoWall_Left
       - type: moip_switch
         tx: 6
-        rx: 8
+        rx: 12    # VideoWall_Right
+      - type: moip_switch
+        tx: 6
+        rx: 22    # AV_SlideInput
+      - type: moip_switch
+        tx: 6
+        rx: 10    # AV_SlideInput_SDI
+      - type: moip_switch
+        tx: 6
+        rx: 25    # Hall_RackInput
+      - type: moip_switch
+        tx: 6
+        rx: 19    # AV_AnnounceVideoInput
+      - type: moip_switch
+        tx: 6
+        rx: 32    # AV_X32ReceiveToX32
+      - type: moip_switch
+        tx: 8
+        rx: 26    # Lounge (Live Stream)
 
   social_source_livestream:
     label: "Social Hall Live Stream"
     icon: "live_tv"
+    description: "Route Live Stream (TX 8) to Social Hall video walls and announce input"
     steps:
       - type: moip_switch
         tx: 8
-        rx: 7
+        rx: 11    # VideoWall_Left
       - type: moip_switch
         tx: 8
-        rx: 8
+        rx: 12    # VideoWall_Right
+      - type: moip_switch
+        tx: 8
+        rx: 19    # AV_AnnounceVideoInput
 
   social_source_logo:
     label: "Social Hall LOGO"
     icon: "image"
+    description: "Route LOGO (TX 16) to all Social Hall displays"
     steps:
       - type: moip_switch
         tx: 16
-        rx: 7
+        rx: 11    # VideoWall_Left
       - type: moip_switch
         tx: 16
-        rx: 8
+        rx: 12    # VideoWall_Right
+      - type: moip_switch
+        tx: 16
+        rx: 22    # AV_SlideInput
+      - type: moip_switch
+        tx: 16
+        rx: 10    # AV_SlideInput_SDI
+      - type: moip_switch
+        tx: 16
+        rx: 25    # Hall_RackInput
+      - type: moip_switch
+        tx: 16
+        rx: 19    # AV_AnnounceVideoInput
+      - type: moip_switch
+        tx: 16
+        rx: 32    # AV_X32ReceiveToX32
+      - type: moip_switch
+        tx: 8
+        rx: 26    # Lounge (Live Stream)
 
   social_source_announcements:
     label: "Social Hall Announcements"
     icon: "announcement"
+    description: "Route Announcements (TX 9) to Social Hall displays (TX 9 direct to Lounge)"
     steps:
       - type: moip_switch
         tx: 9
-        rx: 7
+        rx: 11    # VideoWall_Left
       - type: moip_switch
         tx: 9
-        rx: 8
+        rx: 12    # VideoWall_Right
+      - type: moip_switch
+        tx: 9
+        rx: 22    # AV_SlideInput
+      - type: moip_switch
+        tx: 9
+        rx: 10    # AV_SlideInput_SDI
+      - type: moip_switch
+        tx: 9
+        rx: 26    # Lounge (TX 9 direct, NOT via TX 8)
+      - type: moip_switch
+        tx: 9
+        rx: 19    # AV_AnnounceVideoInput
+      - type: moip_switch
+        tx: 9
+        rx: 32    # AV_X32ReceiveToX32
 
   social_source_camera:
     label: "Social Hall Camera"
     icon: "videocam"
+    description: "Route Camera (TX 2) to all Social Hall displays"
     steps:
       - type: moip_switch
         tx: 2
-        rx: 7
+        rx: 11    # VideoWall_Left
       - type: moip_switch
         tx: 2
-        rx: 8
+        rx: 12    # VideoWall_Right
+      - type: moip_switch
+        tx: 2
+        rx: 22    # AV_SlideInput
+      - type: moip_switch
+        tx: 2
+        rx: 10    # AV_SlideInput_SDI
+      - type: moip_switch
+        tx: 2
+        rx: 25    # Hall_RackInput
+      - type: moip_switch
+        tx: 2
+        rx: 19    # AV_AnnounceVideoInput
+      - type: moip_switch
+        tx: 2
+        rx: 32    # AV_X32ReceiveToX32
+      - type: moip_switch
+        tx: 8
+        rx: 26    # Lounge (Live Stream)
+
+  social_source_laptop:
+    label: "Social Hall Laptop"
+    icon: "computer"
+    description: "Route Laptop (TX 1) to all Social Hall displays"
+    steps:
+      - type: moip_switch
+        tx: 1
+        rx: 11    # VideoWall_Left
+      - type: moip_switch
+        tx: 1
+        rx: 12    # VideoWall_Right
+      - type: moip_switch
+        tx: 1
+        rx: 22    # AV_SlideInput
+      - type: moip_switch
+        tx: 1
+        rx: 10    # AV_SlideInput_SDI
+      - type: moip_switch
+        tx: 1
+        rx: 25    # Hall_RackInput
+      - type: moip_switch
+        tx: 1
+        rx: 19    # AV_AnnounceVideoInput
+      - type: moip_switch
+        tx: 1
+        rx: 32    # AV_X32ReceiveToX32
+      - type: moip_switch
+        tx: 8
+        rx: 26    # Lounge (Live Stream)
+
+  social_source_windows_display:
+    label: "Social Hall Windows Display"
+    icon: "desktop_windows"
+    description: "Route Windows Display Adapter (TX 15) to all Social Hall displays"
+    steps:
+      - type: moip_switch
+        tx: 15
+        rx: 11    # VideoWall_Left
+      - type: moip_switch
+        tx: 15
+        rx: 12    # VideoWall_Right
+      - type: moip_switch
+        tx: 15
+        rx: 22    # AV_SlideInput
+      - type: moip_switch
+        tx: 15
+        rx: 10    # AV_SlideInput_SDI
+      - type: moip_switch
+        tx: 15
+        rx: 19    # AV_AnnounceVideoInput
+      - type: moip_switch
+        tx: 15
+        rx: 25    # Hall_RackInput
+      - type: moip_switch
+        tx: 15
+        rx: 32    # AV_X32ReceiveToX32
+      - type: moip_switch
+        tx: 8
+        rx: 26    # Lounge (Live Stream)
+
+  social_source_google_streamer:
+    label: "Social Hall Google Streamer"
+    icon: "cast_connected"
+    description: "Route Google Streamer (TX 25) to all Social Hall displays"
+    steps:
+      - type: moip_switch
+        tx: 25
+        rx: 11    # VideoWall_Left
+      - type: moip_switch
+        tx: 25
+        rx: 12    # VideoWall_Right
+      - type: moip_switch
+        tx: 25
+        rx: 22    # AV_SlideInput
+      - type: moip_switch
+        tx: 25
+        rx: 10    # AV_SlideInput_SDI
+      - type: moip_switch
+        tx: 25
+        rx: 25    # Hall_RackInput
+      - type: moip_switch
+        tx: 25
+        rx: 19    # AV_AnnounceVideoInput
+      - type: moip_switch
+        tx: 25
+        rx: 32    # AV_X32ReceiveToX32
+      - type: moip_switch
+        tx: 8
+        rx: 26    # Lounge (Live Stream)
+
+  social_source_vbs:
+    label: "Social Hall VBS"
+    icon: "child_care"
+    description: "Route VBS / Laptop (TX 1) to Social Hall displays + Chapel portable"
+    steps:
+      - type: moip_switch
+        tx: 1
+        rx: 9     # Chapel_Portable_IR (unique to VBS)
+      - type: moip_switch
+        tx: 1
+        rx: 11    # VideoWall_Left
+      - type: moip_switch
+        tx: 1
+        rx: 12    # VideoWall_Right
+      - type: moip_switch
+        tx: 1
+        rx: 22    # AV_SlideInput
+      - type: moip_switch
+        tx: 1
+        rx: 10    # AV_SlideInput_SDI
+      - type: moip_switch
+        tx: 1
+        rx: 25    # Hall_RackInput
+      - type: moip_switch
+        tx: 1
+        rx: 19    # AV_AnnounceVideoInput
+      - type: moip_switch
+        tx: 1
+        rx: 32    # AV_X32ReceiveToX32
+
+  social_appletv_restart:
+    label: "Restart Social Hall AppleTV"
+    icon: "restart_alt"
+    confirm: "Restart the Social Hall AppleTV?"
+    steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.sw_007_hall_appletv" }
+      - type: delay
+        seconds: 5
+        message: "Waiting for power cycle"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_007_hall_appletv" }
+        on_fail: skip
 
   # ---------------------------------------------------------------------------
   # GYM
@@ -1678,6 +1893,9 @@ buttons:
           icon: "tv_off"
           action: { type: macro, macro: social_video_off }
           style: "large danger"
+        - label: "AppleTV Restart"
+          icon: "restart_alt"
+          action: { type: macro, macro: social_appletv_restart }
 
     - section: "Audio System"
       cols: 4
@@ -1750,6 +1968,38 @@ buttons:
             source: moip
             field: "11.transmitter_id"
             on_value: "2"
+            on_style: "active"
+        - label: "Laptop"
+          icon: "computer"
+          action: { type: macro, macro: social_source_laptop }
+          state:
+            source: moip
+            field: "11.transmitter_id"
+            on_value: "1"
+            on_style: "active"
+        - label: "Windows Display"
+          icon: "desktop_windows"
+          action: { type: macro, macro: social_source_windows_display }
+          state:
+            source: moip
+            field: "11.transmitter_id"
+            on_value: "15"
+            on_style: "active"
+        - label: "Google Streamer"
+          icon: "cast_connected"
+          action: { type: macro, macro: social_source_google_streamer }
+          state:
+            source: moip
+            field: "11.transmitter_id"
+            on_value: "25"
+            on_style: "active"
+        - label: "VBS"
+          icon: "child_care"
+          action: { type: macro, macro: social_source_vbs }
+          state:
+            source: moip
+            field: "11.transmitter_id"
+            on_value: "1"
             on_style: "active"
 
   gym:
