@@ -937,6 +937,49 @@ body {
   border-top: 1px solid var(--border);
 }
 
+/* PTZ overlay for camera popup panels */
+.ptz-overlay {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 12px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ptz-overlay-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.ptz-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 40px);
+  grid-template-rows: repeat(3, 40px);
+  gap: 2px;
+}
+.ptz-zoom {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ptz-presets {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+}
+.ptz-btn {
+  min-height: 40px !important;
+  min-width: 40px !important;
+  padding: 4px !important;
+  font-size: 12px !important;
+}
+.ptz-btn .material-icons {
+  font-size: 18px;
+}
+
 .camera-card .camera-controls .btn {
   min-height: auto;
   padding: 8px 12px;

@@ -298,24 +298,66 @@ const SecurityPage = {
 
       if (type === 'ptz') {
         body.innerHTML = `
-          <div style="flex:1;background:#111;display:flex;align-items:center;justify-content:center;min-height:0;">
+          <div style="flex:1;background:#111;display:flex;align-items:center;justify-content:center;min-height:0;position:relative;">
             <img id="panel-cam-img" alt="${title}" style="max-width:100%;max-height:100%;object-fit:contain;">
-          </div>
-          <div style="padding:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;border-top:1px solid var(--border);">
-            <button class="btn" data-panel-ptz="preset" data-val="1" style="min-height:40px;padding:8px 16px;"><span class="btn-label">Preset 1</span></button>
-            <button class="btn" data-panel-ptz="preset" data-val="2" style="min-height:40px;padding:8px 16px;"><span class="btn-label">Preset 2</span></button>
-            <button class="btn" data-panel-ptz="preset" data-val="3" style="min-height:40px;padding:8px 16px;"><span class="btn-label">Preset 3</span></button>
-            <button class="btn" data-panel-ptz="home" style="min-height:40px;padding:8px 16px;"><span class="material-icons" style="font-size:18px;">home</span></button>
+            <div class="ptz-overlay">
+              <div class="ptz-overlay-row">
+                <div class="ptz-grid">
+                  <div></div>
+                  <button class="btn ptz-btn" data-panel-ptz="move" data-dir="up"><span class="material-icons">arrow_upward</span></button>
+                  <div></div>
+                  <button class="btn ptz-btn" data-panel-ptz="move" data-dir="left"><span class="material-icons">arrow_back</span></button>
+                  <button class="btn ptz-btn" data-panel-ptz="home"><span class="material-icons">home</span></button>
+                  <button class="btn ptz-btn" data-panel-ptz="move" data-dir="right"><span class="material-icons">arrow_forward</span></button>
+                  <div></div>
+                  <button class="btn ptz-btn" data-panel-ptz="move" data-dir="down"><span class="material-icons">arrow_downward</span></button>
+                  <div></div>
+                </div>
+                <div class="ptz-zoom">
+                  <button class="btn ptz-btn" data-panel-ptz="zoom" data-dir="in"><span class="material-icons">zoom_in</span></button>
+                  <button class="btn ptz-btn" data-panel-ptz="zoom" data-dir="out"><span class="material-icons">zoom_out</span></button>
+                </div>
+              </div>
+              <div class="ptz-presets">
+                <button class="btn ptz-btn" data-panel-ptz="preset" data-val="1"><span class="btn-label">P1</span></button>
+                <button class="btn ptz-btn" data-panel-ptz="preset" data-val="2"><span class="btn-label">P2</span></button>
+                <button class="btn ptz-btn" data-panel-ptz="preset" data-val="3"><span class="btn-label">P3</span></button>
+              </div>
+            </div>
           </div>
         `;
 
-        body.querySelectorAll('[data-panel-ptz]').forEach(btn => {
-          btn.addEventListener('click', () => {
-            const action = btn.dataset.panelPtz;
-            if (action === 'preset') PtzAPI.callPreset(camId, btn.dataset.val);
-            else if (action === 'home') PtzAPI.home(camId);
-          });
+        // Pan/tilt: hold to move, release to stop
+        body.querySelectorAll('[data-panel-ptz="move"]').forEach(btn => {
+          const dir = btn.dataset.dir;
+          const start = () => PtzAPI.panTilt(camId, dir);
+          const stop = () => PtzAPI.panTilt(camId, 'ptzstop');
+          btn.addEventListener('mousedown', start);
+          btn.addEventListener('mouseup', stop);
+          btn.addEventListener('mouseleave', stop);
+          btn.addEventListener('touchstart', (e) => { e.preventDefault(); start(); }, { passive: false });
+          btn.addEventListener('touchend', (e) => { e.preventDefault(); stop(); });
+          btn.addEventListener('touchcancel', stop);
         });
+
+        // Zoom: hold to zoom, release to stop
+        body.querySelectorAll('[data-panel-ptz="zoom"]').forEach(btn => {
+          const dir = btn.dataset.dir;
+          const start = () => dir === 'in' ? PtzAPI.zoomIn(camId) : PtzAPI.zoomOut(camId);
+          const stop = () => PtzAPI.zoomStop(camId);
+          btn.addEventListener('mousedown', start);
+          btn.addEventListener('mouseup', stop);
+          btn.addEventListener('mouseleave', stop);
+          btn.addEventListener('touchstart', (e) => { e.preventDefault(); start(); }, { passive: false });
+          btn.addEventListener('touchend', (e) => { e.preventDefault(); stop(); });
+          btn.addEventListener('touchcancel', stop);
+        });
+
+        // Presets and home: simple click
+        body.querySelectorAll('[data-panel-ptz="preset"]').forEach(btn => {
+          btn.addEventListener('click', () => PtzAPI.callPreset(camId, btn.dataset.val));
+        });
+        body.querySelector('[data-panel-ptz="home"]')?.addEventListener('click', () => PtzAPI.home(camId));
 
         const img = body.querySelector('#panel-cam-img');
         const refreshPanel = () => {

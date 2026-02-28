@@ -847,8 +847,14 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if mock_mode:
             return jsonify({"success": True, "mock": True}), 200
         result, status = _proxy_request("moip", "/switch", "POST", data)
-        # Broadcast state change
-        socketio.emit("state:moip", {"event": "switch", "data": data}, room="moip")
+        # Broadcast full receiver state so button highlights update immediately
+        try:
+            fresh, fresh_status = _proxy_request("moip", "/receivers", "GET", timeout=3)
+            if fresh_status < 400 and fresh:
+                state_cache.set("moip", fresh)
+                socketio.emit("state:moip", fresh, room="moip")
+        except Exception:
+            pass
         return jsonify(result), status
 
     @app.route("/api/moip/ir", methods=["POST"])
@@ -1869,6 +1875,20 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         db.log_action(tablet, "macro:execute", macro_key,
                       json.dumps({"label": label, "steps": len(steps)}),
                       f"OK {completed}/{len(steps)} steps", overall_ms)
+
+        # Force fresh MoIP state broadcast so button highlights update immediately
+        try:
+            resp = http_requests.get(
+                f"{mw_cfg['moip']['url']}/receivers",
+                headers={"X-Tablet-ID": "Gateway"},
+                timeout=5,
+            )
+            fresh = resp.json()
+            if fresh:
+                state_cache.set("moip", fresh)
+                socketio.emit("state:moip", fresh, room="moip")
+        except Exception:
+            pass  # Background poller will catch up
 
         return {
             "success": True,

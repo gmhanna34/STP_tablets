@@ -62,48 +62,18 @@ const StreamPage = {
           </div>
         </div>
 
-        <!-- Camera Controls: full width -->
+        <!-- Active Camera Snapshot: click to open PTZ controls -->
         <div class="control-section">
-          <div class="section-title">Camera Controls</div>
-          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;">
-            <div id="camera-preview-wrap" style="flex:1;min-width:200px;max-width:400px;">
-              <div class="camera-card">
-                <div class="camera-header" id="camera-label">No active camera</div>
-                <div class="camera-feed" id="camera-feed">
-                  <span class="material-icons">videocam</span>
-                  <div style="font-size:11px;margin-top:4px;">Waiting for scene...</div>
-                </div>
+          <div class="section-title">Active Camera</div>
+          <div style="max-width:500px;">
+            <div class="camera-card">
+              <div class="camera-header" id="camera-label">No active camera</div>
+              <div class="camera-feed" id="camera-feed" style="cursor:pointer;">
+                <span class="material-icons">videocam</span>
+                <div style="font-size:11px;margin-top:4px;">Waiting for scene...</div>
               </div>
             </div>
-            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;">
-              <div>
-                <div class="text-center" style="margin-bottom:4px;font-size:12px;opacity:0.7;">Pan / Tilt</div>
-                <div style="display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,48px);gap:3px;">
-                  <div></div>
-                  <button class="btn" data-ptz="up" style="min-height:48px;"><span class="material-icons">arrow_upward</span></button>
-                  <div></div>
-                  <button class="btn" data-ptz="left" style="min-height:48px;"><span class="material-icons">arrow_back</span></button>
-                  <button class="btn" data-ptz="home" style="min-height:48px;font-size:10px;"><span class="material-icons">home</span></button>
-                  <button class="btn" data-ptz="right" style="min-height:48px;"><span class="material-icons">arrow_forward</span></button>
-                  <div></div>
-                  <button class="btn" data-ptz="down" style="min-height:48px;"><span class="material-icons">arrow_downward</span></button>
-                  <div></div>
-                </div>
-              </div>
-              <div>
-                <div class="text-center" style="margin-bottom:4px;font-size:12px;opacity:0.7;">Zoom</div>
-                <div style="display:flex;flex-direction:column;gap:4px;">
-                  <button class="btn" id="btn-zoom-in" style="min-height:44px;"><span class="material-icons">zoom_in</span></button>
-                  <button class="btn" id="btn-zoom-out" style="min-height:44px;"><span class="material-icons">zoom_out</span></button>
-                </div>
-              </div>
-              <div>
-                <div class="text-center" style="margin-bottom:4px;font-size:12px;opacity:0.7;">Presets</div>
-                <div class="control-grid" style="grid-template-columns:repeat(3, 48px);">
-                  ${[1,2,3,4,5,6,7,8,9].map(n => `<button class="btn" data-preset="${n}" style="min-height:44px;"><span class="btn-label">${n}</span></button>`).join('')}
-                </div>
-              </div>
-            </div>
+            <div class="text-center" style="font-size:11px;opacity:0.5;margin-top:4px;">Tap image to open camera controls</div>
           </div>
         </div>
 
@@ -140,54 +110,10 @@ const StreamPage = {
     document.getElementById('btn-set-shure')?.addEventListener('click', () => ObsAPI.setAudioToShureMic());
     document.getElementById('btn-reenable-atem')?.addEventListener('click', () => ObsAPI.reEnableBMATEMWebcam());
 
-    // PTZ controls
-    document.querySelectorAll('[data-ptz]').forEach(btn => {
-      const dir = btn.dataset.ptz;
-      if (dir === 'home') {
-        btn.addEventListener('click', () => {
-          const camKey = this.getCurrentCameraKey();
-          if (camKey) PtzAPI.home(camKey);
-        });
-      } else {
-        btn.addEventListener('mousedown', () => {
-          const camKey = this.getCurrentCameraKey();
-          if (camKey) PtzAPI.panTilt(camKey, dir);
-        });
-        btn.addEventListener('mouseup', () => {
-          const camKey = this.getCurrentCameraKey();
-          if (camKey) PtzAPI.panTilt(camKey, 'ptzstop');
-        });
-        btn.addEventListener('touchstart', (e) => {
-          e.preventDefault();
-          const camKey = this.getCurrentCameraKey();
-          if (camKey) PtzAPI.panTilt(camKey, dir);
-        });
-        btn.addEventListener('touchend', () => {
-          const camKey = this.getCurrentCameraKey();
-          if (camKey) PtzAPI.panTilt(camKey, 'ptzstop');
-        });
-      }
-    });
-
-    // Zoom
-    const setupZoom = (btnId, fn) => {
-      const btn = document.getElementById(btnId);
-      if (!btn) return;
-      btn.addEventListener('mousedown', () => { const k = this.getCurrentCameraKey(); if (k) fn(k); });
-      btn.addEventListener('mouseup', () => { const k = this.getCurrentCameraKey(); if (k) PtzAPI.zoomStop(k); });
-      btn.addEventListener('touchstart', (e) => { e.preventDefault(); const k = this.getCurrentCameraKey(); if (k) fn(k); });
-      btn.addEventListener('touchend', () => { const k = this.getCurrentCameraKey(); if (k) PtzAPI.zoomStop(k); });
-    };
-    setupZoom('btn-zoom-in', (k) => PtzAPI.zoomIn(k));
-    setupZoom('btn-zoom-out', (k) => PtzAPI.zoomOut(k));
-
-    // Presets
-    document.querySelectorAll('[data-preset]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const preset = btn.dataset.preset;
-        const camKey = this.getCurrentCameraKey();
-        if (camKey) PtzAPI.callPreset(camKey, preset);
-      });
+    // Click camera snapshot to open PTZ popup
+    document.getElementById('camera-feed')?.addEventListener('click', () => {
+      const camKey = this.getCurrentCameraKey();
+      if (camKey) this._openPtzPanel(camKey);
     });
 
     // Footer links
@@ -274,6 +200,97 @@ const StreamPage = {
       this._feedTimeout = setTimeout(() => this._refreshCameraFeed(), 2000);
     };
     nextImg.src = `/api/ptz/${camKey}/snapshot?t=${Date.now()}`;
+  },
+
+  _panelFeedTimer: null,
+
+  _openPtzPanel(camId) {
+    const self = this;
+    const title = camId.replace(/_/g, ' ');
+
+    App.showPanel(title, (body) => {
+      body.style.padding = '0';
+      body.style.display = 'flex';
+      body.style.flexDirection = 'column';
+
+      body.innerHTML = `
+        <div style="flex:1;background:#111;display:flex;align-items:center;justify-content:center;min-height:0;position:relative;">
+          <img id="panel-cam-img" alt="${title}" style="max-width:100%;max-height:100%;object-fit:contain;">
+          <div class="ptz-overlay">
+            <div class="ptz-overlay-row">
+              <div class="ptz-grid">
+                <div></div>
+                <button class="btn ptz-btn" data-panel-ptz="move" data-dir="up"><span class="material-icons">arrow_upward</span></button>
+                <div></div>
+                <button class="btn ptz-btn" data-panel-ptz="move" data-dir="left"><span class="material-icons">arrow_back</span></button>
+                <button class="btn ptz-btn" data-panel-ptz="home"><span class="material-icons">home</span></button>
+                <button class="btn ptz-btn" data-panel-ptz="move" data-dir="right"><span class="material-icons">arrow_forward</span></button>
+                <div></div>
+                <button class="btn ptz-btn" data-panel-ptz="move" data-dir="down"><span class="material-icons">arrow_downward</span></button>
+                <div></div>
+              </div>
+              <div class="ptz-zoom">
+                <button class="btn ptz-btn" data-panel-ptz="zoom" data-dir="in"><span class="material-icons">zoom_in</span></button>
+                <button class="btn ptz-btn" data-panel-ptz="zoom" data-dir="out"><span class="material-icons">zoom_out</span></button>
+              </div>
+            </div>
+            <div class="ptz-presets">
+              <button class="btn ptz-btn" data-panel-ptz="preset" data-val="1"><span class="btn-label">P1</span></button>
+              <button class="btn ptz-btn" data-panel-ptz="preset" data-val="2"><span class="btn-label">P2</span></button>
+              <button class="btn ptz-btn" data-panel-ptz="preset" data-val="3"><span class="btn-label">P3</span></button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Pan/tilt: hold to move, release to stop
+      body.querySelectorAll('[data-panel-ptz="move"]').forEach(btn => {
+        const dir = btn.dataset.dir;
+        const start = () => PtzAPI.panTilt(camId, dir);
+        const stop = () => PtzAPI.panTilt(camId, 'ptzstop');
+        btn.addEventListener('mousedown', start);
+        btn.addEventListener('mouseup', stop);
+        btn.addEventListener('mouseleave', stop);
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); start(); }, { passive: false });
+        btn.addEventListener('touchend', (e) => { e.preventDefault(); stop(); });
+        btn.addEventListener('touchcancel', stop);
+      });
+
+      // Zoom: hold to zoom, release to stop
+      body.querySelectorAll('[data-panel-ptz="zoom"]').forEach(btn => {
+        const dir = btn.dataset.dir;
+        const start = () => dir === 'in' ? PtzAPI.zoomIn(camId) : PtzAPI.zoomOut(camId);
+        const stop = () => PtzAPI.zoomStop(camId);
+        btn.addEventListener('mousedown', start);
+        btn.addEventListener('mouseup', stop);
+        btn.addEventListener('mouseleave', stop);
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); start(); }, { passive: false });
+        btn.addEventListener('touchend', (e) => { e.preventDefault(); stop(); });
+        btn.addEventListener('touchcancel', stop);
+      });
+
+      // Presets and home: simple click
+      body.querySelectorAll('[data-panel-ptz="preset"]').forEach(btn => {
+        btn.addEventListener('click', () => PtzAPI.callPreset(camId, btn.dataset.val));
+      });
+      body.querySelector('[data-panel-ptz="home"]')?.addEventListener('click', () => PtzAPI.home(camId));
+
+      // Snapshot refresh loop
+      const img = body.querySelector('#panel-cam-img');
+      const refreshPanel = () => {
+        if (!img || !img.isConnected) return;
+        const next = new Image();
+        next.onload = () => {
+          img.src = next.src;
+          self._panelFeedTimer = setTimeout(refreshPanel, 1000);
+        };
+        next.onerror = () => {
+          self._panelFeedTimer = setTimeout(refreshPanel, 3000);
+        };
+        next.src = `/api/ptz/${camId}/snapshot?t=${Date.now()}`;
+      };
+      refreshPanel();
+    });
   },
 
   async updateStatus() {

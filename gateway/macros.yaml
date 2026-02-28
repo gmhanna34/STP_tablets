@@ -2421,14 +2421,6 @@ buttons:
             field: "36.transmitter_id"
             on_value: "9"
             on_style: "active"
-        - label: "LOGO"
-          icon: "image"
-          action: { type: macro, macro: main_source_logo }
-          state:
-            source: moip
-            field: "36.transmitter_id"
-            on_value: "16"
-            on_style: "active"
         - label: "Live Stream"
           icon: "live_tv"
           action: { type: macro, macro: main_source_livestream }
@@ -2640,14 +2632,6 @@ buttons:
             field: "11.transmitter_id"
             on_value: "8"
             on_style: "active"
-        - label: "LOGO"
-          icon: "image"
-          action: { type: macro, macro: social_source_logo }
-          state:
-            source: moip
-            field: "11.transmitter_id"
-            on_value: "16"
-            on_style: "active"
         - label: "Announcements"
           icon: "announcement"
           action: { type: macro, macro: social_source_announcements }
@@ -2731,14 +2715,6 @@ buttons:
             source: moip
             field: "9.transmitter_id"
             on_value: "8"
-            on_style: "active"
-        - label: "LOGO"
-          icon: "image"
-          action: { type: macro, macro: gym_source_logo }
-          state:
-            source: moip
-            field: "9.transmitter_id"
-            on_value: "16"
             on_style: "active"
         - label: "Announcements"
           icon: "announcement"
@@ -2825,14 +2801,6 @@ buttons:
             field: "28.transmitter_id"
             on_value: "8"
             on_style: "active"
-        - label: "LOGO"
-          icon: "image"
-          action: { type: macro, macro: confroom_left_source_logo }
-          state:
-            source: moip
-            field: "28.transmitter_id"
-            on_value: "16"
-            on_style: "active"
         - label: "Announcements"
           icon: "announcement"
           action: { type: macro, macro: confroom_left_source_announcements }
@@ -2878,14 +2846,6 @@ buttons:
             source: moip
             field: "29.transmitter_id"
             on_value: "8"
-            on_style: "active"
-        - label: "LOGO"
-          icon: "image"
-          action: { type: macro, macro: confroom_right_source_logo }
-          state:
-            source: moip
-            field: "29.transmitter_id"
-            on_value: "16"
             on_style: "active"
         - label: "Announcements"
           icon: "announcement"
