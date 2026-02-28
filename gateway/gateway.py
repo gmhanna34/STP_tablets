@@ -856,6 +856,13 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         data = request.get_json(silent=True) or {}
         if mock_mode:
             return jsonify({"success": True, "mock": True}), 200
+        # Resolve IR code name to raw Pronto hex code from devices.json
+        code = data.get("code", "")
+        ir_codes = devices_data.get("moip", {}).get("irCodes", {})
+        if code in ir_codes:
+            data = dict(data, code=ir_codes[code])
+        else:
+            logger.warning(f"IR code name '{code}' not found in devices.json irCodes")
         result, status = _proxy_request("moip", "/ir", "POST", data)
         return jsonify(result), status
 
@@ -1983,9 +1990,14 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
 
     def _step_moip_ir(step: dict, tablet: str) -> dict:
         rx = str(step.get("receiver", ""))
-        code = step.get("code", "")
+        code_name = step.get("code", "")
+        # Resolve IR code name to raw Pronto hex code from devices.json
+        ir_codes = devices_data.get("moip", {}).get("irCodes", {})
+        code = ir_codes.get(code_name, code_name)
+        if code_name not in ir_codes:
+            logger.warning(f"IR code name '{code_name}' not found in devices.json irCodes")
         if _verbose_logging:
-            logger.debug(f"[VERBOSE] moip_ir: receiver={rx}, code={code}, tablet={tablet}")
+            logger.debug(f"[VERBOSE] moip_ir: receiver={rx}, code_name={code_name}, tablet={tablet}")
         if mock_mode:
             return {"success": True}
         result, status = _proxy_request("moip", "/ir", "POST",
