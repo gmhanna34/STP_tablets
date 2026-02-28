@@ -110,6 +110,21 @@ const SettingsPage = {
           </div>
         </div>
 
+        <!-- Logging: full width -->
+        <div class="control-section">
+          <div class="section-title">Logging</div>
+          <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+            Verbose logging adds detailed request/response info to the server log for troubleshooting AV control issues.
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:#1a1a2e;border-radius:8px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:15px;">
+              <input type="checkbox" id="toggle-verbose-logging" style="width:20px;height:20px;cursor:pointer;">
+              <span>Verbose Logging</span>
+            </label>
+            <span id="verbose-logging-status" style="font-size:12px;opacity:0.6;"></span>
+          </div>
+        </div>
+
         <!-- Audit Log: full width -->
         <div class="control-section">
           <div class="section-title">Audit Log</div>
@@ -247,6 +262,25 @@ const SettingsPage = {
     // Reload
     document.getElementById('btn-reload-app')?.addEventListener('click', () => location.reload());
 
+    // Verbose logging toggle
+    this.loadVerboseLogging();
+    document.getElementById('toggle-verbose-logging')?.addEventListener('change', async (e) => {
+      try {
+        const resp = await fetch('/api/settings/verbose-logging', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          body: JSON.stringify({ enabled: e.target.checked }),
+        });
+        const data = await resp.json();
+        const statusEl = document.getElementById('verbose-logging-status');
+        if (statusEl) statusEl.textContent = data.enabled ? 'Enabled' : 'Disabled';
+        App.showToast(data.enabled ? 'Verbose logging enabled' : 'Verbose logging disabled');
+      } catch (err) {
+        App.showToast('Failed to update logging setting');
+        e.target.checked = !e.target.checked;
+      }
+    });
+
     // Audit log
     document.getElementById('btn-load-audit')?.addEventListener('click', () => this.loadAuditLog());
     document.getElementById('audit-filter')?.addEventListener('change', () => this.filterAuditLog());
@@ -265,6 +299,21 @@ const SettingsPage = {
   },
 
   _auditData: [],
+
+  async loadVerboseLogging() {
+    try {
+      const resp = await fetch('/api/settings/verbose-logging', {
+        headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+      });
+      const data = await resp.json();
+      const toggle = document.getElementById('toggle-verbose-logging');
+      const status = document.getElementById('verbose-logging-status');
+      if (toggle) toggle.checked = data.enabled;
+      if (status) status.textContent = data.enabled ? 'Enabled' : 'Disabled';
+    } catch (e) {
+      // Silently fail — toggle defaults to unchecked
+    }
+  },
 
   async loadAuditLog() {
     try {

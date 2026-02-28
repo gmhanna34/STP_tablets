@@ -387,6 +387,9 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     def _ip_allowed(ip: str) -> bool:
         return any(ip.startswith(pfx) for pfx in allowed_ips)
 
+    # Runtime verbose logging flag (toggled via Settings page)
+    _verbose_logging = False
+
     def _proxy_request(service: str, path: str, method: str = "GET",
                        json_data: dict = None, timeout: float = 5) -> tuple:
         """Proxy a request to a middleware service. Returns (response_dict, status_code)."""
@@ -406,6 +409,11 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         tablet = _tablet_id()
         headers["X-Tablet-ID"] = tablet
 
+        nonlocal _verbose_logging
+        if _verbose_logging:
+            logger.debug(f"[VERBOSE] proxy >> {method} {service}{path} "
+                         f"body={json.dumps(json_data)[:200] if json_data else 'none'}")
+
         start = time.time()
         try:
             if method == "GET":
@@ -417,6 +425,11 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             latency = (time.time() - start) * 1000
             result = resp.json()
 
+            if _verbose_logging:
+                logger.debug(f"[VERBOSE] proxy << {service}{path} "
+                             f"status={resp.status_code} latency={latency:.0f}ms "
+                             f"result={json.dumps(result)[:200]}")
+
             db.log_action(tablet, f"{service}:{path}", service,
                           json.dumps(json_data) if json_data else "",
                           json.dumps(result)[:500], latency)
@@ -424,10 +437,13 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return result, resp.status_code
 
         except http_requests.Timeout:
+            logger.warning(f"proxy {service}{path} TIMEOUT after {svc_timeout}s")
             return {"error": f"{service} timeout after {svc_timeout}s"}, 504
         except http_requests.ConnectionError:
+            logger.warning(f"proxy {service}{path} CONNECTION ERROR")
             return {"error": f"{service} unreachable"}, 503
         except Exception as e:
+            logger.warning(f"proxy {service}{path} ERROR: {e}")
             return {"error": str(e)}, 500
 
     # -------------------------------------------------------------------------
@@ -773,6 +789,28 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             "devices": devices_data,
             "permissions": permissions_data,
         }), 200
+
+    # -------------------------------------------------------------------------
+    # SETTINGS ENDPOINTS
+    # -------------------------------------------------------------------------
+
+    @app.route("/api/settings/verbose-logging", methods=["GET"])
+    def get_verbose_logging():
+        """Return current verbose logging state."""
+        return jsonify({"enabled": _verbose_logging}), 200
+
+    @app.route("/api/settings/verbose-logging", methods=["POST"])
+    def set_verbose_logging():
+        """Toggle verbose logging at runtime."""
+        nonlocal _verbose_logging
+        data = request.get_json(silent=True) or {}
+        _verbose_logging = bool(data.get("enabled", False))
+        level_name = "DEBUG" if _verbose_logging else cfg.get("logging", {}).get("level", "INFO")
+        logger.setLevel(getattr(logging, level_name))
+        logger.info(f"Verbose logging {'ENABLED' if _verbose_logging else 'DISABLED'} by {_tablet_id()}")
+        db.log_action(_tablet_id(), "settings:verbose_logging", "settings",
+                      json.dumps({"enabled": _verbose_logging}), "OK", 0)
+        return jsonify({"success": True, "enabled": _verbose_logging}), 200
 
     # -------------------------------------------------------------------------
     # AUTH ENDPOINTS
@@ -1753,6 +1791,11 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             else:
                 result = _execute_step(step, tablet, depth)
 
+            if _verbose_logging:
+                status_str = "OK" if result["success"] else f"FAIL: {result.get('error', '')}"
+                logger.debug(f"[VERBOSE] Macro {macro_key} step {i+1}/{len(steps)} "
+                             f"type={step_type} {status_str}")
+
             if result["success"]:
                 completed += 1
             else:
@@ -1898,6 +1941,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         service = step.get("service", "")
         data = step.get("data", {})
         ha_cfg = cfg.get("home_assistant", {})
+        if _verbose_logging:
+            logger.debug(f"[VERBOSE] ha_service: {domain}/{service}, data={json.dumps(data)[:200]}")
         if mock_mode:
             return {"success": True}
         try:
@@ -1911,6 +1956,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 timeout=ha_cfg.get("timeout", 10),
             )
             ok = resp.status_code < 400
+            if _verbose_logging:
+                logger.debug(f"[VERBOSE] ha_service result: {domain}/{service} status={resp.status_code}")
             if ok:
                 db.log_action(tablet, f"macro:ha:{domain}/{service}", "home_assistant",
                               json.dumps(data)[:500], f"status={resp.status_code}", 0)
@@ -1921,23 +1968,35 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     def _step_moip_switch(step: dict, tablet: str) -> dict:
         tx = str(step.get("tx", ""))
         rx = str(step.get("rx", ""))
+        if _verbose_logging:
+            logger.debug(f"[VERBOSE] moip_switch: tx={tx}, rx={rx}, tablet={tablet}")
         if mock_mode:
             return {"success": True}
         result, status = _proxy_request("moip", "/switch", "POST",
                                          {"transmitter": tx, "receiver": rx}, timeout=3)
         ok = status < 400
+        if _verbose_logging:
+            logger.debug(f"[VERBOSE] moip_switch result: tx={tx}->rx={rx} status={status}")
         if ok:
             socketio.emit("state:moip", {"event": "switch", "data": {"transmitter": tx, "receiver": rx}}, room="moip")
-        return {"success": ok, "error": "" if ok else f"MoIP switch failed: status={status}"}
+        return {"success": ok, "error": "" if ok else f"MoIP switch failed: tx={tx}, rx={rx}, status={status}"}
 
     def _step_moip_ir(step: dict, tablet: str) -> dict:
         rx = str(step.get("receiver", ""))
         code = step.get("code", "")
+        if _verbose_logging:
+            logger.debug(f"[VERBOSE] moip_ir: receiver={rx}, code={code}, tablet={tablet}")
         if mock_mode:
             return {"success": True}
         result, status = _proxy_request("moip", "/ir", "POST",
                                          {"tx": "0", "rx": rx, "code": code}, timeout=3)
-        return {"success": status < 400, "error": "" if status < 400 else f"IR failed: status={status}"}
+        ok = status < 400
+        if _verbose_logging:
+            logger.debug(f"[VERBOSE] moip_ir result: receiver={rx}, code={code}, "
+                         f"status={status}, response={json.dumps(result)[:200]}")
+        if not ok:
+            logger.warning(f"moip_ir FAILED: receiver={rx}, code={code}, status={status}")
+        return {"success": ok, "error": "" if ok else f"IR failed: receiver={rx}, code={code}, status={status}"}
 
     def _step_epson_power(step: dict, tablet: str) -> dict:
         key = step.get("projector", "")

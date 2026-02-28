@@ -70,11 +70,11 @@ macros:
       - type: moip_ir
         receiver: 09
         code: "IRPowerOnVizio"
-        message: "Sending power-on to Chapel TV 1/2"
-#     - type: moip_ir
-#       receiver: 6
-#       code: "IRPowerOn"
-#       message: "Sending power-on to Chapel TV 2"
+        message: "Sending power-on to Chapel Vizio TV"
+      - type: moip_ir
+        receiver: 09
+        code: "IRPowerOnRCA"
+        message: "Sending power-on to Chapel Floating TV"
       - type: delay
         seconds: 3
         message: "Waiting for TVs to respond"
@@ -82,33 +82,25 @@ macros:
       - type: moip_ir
         receiver: 09
         code: "IRPowerOnVizio"
-        message: "Sending repeat power-on to Chapel TV 1/2"
-#     - type: moip_ir
-#       receiver: 6
-#       code: "IRPowerOn"
-#       message: "Sending repeat power-on to Chapel TV 2"
+        message: "Repeat power-on to Chapel Vizio TV"
+      - type: moip_ir
+        receiver: 09
+        code: "IRPowerOnRCA"
+        message: "Repeat power-on to Chapel Floating TV"
       - type: delay
         seconds: 5
         message: "Waiting for TVs to initialize"
-      # Set HDMI input
+      # Set HDMI input (Vizio only)
       - type: moip_ir
         receiver: 09
         code: "IRSourceHDMI1Vizio"
-        message: "Setting Chapel TV 1/2 to HDMI 1"
-#     - type: moip_ir
-#       receiver: 6
-#       code: "IRSourceHDMI1"
-#       message: "Setting Chapel TV 2 to HDMI 1"
+        message: "Setting Chapel Vizio TV to HDMI 1"
       - type: delay
         seconds: 3
       - type: moip_ir
         receiver: 09
         code: "IRSourceHDMI1Vizio"
-        message: "Repeat HDMI 1 for Chapel TV 1/2"
-#     - type: moip_ir
-#       receiver: 6
-#       code: "IRSourceHDMI1"
-#       message: "Repeat HDMI 1 for Chapel TV 2"
+        message: "Repeat HDMI 1 for Chapel Vizio TV"
 
   chapel_tv_off:
     label: "Chapel TVs Off"
@@ -116,23 +108,23 @@ macros:
     confirm: "Turn off all Chapel TVs?"
     steps:
       - type: moip_ir
-        receiver: 5
-        code: "IRPowerOff"
-        message: "Powering off Chapel TV 1"
+        receiver: 09
+        code: "IRPowerOffVizio"
+        message: "Powering off Chapel Vizio TV"
       - type: moip_ir
-        receiver: 6
-        code: "IRPowerOff"
-        message: "Powering off Chapel TV 2"
+        receiver: 09
+        code: "IRPowerOffRCA"
+        message: "Powering off Chapel Floating TV"
       - type: delay
         seconds: 3
       - type: moip_ir
-        receiver: 5
-        code: "IRPowerOff"
-        message: "Repeat power-off Chapel TV 1"
+        receiver: 09
+        code: "IRPowerOffVizio"
+        message: "Repeat power-off Chapel Vizio TV"
       - type: moip_ir
-        receiver: 6
-        code: "IRPowerOff"
-        message: "Repeat power-off Chapel TV 2"
+        receiver: 09
+        code: "IRPowerOffRCA"
+        message: "Repeat power-off Chapel Floating TV"
       - type: notify
         message: "Chapel TVs powered off"
 
