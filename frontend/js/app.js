@@ -9,8 +9,9 @@ const App = {
   async init() {
     console.log('St. Paul Control Panel - Initializing...');
 
-    // Apply saved theme before anything renders
+    // Apply saved theme and density before anything renders
     this.initTheme();
+    this.initDensity();
 
     // Load configuration from gateway
     try {
@@ -430,6 +431,28 @@ const App = {
   _updateThemeIcon(theme) {
     const icon = document.querySelector('#theme-toggle .material-icons');
     if (icon) icon.textContent = theme === 'light' ? 'dark_mode' : 'light_mode';
+  },
+
+  // -----------------------------------------------------------------------
+  // Density toggle (comfortable / compact)
+  // -----------------------------------------------------------------------
+
+  initDensity() {
+    const saved = localStorage.getItem('density') || 'comfortable';
+    if (saved === 'compact') document.body.classList.add('compact');
+    this._updateDensityIcon(saved);
+
+    document.getElementById('density-toggle')?.addEventListener('click', () => {
+      const isCompact = document.body.classList.toggle('compact');
+      const mode = isCompact ? 'compact' : 'comfortable';
+      localStorage.setItem('density', mode);
+      this._updateDensityIcon(mode);
+    });
+  },
+
+  _updateDensityIcon(mode) {
+    const icon = document.querySelector('#density-toggle .material-icons');
+    if (icon) icon.textContent = mode === 'compact' ? 'density_small' : 'density_medium';
   },
 
   // -----------------------------------------------------------------------

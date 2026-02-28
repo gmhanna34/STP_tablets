@@ -151,7 +151,8 @@ body {
   font-weight: bold;
 }
 
-#theme-toggle {
+#theme-toggle,
+#density-toggle {
   background: none;
   border: none;
   cursor: pointer;
@@ -164,8 +165,10 @@ body {
   align-items: center;
 }
 
-#theme-toggle:hover { opacity: 1; }
-#theme-toggle .material-icons { font-size: 18px; }
+#theme-toggle:hover,
+#density-toggle:hover { opacity: 1; }
+#theme-toggle .material-icons,
+#density-toggle .material-icons { font-size: 18px; }
 
 /* ── Page Content ─────────────────────────────────────────── */
 
@@ -2392,4 +2395,118 @@ body {
   .channel-fader        { height: 80px; }
 
   .page-grid            { gap: 6px; }
+}
+
+/* ── Compact Density Mode ────────────────────────────────── */
+
+body.compact #status-bar {
+  flex: 0 0 30px;
+  padding: 1px 10px;
+  font-size: 10px;
+}
+
+body.compact #nav-bar {
+  flex: 0 0 54px;
+}
+
+body.compact .nav-item {
+  padding: 3px 5px;
+}
+
+body.compact .nav-item .material-icons {
+  font-size: 22px;
+}
+
+body.compact .nav-item .nav-label {
+  font-size: 8px;
+  margin-top: 0;
+}
+
+body.compact #church-seal {
+  width: 42px;
+  height: 42px;
+}
+
+body.compact #page-content {
+  padding: 8px;
+}
+
+body.compact .page-header {
+  margin-bottom: 6px;
+}
+
+body.compact .page-header h1 {
+  font-size: 20px;
+  margin-bottom: 2px;
+}
+
+body.compact .page-header .subtitle {
+  font-size: 12px;
+}
+
+body.compact .page-grid {
+  gap: 6px;
+}
+
+body.compact .control-section {
+  padding: 8px;
+  margin-bottom: 6px;
+}
+
+body.compact .section-title {
+  font-size: 14px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+}
+
+body.compact .control-grid {
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 6px;
+}
+
+body.compact .btn {
+  min-height: 48px;
+  padding: 8px 6px;
+  font-size: 13px;
+  border-radius: 10px;
+  gap: 2px;
+}
+
+body.compact .btn .material-icons {
+  font-size: 22px;
+}
+
+body.compact .btn-label {
+  font-size: 11px;
+}
+
+body.compact .btn-large {
+  min-height: 60px;
+}
+
+body.compact .scene-grid {
+  gap: 6px;
+}
+
+body.compact .mixer-channel {
+  padding: 6px 4px;
+}
+
+body.compact .channel-fader {
+  height: 90px;
+}
+
+body.compact .section-link {
+  font-size: 13px;
+  padding: 4px 8px;
+}
+
+body.compact .cam-tab-bar {
+  gap: 4px;
+  padding: 4px;
+}
+
+body.compact .cam-tab {
+  padding: 6px 10px;
+  font-size: 12px;
 }
