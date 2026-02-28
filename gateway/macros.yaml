@@ -68,47 +68,47 @@ macros:
         message: "Enabling Chapel TV 2 AC power"
       # IR Power On - Round 1
       - type: moip_ir
-        receiver: 5
-        code: "IRPowerOn"
-        message: "Sending power-on to Chapel TV 1"
-      - type: moip_ir
-        receiver: 6
-        code: "IRPowerOn"
-        message: "Sending power-on to Chapel TV 2"
+        receiver: 09
+        code: "IRPowerOnVizio"
+        message: "Sending power-on to Chapel TV 1/2"
+#     - type: moip_ir
+#       receiver: 6
+#       code: "IRPowerOn"
+#       message: "Sending power-on to Chapel TV 2"
       - type: delay
         seconds: 3
         message: "Waiting for TVs to respond"
       # IR Power On - Round 2
       - type: moip_ir
-        receiver: 5
-        code: "IRPowerOn"
-        message: "Sending repeat power-on to Chapel TV 1"
-      - type: moip_ir
-        receiver: 6
-        code: "IRPowerOn"
-        message: "Sending repeat power-on to Chapel TV 2"
+        receiver: 09
+        code: "IRPowerOnVizio"
+        message: "Sending repeat power-on to Chapel TV 1/2"
+#     - type: moip_ir
+#       receiver: 6
+#       code: "IRPowerOn"
+#       message: "Sending repeat power-on to Chapel TV 2"
       - type: delay
         seconds: 5
         message: "Waiting for TVs to initialize"
       # Set HDMI input
       - type: moip_ir
-        receiver: 5
-        code: "IRSourceHDMI1"
-        message: "Setting Chapel TV 1 to HDMI 1"
-      - type: moip_ir
-        receiver: 6
-        code: "IRSourceHDMI1"
-        message: "Setting Chapel TV 2 to HDMI 1"
+        receiver: 09
+        code: "IRSourceHDMI1Vizio"
+        message: "Setting Chapel TV 1/2 to HDMI 1"
+#     - type: moip_ir
+#       receiver: 6
+#       code: "IRSourceHDMI1"
+#       message: "Setting Chapel TV 2 to HDMI 1"
       - type: delay
         seconds: 3
       - type: moip_ir
-        receiver: 5
-        code: "IRSourceHDMI1"
-        message: "Repeat HDMI 1 for Chapel TV 1"
-      - type: moip_ir
-        receiver: 6
-        code: "IRSourceHDMI1"
-        message: "Repeat HDMI 1 for Chapel TV 2"
+        receiver: 09
+        code: "IRSourceHDMI1Vizio"
+        message: "Repeat HDMI 1 for Chapel TV 1/2"
+#     - type: moip_ir
+#       receiver: 6
+#       code: "IRSourceHDMI1"
+#       message: "Repeat HDMI 1 for Chapel TV 2"
 
   chapel_tv_off:
     label: "Chapel TVs Off"
@@ -2187,15 +2187,16 @@ buttons:
       items:
         - label: "TVs On"
           icon: "tv"
+          confirm_steps: true
           action: { type: macro, macro: chapel_tv_on }
-          state:
-            source: ha
-            entity: "switch.bat_chapeltv_1_ac_enabled"
-            on_value: "on"
-            on_style: "active"
+#          state:
+#            source: ha
+#            entity: "switch.bat_chapeltv_1_ac_enabled"
+#            on_value: "on"
+#            on_style: "active"
           badge:
             source: ha
-            entity: "sensor.bat_chapeltv_1_battery_level"
+            entity: "sensor.bat_chapeltv_1_main_battery_level"
             format: "percent"
         - label: "TVs Off"
           icon: "tv_off"
