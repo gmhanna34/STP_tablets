@@ -241,6 +241,30 @@ macros:
         service: "turn_off"
         data: { entity_id: "climate.chapel_and_main_hallway" }
 
+  chapel_source_laptop:
+    label: "Social Hall Laptop"
+    icon: "laptop"
+    steps:
+      - type: moip_switch
+        tx: 1
+        rx: 47
+      - type: moip_switch
+        tx: 1
+        rx: 09
+      - type: moip_switch
+        tx: 1
+        rx: 22
+      - type: moip_switch
+        tx: 1
+        rx: 10
+      - type: moip_switch
+        tx: 1
+        rx: 19
+      - type: moip_switch
+        tx: 1
+        rx: 32
+
+        
   chapel_source_appletv:
     label: "Chapel Apple TV"
     icon: "cast"
@@ -265,48 +289,50 @@ macros:
         rx: 10
       - type: moip_switch
         tx: 14
+        rx: 47
+      - type: moip_switch
+        tx: 14
+        rx: 09
+      - type: moip_switch
+        tx: 14
+        rx: 22
+      - type: moip_switch
+        tx: 14
+        rx: 10
+      - type: moip_switch
+        tx: 14
         rx: 19
       - type: moip_switch
         tx: 14
         rx: 32
-
-  chapel_source_livestream:
-    label: "Chapel Live Stream"
-    icon: "live_tv"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_3" }      
+        
+  chapel_source_windows_display:
+    label: "Social Windows Display"
+    icon: "laptop"
     steps:
       - type: moip_switch
-        tx: 8
+        tx: 15
         rx: 47
       - type: moip_switch
-        tx: 8
-        rx: 9
+        tx: 15
+        rx: 09
       - type: moip_switch
-        tx: 8
-        rx: 19
-
-  chapel_source_logo:
-    label: "Chapel LOGO"
-    icon: "image"
-    steps:
-      - type: moip_switch
-        tx: 16
-        rx: 47
-      - type: moip_switch
-        tx: 16
-        rx: 9
-      - type: moip_switch
-        tx: 16
+        tx: 15
         rx: 22
       - type: moip_switch
-        tx: 16
+        tx: 15
         rx: 10
       - type: moip_switch
-        tx: 16
+        tx: 15
         rx: 19
       - type: moip_switch
-        tx: 16
+        tx: 15
         rx: 32
-
+ 
   chapel_source_announcements:
     label: "Chapel Announcements"
     icon: "announcement"
@@ -2216,6 +2242,14 @@ buttons:
         entity: "switch.bat_chapeltv_1_ac_enabled"
         value: "off"
       items:
+        - label: "Hall Laptop"
+          icon: "cast"
+          action: { type: macro, macro: chapel_source_laptop }
+          state:
+            source: moip
+            field: "47.transmitter_id"
+            on_value: "1"
+            on_style: "active"
         - label: "Apple TV"
           icon: "cast"
           action: { type: macro, macro: chapel_source_appletv }
@@ -2224,21 +2258,13 @@ buttons:
             field: "47.transmitter_id"
             on_value: "14"
             on_style: "active"
-        - label: "Live Stream"
-          icon: "live_tv"
-          action: { type: macro, macro: chapel_source_livestream }
+        - label: "Windows Disp"
+          icon: "laptop"
+          action: { type: macro, macro: chapel_source_windows_display }
           state:
             source: moip
             field: "47.transmitter_id"
-            on_value: "8"
-            on_style: "active"
-        - label: "LOGO"
-          icon: "image"
-          action: { type: macro, macro: chapel_source_logo }
-          state:
-            source: moip
-            field: "47.transmitter_id"
-            on_value: "16"
+            on_value: "15"
             on_style: "active"
         - label: "Announcements"
           icon: "announcement"
@@ -2247,6 +2273,22 @@ buttons:
             source: moip
             field: "47.transmitter_id"
             on_value: "9"
+            on_style: "active"
+        - label: "Google Streamer"
+          icon: "chromecast"
+          action: { type: macro, macro: chapel_source_google_streamer }
+          state:
+            source: moip
+            field: "47.transmitter_id"
+            on_value: "25"
+            on_style: "active"
+        - label: "Live Stream"
+          icon: "live_tv"
+          action: { type: macro, macro: chapel_source_livestream }
+          state:
+            source: moip
+            field: "47.transmitter_id"
+            on_value: "8"
             on_style: "active"
 
   main:
@@ -2419,7 +2461,7 @@ buttons:
             on_value: "27"
             on_style: "active"
         - label: "Google Streamer"
-          icon: "cast_connected"
+          icon: "chromecast"
           action: { type: macro, macro: main_source_google_streamer }
           state:
             source: moip
