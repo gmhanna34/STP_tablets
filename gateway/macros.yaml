@@ -2336,51 +2336,6 @@ buttons:
             attribute: "current_temperature"
             format: "temp"
 
-    - section: "People Counts"
-      cols: 4
-      items:
-        - label: "Occupancy"
-          icon: "groups"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "occupancy_adjusted"
-        - label: "Communion"
-          icon: "how_to_reg"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "communion_adjusted"
-
-    - section: "For Advanced People Count Settings, click here"
-      display: "link"
-      cols: 4
-      items:
-        - label: "Peak Bldg Occupancy"
-          icon: "groups"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "occupancy_adjusted"
-        - label: "Communion Count"
-          icon: "how_to_reg"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "communion_adjusted"
-        - label: "Building Entry Count"
-          icon: "sensor_door"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "enter_adjusted"
-        - label: "Live Occupancy"
-          icon: "person"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "occupancy_live"
-
     - section: "Video Sources"
       items:
         - label: "Left Podium"
@@ -2440,6 +2395,51 @@ buttons:
             on_value: "25"
             on_style: "active"
 
+    - section: "People Counts"
+      cols: 12
+      items:
+        - label: "Occupancy"
+          icon: "groups"
+          action: { type: camlytics_panel }
+          badge:
+            source: camlytics
+            field: "occupancy_adjusted"
+        - label: "Communion"
+          icon: "how_to_reg"
+          action: { type: camlytics_panel }
+          badge:
+            source: camlytics
+            field: "communion_adjusted"
+            
+    - section: "Advanced People Count Settings"
+      display: "link"
+      cols: 4
+      items:
+        - label: "Peak Bldg Occupancy"
+          icon: "groups"
+          action: { type: camlytics_panel }
+          badge:
+            source: camlytics
+            field: "occupancy_adjusted"
+        - label: "Communion Count"
+          icon: "how_to_reg"
+          action: { type: camlytics_panel }
+          badge:
+            source: camlytics
+            field: "communion_adjusted"
+        - label: "Building Entry Count"
+          icon: "sensor_door"
+          action: { type: camlytics_panel }
+          badge:
+            source: camlytics
+            field: "enter_adjusted"
+        - label: "Live Occupancy"
+          icon: "person"
+          action: { type: camlytics_panel }
+          badge:
+            source: camlytics
+            field: "occupancy_live"
+            
     - section: "Advanced Display Settings"
       display: "link"
       cols: 4
@@ -2522,43 +2522,6 @@ buttons:
               label: "PRJ Rear Right Off"
               icon: "tv_off"
               action: { type: macro, macro: main_epson4_on }
-
-    - section: "Advanced Power Settings"
-      display: "link"
-      cols: 4
-      items:
-        - label: "WattBox 1"
-          icon: "power"
-          toggle:
-            state:
-              source: ha
-              entity: "switch.wattbox_outlet_1"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "WattBox 1 On"
-              icon: "power"
-              action: { type: macro, macro: main_wattbox1_off }
-            off:
-              label: "WattBox 1 Off"
-              icon: "power_off"
-              action: { type: macro, macro: main_wattbox1_on }
-        - label: "WattBox 2"
-          icon: "power"
-          toggle:
-            state:
-              source: ha
-              entity: "switch.wattbox_outlet_2"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "WattBox 2 On"
-              icon: "power"
-              action: { type: macro, macro: main_wattbox2_off }
-            off:
-              label: "WattBox 2 Off"
-              icon: "power_off"
-              action: { type: macro, macro: main_wattbox2_on }
 
     - section: "Baptism / Wedding"
       display: "link"

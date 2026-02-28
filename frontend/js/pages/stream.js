@@ -30,40 +30,17 @@ const StreamPage = {
           </div>
         </div>
 
-        <!-- Scenes: full width -->
-        <div class="control-section">
+		<!-- Change to: left half -->
+		<div class="control-section col-span-6">
           <div class="section-title">Scenes</div>
           <div class="scene-grid" id="scene-grid">
             <div class="text-center" style="grid-column:1/-1;opacity:0.5;">Loading scenes...</div>
           </div>
         </div>
-
-        <!-- Stream & Record: left half -->
-        <div class="control-section col-span-6">
-          <div class="section-title">Stream & Record</div>
-          <div class="control-grid" style="grid-template-columns:repeat(2, 1fr);">
-            <button class="btn" id="btn-start-stream"><span class="material-icons">play_arrow</span><span class="btn-label">Start Stream</span></button>
-            <button class="btn btn-danger" id="btn-stop-stream"><span class="material-icons">stop</span><span class="btn-label">Stop Stream</span></button>
-            <button class="btn" id="btn-start-record"><span class="material-icons">fiber_manual_record</span><span class="btn-label">Start Record</span></button>
-            <button class="btn btn-danger" id="btn-stop-record"><span class="material-icons">stop</span><span class="btn-label">Stop Record</span></button>
-          </div>
-        </div>
-
-        <!-- Slides & Advanced: right half -->
-        <div class="control-section col-span-6">
-          <div class="section-title">Slides & Advanced</div>
-          <div class="control-grid" style="grid-template-columns:repeat(3, 1fr);">
-            <button class="btn" id="btn-slides-on"><span class="material-icons">slideshow</span><span class="btn-label">Slides On</span></button>
-            <button class="btn" id="btn-slides-off"><span class="material-icons">block</span><span class="btn-label">Slides Off</span></button>
-            <button class="btn" id="btn-slides-toggle"><span class="material-icons">swap_horiz</span><span class="btn-label">Toggle</span></button>
-            <button class="btn" id="btn-reset-stream"><span class="material-icons">restart_alt</span><span class="btn-label">Reset Stream</span></button>
-            <button class="btn" id="btn-set-shure"><span class="material-icons">mic_external_on</span><span class="btn-label">Shure Mic</span></button>
-            <button class="btn" id="btn-reenable-atem"><span class="material-icons">videocam</span><span class="btn-label">ATEM</span></button>
-          </div>
-        </div>
-
+		
         <!-- Active Camera Snapshot: click to open PTZ controls -->
-        <div class="control-section">
+		<!-- Change to: right half, placed immediately after Scenes -->
+		<div class="control-section col-span-6">
           <div class="section-title">Active Camera</div>
           <div style="max-width:500px;">
             <div class="camera-card">
@@ -75,9 +52,34 @@ const StreamPage = {
             </div>
             <div class="text-center" style="font-size:11px;opacity:0.5;margin-top:4px;">Tap image to open camera controls</div>
           </div>
+		</div>
+
+		<!-- Stream & Record: Left -->
+        <div class="control-section col-span-6">
+          <div class="section-title">Stream & Record</div>
+          <div class="control-grid" style="grid-template-columns:repeat(2, 1fr);">
+            <button class="btn" id="btn-start-stream"><span class="material-icons">play_arrow</span><span class="btn-label">Start Stream</span></button>
+            <button class="btn btn-danger" id="btn-stop-stream"><span class="material-icons">stop</span><span class="btn-label">Stop Stream</span></button>
+            <button class="btn" id="btn-start-record"><span class="material-icons">fiber_manual_record</span><span class="btn-label">Start Record</span></button>
+            <button class="btn btn-danger" id="btn-stop-record"><span class="material-icons">stop</span><span class="btn-label">Stop Record</span></button>
+          </div>
+        </div>		
+
+        <!-- Slides & Advanced: Full -->
+        <div class="control-section">
+          <div class="section-title">Slides & Advanced</div>
+          <div class="control-grid" style="grid-template-columns:repeat(3, 1fr);">
+            <button class="btn" id="btn-slides-on"><span class="material-icons">slideshow</span><span class="btn-label">Slides On</span></button>
+            <button class="btn" id="btn-slides-off"><span class="material-icons">block</span><span class="btn-label">Slides Off</span></button>
+            <button class="btn" id="btn-slides-toggle"><span class="material-icons">swap_horiz</span><span class="btn-label">Toggle</span></button>
+            <button class="btn" id="btn-reset-stream"><span class="material-icons">restart_alt</span><span class="btn-label">Reset Stream</span></button>
+            <button class="btn" id="btn-set-shure"><span class="material-icons">mic_external_on</span><span class="btn-label">Shure Mic</span></button>
+            <button class="btn" id="btn-reenable-atem"><span class="material-icons">videocam</span><span class="btn-label">ATEM</span></button>
+          </div>
         </div>
 
-        <!-- Footer links -->
+
+                <!-- Footer links -->
         <div class="control-section" style="grid-column:1/-1;text-align:center;padding:8px 0;">
           <a href="#" class="stream-footer-link" id="link-obs-web">Web Control Popup</a>
         </div>
