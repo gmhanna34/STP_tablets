@@ -245,12 +245,30 @@ macros:
     label: "Chapel Apple TV"
     icon: "cast"
     steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_3" }
+        on_fail: skip
+        message: "Turning on Chapel Apple TV power"
       - type: moip_switch
         tx: 14
-        rx: 5
+        rx: 47
       - type: moip_switch
         tx: 14
-        rx: 6
+        rx: 9
+      - type: moip_switch
+        tx: 14
+        rx: 22
+      - type: moip_switch
+        tx: 14
+        rx: 10
+      - type: moip_switch
+        tx: 14
+        rx: 19
+      - type: moip_switch
+        tx: 14
+        rx: 32
 
   chapel_source_livestream:
     label: "Chapel Live Stream"
@@ -258,10 +276,13 @@ macros:
     steps:
       - type: moip_switch
         tx: 8
-        rx: 5
+        rx: 47
       - type: moip_switch
         tx: 8
-        rx: 6
+        rx: 9
+      - type: moip_switch
+        tx: 8
+        rx: 19
 
   chapel_source_logo:
     label: "Chapel LOGO"
@@ -269,10 +290,22 @@ macros:
     steps:
       - type: moip_switch
         tx: 16
-        rx: 5
+        rx: 47
       - type: moip_switch
         tx: 16
-        rx: 6
+        rx: 9
+      - type: moip_switch
+        tx: 16
+        rx: 22
+      - type: moip_switch
+        tx: 16
+        rx: 10
+      - type: moip_switch
+        tx: 16
+        rx: 19
+      - type: moip_switch
+        tx: 16
+        rx: 32
 
   chapel_source_announcements:
     label: "Chapel Announcements"
@@ -280,10 +313,22 @@ macros:
     steps:
       - type: moip_switch
         tx: 9
-        rx: 5
+        rx: 47
       - type: moip_switch
         tx: 9
-        rx: 6
+        rx: 9
+      - type: moip_switch
+        tx: 9
+        rx: 22
+      - type: moip_switch
+        tx: 9
+        rx: 10
+      - type: moip_switch
+        tx: 9
+        rx: 19
+      - type: moip_switch
+        tx: 9
+        rx: 32
 
   # --- Nested macro: full chapel setup ---
   chapel_full_setup:
@@ -635,7 +680,7 @@ macros:
     steps:
       - type: moip_switch
         tx: 22
-        rx: 47
+        rx: 46
       - type: moip_switch
         tx: 22
         rx: 34
@@ -701,7 +746,7 @@ macros:
         rx: 19
       - type: moip_switch
         tx: 23
-        rx: 47
+        rx: 46
       - type: moip_switch
         tx: 8
         rx: 26
@@ -743,7 +788,7 @@ macros:
         rx: 19
       - type: moip_switch
         tx: 9
-        rx: 47
+        rx: 46
       - type: moip_switch
         tx: 9
         rx: 26
@@ -785,7 +830,7 @@ macros:
         rx: 19
       - type: moip_switch
         tx: 16
-        rx: 47
+        rx: 46
       - type: moip_switch
         tx: 8
         rx: 26
@@ -803,7 +848,7 @@ macros:
     steps:
       - type: moip_switch
         tx: 8
-        rx: 47
+        rx: 46
       - type: moip_switch
         tx: 8
         rx: 34
@@ -864,7 +909,7 @@ macros:
         rx: 19
       - type: moip_switch
         tx: 24
-        rx: 47
+        rx: 46
       - type: moip_switch
         tx: 8
         rx: 26
@@ -890,7 +935,7 @@ macros:
         data: { entity_id: "switch.sw_022_spare" }
       - type: moip_switch
         tx: 27
-        rx: 47    # Chapel_HDMITransmitter
+        rx: 46
       - type: moip_switch
         tx: 27
         rx: 34    # MainChurch_PortableTV
@@ -960,7 +1005,7 @@ macros:
         rx: 19
       - type: moip_switch
         tx: 25
-        rx: 47
+        rx: 46
       - type: moip_switch
         tx: 8
         rx: 26
@@ -1084,7 +1129,7 @@ macros:
     steps:
       - type: moip_switch
         tx: 21
-        rx: 47
+        rx: 46
       - type: moip_switch
         tx: 21
         rx: 34
