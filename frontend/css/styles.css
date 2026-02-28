@@ -2028,6 +2028,73 @@ body {
   .switch-name { font-size: 13px; }
 }
 
+/* ── EcoFlow Battery Panel ────────────────────────────────── */
+
+.ecoflow-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.ecoflow-card {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.ecoflow-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ecoflow-label {
+  font-size: 15px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.ecoflow-level {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.ecoflow-bar-track {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.ecoflow-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.ecoflow-switches {
+  display: flex;
+  gap: 8px;
+}
+
+.ecoflow-toggle {
+  flex: 1;
+  min-height: 48px;
+}
+
+.ecoflow-toggle .material-icons {
+  font-size: 24px;
+}
+
+@media (max-width: 599px) {
+  .ecoflow-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Settings Tab Content ────────────────────────────────── */
 
 .settings-tab-content {

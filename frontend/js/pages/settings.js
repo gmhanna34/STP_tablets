@@ -69,6 +69,16 @@ const SettingsPage = {
               <span class="btn-label">Open WattBox Panel</span>
             </button>
           </div>
+          <div class="control-section">
+            <div class="section-title">EcoFlow Batteries</div>
+            <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+              View battery levels and toggle AC / DC outputs for EcoFlow battery packs.
+            </div>
+            <button class="btn" id="btn-open-ecoflow" style="display:inline-flex;">
+              <span class="material-icons">battery_charging_full</span>
+              <span class="btn-label">Open EcoFlow Panel</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -98,13 +108,8 @@ const SettingsPage = {
       <!-- THERMOSTATS TAB                                               -->
       <!-- ============================================================ -->
       <div id="settings-tab-thermostats" class="settings-tab-content" style="display:none;">
-        <div class="page-grid">
-          <div class="control-section">
-            <div class="text-center" style="opacity:0.5;padding:30px;">
-              <span class="material-icons" style="font-size:48px;opacity:0.3;">thermostat</span>
-              <div style="margin-top:8px;">Thermostat controls coming soon.</div>
-            </div>
-          </div>
+        <div class="page-grid" id="thermostats-grid">
+          <div class="text-center" style="opacity:0.5;padding:30px;">Loading thermostats...</div>
         </div>
       </div>
 
@@ -327,6 +332,10 @@ const SettingsPage = {
     // ── Power tab ──────────────────────────────────────────────────
     document.getElementById('btn-open-smartthings')?.addEventListener('click', () => this._openSwitchPanel('SmartThings', 'SW_'));
     document.getElementById('btn-open-wattbox')?.addEventListener('click', () => this._openSwitchPanel('WattBox', 'WB_'));
+    document.getElementById('btn-open-ecoflow')?.addEventListener('click', () => this._openEcoFlowPanel());
+
+    // ── Thermostats tab ─────────────────────────────────────────────
+    this._loadThermostats();
 
     // ── Audio tab ──────────────────────────────────────────────────
     this.loadMixer();
@@ -457,9 +466,10 @@ const SettingsPage = {
           }
 
           const entities = [];
+          const prefixLower = prefix.toLowerCase();
           for (const [, info] of Object.entries(data.domains || {})) {
             for (const ent of (info.entities || [])) {
-              if (ent.entity_id.includes(prefix)) entities.push(ent);
+              if (ent.entity_id.toLowerCase().includes(prefixLower)) entities.push(ent);
             }
           }
 
@@ -475,7 +485,8 @@ const SettingsPage = {
             <div class="switch-panel-grid">
               ${entities.map(e => {
                 const isOn = e.state === 'on';
-                const name = (e.friendly_name || e.entity_id).replace(/^SW_|^WB_/i, '').replace(/_/g, ' ');
+                const raw = e.friendly_name || e.entity_id.split('.').pop() || e.entity_id;
+                const name = raw.replace(/^SW[_ ]|^WB[_ ]/i, '').replace(/_/g, ' ');
                 return `<div class="switch-card ${isOn ? 'switch-on' : 'switch-off'}">
                   <div class="switch-info">
                     <span class="status-dot ${isOn ? 'idle' : 'offline'}"></span>
@@ -526,6 +537,352 @@ const SettingsPage = {
         renderSwitches();
       }, 5000);
     });
+  },
+
+  // =====================================================================
+  // Power Tab — EcoFlow Battery Panel
+  // =====================================================================
+
+  _ecoFlowBatteries: [
+    { id: 'bat_chapeltv_1', label: 'Chapel TV 1' },
+    { id: 'bat_chapeltv_2', label: 'Chapel TV 2' },
+    { id: 'bat_mainchurchtv_1', label: 'Main Church TV 1' },
+    { id: 'bat_mainchurchtv_2', label: 'Main Church TV 2' },
+  ],
+  _ecoFlowTimer: null,
+
+  async _openEcoFlowPanel() {
+    const self = this;
+    const tabletId = localStorage.getItem('tabletId') || 'WebApp';
+
+    App.showPanel('EcoFlow Batteries', async (body) => {
+      body.innerHTML = '<div class="text-center" style="padding:30px;opacity:0.5;">Loading batteries...</div>';
+
+      const renderBatteries = async () => {
+        try {
+          // Fetch all battery entities in one call (no domain filter — need both switch + sensor)
+          const resp = await fetch('/api/ha/entities?q=bat_', {
+            headers: { 'X-Tablet-ID': tabletId },
+          });
+          const data = await resp.json();
+
+          // Build a flat lookup map of entity_id → entity
+          const entityMap = {};
+          for (const [, info] of Object.entries(data.domains || {})) {
+            for (const ent of (info.entities || [])) {
+              entityMap[ent.entity_id] = ent;
+            }
+          }
+
+          body.innerHTML = `
+            <div style="margin-bottom:12px;font-size:13px;opacity:0.6;">${self._ecoFlowBatteries.length} batteries</div>
+            <div class="ecoflow-grid">
+              ${self._ecoFlowBatteries.map(bat => {
+                const acEntity = entityMap[`switch.${bat.id}_ac_enabled`];
+                const dcEntity = entityMap[`switch.${bat.id}_dc_12v_enabled`];
+                const levelEntity = entityMap[`sensor.${bat.id}_main_battery_level`];
+
+                const acOn = acEntity?.state === 'on';
+                const dcOn = dcEntity?.state === 'on';
+                const level = levelEntity ? parseInt(levelEntity.state) : null;
+                const levelStr = level != null && !isNaN(level) ? level + '%' : '--';
+
+                // Color code battery level
+                let levelColor = 'var(--ok)';
+                if (level != null) {
+                  if (level <= 20) levelColor = 'var(--danger)';
+                  else if (level <= 50) levelColor = 'var(--warn)';
+                }
+
+                return `<div class="ecoflow-card">
+                  <div class="ecoflow-header">
+                    <span class="material-icons" style="font-size:20px;">battery_charging_full</span>
+                    <span class="ecoflow-label">${bat.label}</span>
+                    <span class="ecoflow-level" style="color:${levelColor};">${levelStr}</span>
+                  </div>
+                  <div class="ecoflow-bar-track">
+                    <div class="ecoflow-bar-fill" style="width:${level != null ? level : 0}%;background:${levelColor};"></div>
+                  </div>
+                  <div class="ecoflow-switches">
+                    <button class="btn ecoflow-toggle ${acOn ? 'active' : ''}" data-ecoflow-entity="${acEntity?.entity_id || ''}" ${!acEntity ? 'disabled' : ''}>
+                      <span class="material-icons">${acOn ? 'toggle_on' : 'toggle_off'}</span>
+                      <span class="btn-label">AC Output</span>
+                    </button>
+                    <button class="btn ecoflow-toggle ${dcOn ? 'active' : ''}" data-ecoflow-entity="${dcEntity?.entity_id || ''}" ${!dcEntity ? 'disabled' : ''}>
+                      <span class="material-icons">${dcOn ? 'toggle_on' : 'toggle_off'}</span>
+                      <span class="btn-label">DC 12V</span>
+                    </button>
+                  </div>
+                </div>`;
+              }).join('')}
+            </div>
+          `;
+
+          // Wire toggle handlers
+          body.querySelectorAll('[data-ecoflow-entity]').forEach(btn => {
+            if (!btn.dataset.ecoflowEntity) return;
+            btn.addEventListener('click', async () => {
+              btn.disabled = true;
+              try {
+                await fetch('/api/ha/service/switch/toggle', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': tabletId },
+                  body: JSON.stringify({ entity_id: btn.dataset.ecoflowEntity }),
+                });
+                setTimeout(() => renderBatteries(), 800);
+              } catch (err) {
+                App.showToast('Failed to toggle switch');
+                btn.disabled = false;
+              }
+            });
+          });
+
+        } catch (err) {
+          body.innerHTML = '<div style="color:var(--danger);padding:16px;">Failed to load batteries. Is Home Assistant connected?</div>';
+        }
+      };
+
+      await renderBatteries();
+
+      self._ecoFlowTimer = setInterval(() => {
+        if (!body.isConnected) {
+          clearInterval(self._ecoFlowTimer);
+          self._ecoFlowTimer = null;
+          return;
+        }
+        renderBatteries();
+      }, 5000);
+    });
+  },
+
+  // =====================================================================
+  // Thermostats Tab — Inline thermostat dials
+  // =====================================================================
+
+  _thermostatEntities: [
+    { entity_id: 'climate.chapel_and_main_hallway', label: 'Chapel & Main Hallway' },
+    { entity_id: 'climate.mainchurch', label: 'Main Church' },
+    { entity_id: 'climate.social_hall_new', label: 'Social Hall' },
+    { entity_id: 'climate.sunday_school', label: 'Sunday School' },
+  ],
+  _thermostatTimers: [],
+
+  async _loadThermostats() {
+    const grid = document.getElementById('thermostats-grid');
+    if (!grid) return;
+    const tabletId = localStorage.getItem('tabletId') || 'WebApp';
+    const self = this;
+
+    grid.innerHTML = self._thermostatEntities.map((t, i) =>
+      `<div class="control-section col-span-6" id="thermo-section-${i}">
+        <div class="section-title">${t.label}</div>
+        <div class="text-center" style="opacity:0.5;padding:20px;" id="thermo-body-${i}">Loading...</div>
+      </div>`
+    ).join('');
+
+    // Load each thermostat in parallel
+    self._thermostatEntities.forEach((t, i) => {
+      self._loadSingleThermostat(t.entity_id, i, tabletId);
+    });
+  },
+
+  async _loadSingleThermostat(entityId, index, tabletId) {
+    const body = document.getElementById(`thermo-body-${index}`);
+    if (!body) return;
+    const self = this;
+
+    let state;
+    try {
+      const resp = await fetch(`/api/ha/states/${entityId}`, {
+        headers: { 'X-Tablet-ID': tabletId },
+      });
+      if (!resp.ok) {
+        body.innerHTML = `<div style="color:var(--danger);">Failed to load (${resp.status})</div>`;
+        return;
+      }
+      state = await resp.json();
+    } catch (e) {
+      body.innerHTML = '<div style="color:var(--danger);">Failed to load thermostat</div>';
+      return;
+    }
+
+    if (state.error) {
+      body.innerHTML = `<div style="color:var(--danger);">${state.error}</div>`;
+      return;
+    }
+
+    const attrs = state.attributes || {};
+    const currentTemp = attrs.current_temperature != null ? Math.round(attrs.current_temperature) : '--';
+    let targetTemp = 72;
+    if (attrs.temperature != null) targetTemp = Math.round(attrs.temperature);
+    else if (attrs.target_temp_high != null && attrs.target_temp_low != null) targetTemp = Math.round((attrs.target_temp_high + attrs.target_temp_low) / 2);
+    else if (currentTemp !== '--') targetTemp = currentTemp;
+
+    const hvacMode = state.state || 'off';
+    const hvacModes = attrs.hvac_modes || ['off', 'heat', 'cool'];
+    const minTemp = attrs.min_temp || 45;
+    const maxTemp = attrs.max_temp || 95;
+    const hvacAction = attrs.hvac_action || '';
+    const humidity = attrs.current_humidity;
+
+    let _target = targetTemp;
+    let _mode = hvacMode;
+
+    // Use MacroAPI's thermostat rendering helpers
+    body.style.padding = '12px';
+    body.style.display = 'flex';
+    body.style.flexDirection = 'column';
+    body.style.alignItems = 'center';
+    body.style.opacity = '1';
+
+    body.innerHTML = MacroAPI._thermostatHTML(_target, currentTemp, _mode, hvacAction, minTemp, maxTemp, hvacModes, humidity);
+
+    // Make IDs unique per thermostat to avoid conflicts
+    const uniquify = (el) => {
+      el.querySelectorAll('[id]').forEach(node => {
+        node.id = node.id + '-' + index;
+      });
+    };
+    uniquify(body);
+
+    // Wire events manually (adapted from MacroAPI._wireThermostatEvents)
+    const svg = body.querySelector(`#thermo-svg-${index}`);
+    const dot = body.querySelector(`#thermo-dot-${index}`);
+    const arc = body.querySelector(`#thermo-arc-${index}`);
+    const targetText = body.querySelector(`#thermo-target-${index}`);
+    const CX = 140, CY = 140, R = 120;
+    const START_ANGLE = 135, END_ANGLE = 405, RANGE = END_ANGLE - START_ANGLE;
+
+    let sendTimer = null;
+
+    const updateVisual = () => {
+      const frac = (_target - minTemp) / (maxTemp - minTemp);
+      const angle = START_ANGLE + frac * RANGE;
+      const rad = angle * Math.PI / 180;
+      const dotX = CX + R * Math.cos(rad);
+      const dotY = CY + R * Math.sin(rad);
+      const modeColor = _mode === 'heat' ? '#ff6b35' : _mode === 'cool' ? '#4dabf7' : '#888';
+
+      if (dot) { dot.setAttribute('cx', dotX); dot.setAttribute('cy', dotY); dot.setAttribute('fill', modeColor); }
+      if (arc) {
+        const startRad = START_ANGLE * Math.PI / 180;
+        const endRad = Math.min(angle, END_ANGLE) * Math.PI / 180;
+        const sx = CX + R * Math.cos(startRad), sy = CY + R * Math.sin(startRad);
+        const ex = CX + R * Math.cos(endRad), ey = CY + R * Math.sin(endRad);
+        const sweep = (angle - START_ANGLE) > 180 ? 1 : 0;
+        arc.setAttribute('d', `M ${sx} ${sy} A ${R} ${R} 0 ${sweep} 1 ${ex} ${ey}`);
+        arc.setAttribute('stroke', modeColor);
+      }
+      if (targetText) targetText.textContent = _target + '\u00B0';
+    };
+
+    const scheduleSet = () => {
+      clearTimeout(sendTimer);
+      sendTimer = setTimeout(async () => {
+        try {
+          await fetch('/api/ha/service/climate/set_temperature', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': tabletId },
+            body: JSON.stringify({ entity_id: entityId, temperature: _target }),
+          });
+        } catch (e) { console.error('set_temperature error:', e); }
+      }, 600);
+    };
+
+    // +/- buttons
+    body.querySelector(`#thermo-minus-${index}`)?.addEventListener('click', () => {
+      if (_target > minTemp) { _target--; updateVisual(); scheduleSet(); }
+    });
+    body.querySelector(`#thermo-plus-${index}`)?.addEventListener('click', () => {
+      if (_target < maxTemp) { _target++; updateVisual(); scheduleSet(); }
+    });
+
+    // Drag on SVG
+    if (svg) {
+      let dragging = false;
+      const angleFromPoint = (px, py) => {
+        const rect = svg.getBoundingClientRect();
+        const svgW = parseFloat(svg.getAttribute('width')) || 280;
+        const svgH = parseFloat(svg.getAttribute('height')) || 280;
+        const scaleX = svgW / rect.width;
+        const scaleY = svgH / rect.height;
+        const x = (px - rect.left) * scaleX;
+        const y = (py - rect.top) * scaleY;
+        let deg = Math.atan2(y - CY, x - CX) * 180 / Math.PI;
+        if (deg < 0) deg += 360;
+        if (deg < START_ANGLE) deg += 360;
+        return deg;
+      };
+      const clampToTemp = (deg) => {
+        let d = deg;
+        if (d < START_ANGLE) d = START_ANGLE;
+        if (d > END_ANGLE) d = END_ANGLE;
+        const frac2 = (d - START_ANGLE) / RANGE;
+        return Math.round(minTemp + frac2 * (maxTemp - minTemp));
+      };
+      const onStart = (e) => {
+        const t = e.target;
+        if (t === dot || t.closest?.(`#thermo-dot-${index}`)) { dragging = true; e.preventDefault(); }
+      };
+      const onMove = (e) => {
+        if (!dragging) return;
+        e.preventDefault();
+        const pt = e.touches ? e.touches[0] : e;
+        const deg = angleFromPoint(pt.clientX, pt.clientY);
+        _target = clampToTemp(deg);
+        updateVisual();
+      };
+      const onEnd = () => { if (dragging) { dragging = false; scheduleSet(); } };
+      svg.addEventListener('mousedown', onStart);
+      svg.addEventListener('mousemove', onMove);
+      svg.addEventListener('mouseup', onEnd);
+      svg.addEventListener('mouseleave', onEnd);
+      svg.addEventListener('touchstart', onStart, { passive: false });
+      svg.addEventListener('touchmove', onMove, { passive: false });
+      svg.addEventListener('touchend', onEnd);
+    }
+
+    // Mode buttons
+    body.querySelectorAll('.thermo-mode-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const newMode = btn.dataset.mode;
+        _mode = newMode;
+        body.querySelectorAll('.thermo-mode-btn').forEach(b => {
+          b.classList.remove('active');
+          b.style.background = '';
+          b.style.color = '';
+        });
+        const activeColor = newMode === 'heat' ? '#ff6b35' : newMode === 'cool' ? '#4dabf7' : 'var(--accent)';
+        btn.classList.add('active');
+        btn.style.background = activeColor;
+        btn.style.color = '#fff';
+        updateVisual();
+        try {
+          await fetch('/api/ha/service/climate/set_hvac_mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': tabletId },
+            body: JSON.stringify({ entity_id: entityId, hvac_mode: newMode }),
+          });
+        } catch (e) { console.error('set_hvac_mode error:', e); }
+      });
+    });
+
+    // Poll for live updates
+    const pollTimer = setInterval(async () => {
+      if (!body.isConnected) { clearInterval(pollTimer); return; }
+      try {
+        const r = await fetch(`/api/ha/states/${entityId}`, { headers: { 'X-Tablet-ID': tabletId } });
+        const s = await r.json();
+        const a = s.attributes || {};
+        const curEl = body.querySelector(`#thermo-current-${index}`);
+        const actionEl = body.querySelector(`#thermo-action-${index}`);
+        const humEl = body.querySelector(`#thermo-humidity-${index}`);
+        if (curEl && a.current_temperature != null) curEl.textContent = Math.round(a.current_temperature) + '\u00B0';
+        if (actionEl) actionEl.textContent = MacroAPI._hvacActionLabel(a.hvac_action || '');
+        if (humEl && a.current_humidity != null) humEl.textContent = Math.round(a.current_humidity) + '% humidity';
+      } catch (e) { /* ignore poll errors */ }
+    }, 10000);
+    self._thermostatTimers.push(pollTimer);
   },
 
   // =====================================================================
@@ -1064,6 +1421,9 @@ const SettingsPage = {
   destroy() {
     if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
     if (this._switchPanelTimer) { clearInterval(this._switchPanelTimer); this._switchPanelTimer = null; }
+    if (this._ecoFlowTimer) { clearInterval(this._ecoFlowTimer); this._ecoFlowTimer = null; }
+    this._thermostatTimers.forEach(t => clearInterval(t));
+    this._thermostatTimers = [];
     this._haDomainSummary = null;
     clearTimeout(this._haSearchTimer);
   }
