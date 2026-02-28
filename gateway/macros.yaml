@@ -427,20 +427,17 @@ macros:
     icon: "restart_alt"
     confirm: "Restart the Main Church AppleTV?"
     steps:
-      # TODO: Replace with actual HA entity for AppleTV restart
       - type: ha_service
         domain: "switch"
         service: "turn_off"
-        data: { entity_id: "switch.TODO_main_appletv_power" }
-        on_fail: skip
-        message: "AppleTV power entity not configured yet"
+        data: { entity_id: "switch.sw_022_spare" }
       - type: delay
         seconds: 5
         message: "Waiting for power cycle"
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.TODO_main_appletv_power" }
+        data: { entity_id: "switch.sw_022_spare" }
         on_fail: skip
 
   # --- Main Church video source macros (inline MoIP switches) ---
@@ -562,10 +559,10 @@ macros:
         tx: 9
         rx: 47
       - type: moip_switch
-        tx: 8
+        tx: 9
         rx: 26
       - type: moip_switch
-        tx: 8
+        tx: 9
         rx: 35
       - type: moip_switch
         tx: 9
@@ -616,8 +613,11 @@ macros:
   main_source_livestream:
     label: "Live Stream"
     icon: "live_tv"
-    description: "Route Live Stream (TX 8) to all Main Church displays"
+    description: "Route Live Stream (TX 8) to Main Church displays"
     steps:
+      - type: moip_switch
+        tx: 8
+        rx: 47
       - type: moip_switch
         tx: 8
         rx: 34
@@ -635,31 +635,23 @@ macros:
         rx: 39
       - type: moip_switch
         tx: 8
-        rx: 22
-      - type: moip_switch
-        tx: 8
-        rx: 10
-      - type: moip_switch
-        tx: 8
         rx: 19
-      - type: moip_switch
-        tx: 8
-        rx: 47
       - type: moip_switch
         tx: 8
         rx: 26
       - type: moip_switch
         tx: 8
         rx: 35
-      - type: moip_switch
-        tx: 8
-        rx: 32
 
-  main_source_appletv:
-    label: "Apple TV"
+  main_source_appletv_no_pages:
+    label: "Apple TV (No Page #s)"
     icon: "cast"
-    description: "Route Apple TV (TX 24) to all Main Church displays"
+    description: "Route Apple TV (TX 24) directly to all Main Church displays (no page number overlay)"
     steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_022_spare" }
       - type: moip_switch
         tx: 24
         rx: 34
@@ -696,6 +688,60 @@ macros:
       - type: moip_switch
         tx: 24
         rx: 32
+      - type: moip_ir
+        receiver: 26
+        code: "IRSourceHDMI1"
+        message: "Setting Lounge TV to HDMI 1"
+
+  main_source_appletv_pages:
+    label: "Apple TV (Page #s)"
+    icon: "cast"
+    description: "Route Apple TV via ATEM (TX 27) to displays for page number overlay"
+    steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_022_spare" }
+      - type: moip_switch
+        tx: 27
+        rx: 47    # Chapel_HDMITransmitter
+      - type: moip_switch
+        tx: 27
+        rx: 34    # MainChurch_PortableTV
+      - type: moip_switch
+        tx: 27
+        rx: 36    # MainChurch_FrontLeft
+      - type: moip_switch
+        tx: 27
+        rx: 37    # MainChurch_FrontRight
+      - type: moip_switch
+        tx: 27
+        rx: 38    # MainChurch_RearRight
+      - type: moip_switch
+        tx: 27
+        rx: 39    # MainChurch_RearLeft
+      - type: moip_switch
+        tx: 24
+        rx: 22    # AV_SlideInput
+      - type: moip_switch
+        tx: 24
+        rx: 10    # AV_SlideInput_SDI
+      - type: moip_switch
+        tx: 24
+        rx: 19    # AV_AnnounceVideoInput
+      - type: moip_switch
+        tx: 8
+        rx: 26    # Lounge (Live Stream)
+      - type: moip_switch
+        tx: 8
+        rx: 35    # MainChurch_CryRoom (Live Stream)
+      - type: moip_switch
+        tx: 24
+        rx: 32    # AV_X32ReceiveToX32
+      - type: moip_ir
+        receiver: 26
+        code: "IRSourceHDMI1"
+        message: "Setting Lounge TV to HDMI 1"
 
   main_source_google_streamer:
     label: "Google Streamer"
@@ -1613,13 +1659,21 @@ buttons:
             field: "36.transmitter_id"
             on_value: "8"
             on_style: "active"
-        - label: "Apple TV"
+        - label: "Apple TV (No Page #s)"
           icon: "cast"
-          action: { type: macro, macro: main_source_appletv }
+          action: { type: macro, macro: main_source_appletv_no_pages }
           state:
             source: moip
             field: "36.transmitter_id"
             on_value: "24"
+            on_style: "active"
+        - label: "Apple TV (Page #s)"
+          icon: "cast"
+          action: { type: macro, macro: main_source_appletv_pages }
+          state:
+            source: moip
+            field: "36.transmitter_id"
+            on_value: "27"
             on_style: "active"
         - label: "Google Streamer"
           icon: "chromecast"
