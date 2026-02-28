@@ -27,7 +27,8 @@ const HomePage = {
   },
   init() {
     document.getElementById('btn-restart-app')?.addEventListener('click', () => {
-      location.reload();
+      // Use Fully Kiosk loadStartUrl to preserve the tablet's configured URL path
+      new Image().src = `http://127.0.0.1:2323/?password=admin&cmd=loadStartUrl&_t=${Date.now()}`;
     });
   },
   destroy() {}
