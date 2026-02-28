@@ -214,7 +214,11 @@ const StreamPage = {
 
       body.innerHTML = `
         <div style="flex:1;background:#111;display:flex;align-items:center;justify-content:center;min-height:0;position:relative;">
-          <img id="panel-cam-img" alt="${title}" style="max-width:100%;max-height:100%;object-fit:contain;">
+          <img id="panel-cam-img" alt="${title}" style="max-width:100%;max-height:100%;object-fit:contain;display:none;">
+          <div id="panel-cam-loading" style="position:absolute;display:flex;flex-direction:column;align-items:center;gap:8px;color:#aaa;">
+            <span class="material-icons" style="font-size:48px;">videocam</span>
+            <div style="font-size:13px;">Connecting...</div>
+          </div>
           <div class="ptz-overlay">
             <div class="ptz-overlay-row">
               <div class="ptz-grid">
@@ -274,22 +278,45 @@ const StreamPage = {
       });
       body.querySelector('[data-panel-ptz="home"]')?.addEventListener('click', () => PtzAPI.home(camId));
 
-      // Snapshot refresh loop
       const img = body.querySelector('#panel-cam-img');
-      const refreshPanel = () => {
-        if (!img || !img.isConnected) return;
-        const next = new Image();
-        next.onload = () => {
-          img.src = next.src;
-          self._panelFeedTimer = setTimeout(refreshPanel, 1000);
+      const loading = body.querySelector('#panel-cam-loading');
+      const hasLive = App.settings?.ptzCameras?.[camId]?.hasLive;
+
+      if (hasLive) {
+        img.src = `/api/ptz/${camId}/live`;
+        img.onload = () => {
+          img.style.display = '';
+          if (loading) loading.style.display = 'none';
         };
-        next.onerror = () => {
-          self._panelFeedTimer = setTimeout(refreshPanel, 3000);
+        img.onerror = () => {
+          // Live stream failed — fall back to snapshot polling
+          img.onload = null;
+          img.onerror = null;
+          self._startPanelSnapshotPolling(camId, img, loading);
         };
-        next.src = `/api/ptz/${camId}/snapshot?t=${Date.now()}`;
-      };
-      refreshPanel();
+      } else {
+        self._startPanelSnapshotPolling(camId, img, loading);
+      }
     });
+  },
+
+  _startPanelSnapshotPolling(camId, img, loading) {
+    const self = this;
+    const refresh = () => {
+      if (!img || !img.isConnected) return;
+      const next = new Image();
+      next.onload = () => {
+        img.src = next.src;
+        img.style.display = '';
+        if (loading) loading.style.display = 'none';
+        self._panelFeedTimer = setTimeout(refresh, 1000);
+      };
+      next.onerror = () => {
+        self._panelFeedTimer = setTimeout(refresh, 3000);
+      };
+      next.src = `/api/ptz/${camId}/snapshot?t=${Date.now()}`;
+    };
+    refresh();
   },
 
   async updateStatus() {
