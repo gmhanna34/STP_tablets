@@ -38,43 +38,77 @@ macros:
   chapel_tv_on:
     label: "Chapel TVs On"
     icon: "tv"
-    description: "Check battery power, send IR power-on, set HDMI input"
+    description: "Enable power supplies, send IR power-on, set HDMI input"
     steps:
-      - type: ha_check
-        entity: "switch.bat_chapeltv_1_ac_enabled"
-        expect: "on"
-        on_fail: abort
-        message: "Chapel TV 1 EcoFlow AC power is off — charge battery first"
-
-      - type: ha_check
-        entity: "switch.bat_chapeltv_2_ac_enabled"
-        expect: "on"
+      # Enable Chapel HDMI Transmitter and IR
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_1" }
         on_fail: skip
-        message: "Chapel TV 2 EcoFlow AC power is off (non-critical)"
-
+        message: "Turning on Chapel HDMI Transmitter"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_2" }
+        on_fail: skip
+        message: "Turning on Chapel Screens IR"
+      # Enable battery power for TVs
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.bat_chapeltv_1_ac_enabled" }
+        on_fail: skip
+        message: "Enabling Chapel TV 1 AC power"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.bat_chapeltv_2_ac_enabled" }
+        on_fail: skip
+        message: "Enabling Chapel TV 2 AC power"
+      # IR Power On - Round 1
       - type: moip_ir
         receiver: 5
         code: "IRPowerOn"
         message: "Sending power-on to Chapel TV 1"
-
       - type: moip_ir
         receiver: 6
         code: "IRPowerOn"
         message: "Sending power-on to Chapel TV 2"
-
+      - type: delay
+        seconds: 3
+        message: "Waiting for TVs to respond"
+      # IR Power On - Round 2
+      - type: moip_ir
+        receiver: 5
+        code: "IRPowerOn"
+        message: "Sending repeat power-on to Chapel TV 1"
+      - type: moip_ir
+        receiver: 6
+        code: "IRPowerOn"
+        message: "Sending repeat power-on to Chapel TV 2"
       - type: delay
         seconds: 5
         message: "Waiting for TVs to initialize"
-
+      # Set HDMI input
       - type: moip_ir
         receiver: 5
         code: "IRSourceHDMI1"
         message: "Setting Chapel TV 1 to HDMI 1"
-
       - type: moip_ir
         receiver: 6
         code: "IRSourceHDMI1"
         message: "Setting Chapel TV 2 to HDMI 1"
+      - type: delay
+        seconds: 3
+      - type: moip_ir
+        receiver: 5
+        code: "IRSourceHDMI1"
+        message: "Repeat HDMI 1 for Chapel TV 1"
+      - type: moip_ir
+        receiver: 6
+        code: "IRSourceHDMI1"
+        message: "Repeat HDMI 1 for Chapel TV 2"
 
   chapel_tv_off:
     label: "Chapel TVs Off"
@@ -85,26 +119,88 @@ macros:
         receiver: 5
         code: "IRPowerOff"
         message: "Powering off Chapel TV 1"
-
       - type: moip_ir
         receiver: 6
         code: "IRPowerOff"
         message: "Powering off Chapel TV 2"
-
+      - type: delay
+        seconds: 3
+      - type: moip_ir
+        receiver: 5
+        code: "IRPowerOff"
+        message: "Repeat power-off Chapel TV 1"
+      - type: moip_ir
+        receiver: 6
+        code: "IRPowerOff"
+        message: "Repeat power-off Chapel TV 2"
       - type: notify
         message: "Chapel TVs powered off"
 
   chapel_audio_on:
     label: "Chapel Audio On"
     icon: "mic"
-    description: "Turn on chapel audio via Home Assistant"
+    description: "Turn on shared audio components, chapel mics, amp, and routing"
     steps:
+      # Chapel microphones
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.chapel_audio_power" }
-        on_fail: abort
-        message: "Failed to turn on chapel audio power"
+        data: { entity_id: "switch.sw_024_chapelmics" }
+        on_fail: skip
+        message: "Turning on Chapel microphones"
+      # Shared audio components (X32, PA amp, sub)
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_019_2spare" }
+        on_fail: skip
+        message: "Turning on X32 Mixer"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_033_av_2socialhallandpaamp" }
+        on_fail: skip
+        message: "Turning on Social Hall & PA Amp (Kasa)"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_020_spare_plug4" }
+        on_fail: skip
+        message: "Turning on PA Amp"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_020_spare_plug5" }
+        on_fail: skip
+        message: "Turning on Main Audio Sub"
+      - type: delay
+        seconds: 5
+        message: "Waiting for shared audio to initialize"
+      # Chapel amplifier
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_020_spare_plug3" }
+        on_fail: skip
+        message: "Turning on Chapel Amplifier"
+      # Audio routing
+      - type: moip_switch
+        tx: 13
+        rx: 24
+        message: "Setting audio routing (TX 13 → RX 24)"
+      # WattBox IR outlets
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_2" }
+        on_fail: skip
+        message: "Turning on Chapel Screens IR"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_4" }
+        on_fail: skip
+        message: "Turning on Chapel IR Transmitter"
 
   chapel_audio_off:
     label: "Chapel Audio Off"
@@ -114,7 +210,17 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_off"
-        data: { entity_id: "switch.chapel_audio_power" }
+        data: { entity_id: "switch.sw_020_spare_plug3" }
+        on_fail: skip
+        message: "Turning off Chapel Amplifier"
+      - type: delay
+        seconds: 5
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.sw_024_chapelmics" }
+        on_fail: skip
+        message: "Turning off Chapel microphones"
 
   chapel_ac_on:
     label: "Chapel A/C On"
@@ -221,11 +327,82 @@ macros:
   main_video_on:
     label: "Video System On"
     icon: "tv"
-    description: "Power on all projectors and lower screens"
+    description: "Power on shared video, projectors, lower screens, cry room"
     steps:
+      # Shared video components
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_019_av_1moipcontroller" }
+        on_fail: skip
+        message: "Turning on MoIP controller"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_003_hall_leftspeaker2" }
+        on_fail: skip
+        message: "Turning on Blackmagic ATEM"
+      # Projector power switches (Kasa plugs)
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_034_mc_frontleft_new" }
+        on_fail: skip
+        message: "Powering on front-left projector outlet"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_035_mc_frontright" }
+        on_fail: skip
+        message: "Powering on front-right projector outlet"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_036_mc_rearright" }
+        on_fail: skip
+        message: "Powering on rear-right projector outlet"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_037_mc_rearleft" }
+        on_fail: skip
+        message: "Powering on rear-left projector outlet"
+      # Turn on Epson projectors
       - type: epson_all
         state: "on"
         message: "Powering on all projectors"
+      # Virtual switches for projectors
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.vs_epsonprojector1" }
+        on_fail: skip
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.vs_epsonprojector2" }
+        on_fail: skip
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.vs_epsonprojector3" }
+        on_fail: skip
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.vs_epsonprojector4" }
+        on_fail: skip
+      # Cry room TV on (IR to receiver 35)
+      - type: moip_ir
+        receiver: 35
+        code: "IRPowerOn"
+        message: "Turning on cry room TV"
+      - type: delay
+        seconds: 20
+      - type: moip_ir
+        receiver: 35
+        code: "IRSourceHDMI1"
+        message: "Setting cry room TV to HDMI 1"
       - type: notify
         message: "Main church video system turning on"
 
@@ -234,24 +411,114 @@ macros:
     icon: "tv_off"
     confirm: "Turn OFF the entire video system (all projectors + screens)?"
     steps:
+      # Turn off projectors
       - type: epson_all
         state: "off"
         message: "Powering off all projectors"
+      # Virtual switches off
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.vs_epsonprojector1" }
+        on_fail: skip
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.vs_epsonprojector2" }
+        on_fail: skip
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.vs_epsonprojector3" }
+        on_fail: skip
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.vs_epsonprojector4" }
+        on_fail: skip
+      # Cry room off
+      - type: moip_ir
+        receiver: 35
+        code: "IRPowerOff"
+        message: "Turning off cry room TV"
+      # Portables off (IR to receiver 34, sent twice)
+      - type: moip_ir
+        receiver: 34
+        code: "IRPowerOff"
+        message: "Turning off portables"
+      - type: delay
+        seconds: 2
+      - type: moip_ir
+        receiver: 34
+        code: "IRPowerOff"
+        message: "Repeat power-off for portables"
       - type: notify
         message: "Main church video system powered off"
 
   main_audio_on:
     label: "Audio System On"
     icon: "mic"
+    description: "Turn on shared audio, mics, amps, and routing"
     steps:
+      # Shared audio components
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.wattbox_outlet_1" }
+        data: { entity_id: "switch.sw_019_2spare" }
+        on_fail: skip
+        message: "Turning on X32 Mixer"
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.wattbox_outlet_2" }
+        data: { entity_id: "switch.sw_033_av_2socialhallandpaamp" }
+        on_fail: skip
+        message: "Turning on Social Hall & PA Amp (Kasa)"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_020_spare_plug4" }
+        on_fail: skip
+        message: "Turning on PA Amp"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_020_spare_plug5" }
+        on_fail: skip
+        message: "Turning on Main Audio Sub"
+      # Wireless mics and lapel mic
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_033_av_3spare" }
+        on_fail: skip
+        message: "Turning on Main Church wireless mics"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_025_av_lapelmic" }
+        on_fail: skip
+        message: "Turning on lapel mic"
+      - type: delay
+        seconds: 5
+        message: "Waiting for audio components to initialize"
+      # Amplifiers
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_020_spare_plug6" }
+        on_fail: skip
+        message: "Turning on Main Church Amplifier"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_020_spare_plug2" }
+        on_fail: skip
+        message: "Turning on Social Hall Amplifier"
+      # Audio routing
+      - type: moip_switch
+        tx: 13
+        rx: 24
+        message: "Setting audio routing (TX 13 → RX 24)"
 
   main_audio_off:
     label: "Audio System Off"
@@ -261,11 +528,23 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_off"
-        data: { entity_id: "switch.wattbox_outlet_1" }
+        data: { entity_id: "switch.sw_020_spare_plug6" }
+        on_fail: skip
+        message: "Turning off Main Church Amplifier"
+      - type: delay
+        seconds: 5
       - type: ha_service
         domain: "switch"
         service: "turn_off"
-        data: { entity_id: "switch.wattbox_outlet_2" }
+        data: { entity_id: "switch.sw_033_av_3spare" }
+        on_fail: skip
+        message: "Turning off wireless mics"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.sw_025_av_lapelmic" }
+        on_fail: skip
+        message: "Turning off lapel mic"
 
   main_proj_only_on:
     label: "Projectors Only On"
@@ -817,52 +1096,240 @@ macros:
   social_video_on:
     label: "Social Hall Video On"
     icon: "tv"
+    description: "Power on all 8 video wall panels via IR"
     steps:
-      # TODO: Replace with actual HA entity for Social Hall video/TV power
+      # Round 1: IR PowerOn to all 8 panels
+      - type: moip_ir
+        receiver: 1
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 2
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 3
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 4
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 5
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 6
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 7
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 8
+        code: "IRPowerOn"
+      - type: delay
+        seconds: 3
+        message: "Waiting for panels to respond"
+      # Round 2: Repeat PowerOn
+      - type: moip_ir
+        receiver: 1
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 2
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 3
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 4
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 5
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 6
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 7
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 8
+        code: "IRPowerOn"
+      - type: delay
+        seconds: 5
+        message: "Waiting for panels to initialize"
+      # Set all panels to HDMI1
+      - type: moip_ir
+        receiver: 1
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 2
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 3
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 4
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 5
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 6
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 7
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 8
+        code: "IRSourceHDMI1"
+      # Turn on shared video infrastructure
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.TODO_social_video_power" }
+        data: { entity_id: "switch.sw_019_av_1moipcontroller" }
         on_fail: skip
-        message: "Social Hall video entity not configured yet"
+        message: "Turning on MoIP controller"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_003_hall_leftspeaker2" }
+        on_fail: skip
+        message: "Turning on Blackmagic ATEM"
+      - type: notify
+        message: "Social Hall video wall powering on"
 
   social_video_off:
     label: "Social Hall Video Off"
     icon: "tv_off"
-    confirm: "Turn off Social Hall video?"
+    confirm: "Turn off Social Hall video wall?"
     steps:
-      # TODO: Replace with actual HA entity for Social Hall video/TV power
-      - type: ha_service
-        domain: "switch"
-        service: "turn_off"
-        data: { entity_id: "switch.TODO_social_video_power" }
-        on_fail: skip
-        message: "Social Hall video entity not configured yet"
+      # Round 1: IR PowerOff to all 8 panels
+      - type: moip_ir
+        receiver: 1
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 2
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 3
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 4
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 5
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 6
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 7
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 8
+        code: "IRPowerOff"
+      - type: delay
+        seconds: 3
+      # Round 2: Repeat PowerOff
+      - type: moip_ir
+        receiver: 1
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 2
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 3
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 4
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 5
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 6
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 7
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 8
+        code: "IRPowerOff"
+      - type: notify
+        message: "Social Hall video wall powered off"
 
   social_audio_on:
     label: "Social Hall Audio On"
     icon: "mic"
+    description: "Turn on shared audio, mics, amps, and audio routing"
     steps:
-      # TODO: Replace with actual HA entity for Social Hall audio power
+      # Shared audio components (X32 mixer, PA amp, sub)
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.TODO_social_audio_power" }
+        data: { entity_id: "switch.sw_019_2spare" }
         on_fail: skip
-        message: "Social Hall audio entity not configured yet"
+        message: "Turning on X32 Mixer"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_033_av_2socialhallandpaamp" }
+        on_fail: skip
+        message: "Turning on Social Hall & PA Amp (Kasa)"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_020_spare_plug4" }
+        on_fail: skip
+        message: "Turning on PA Amp"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_020_spare_plug5" }
+        on_fail: skip
+        message: "Turning on Main Audio Sub"
+      - type: delay
+        seconds: 5
+        message: "Waiting for shared audio to initialize"
+      # Social Hall specific audio
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_5" }
+        on_fail: skip
+        message: "Turning on Social Hall Mics 1"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_6" }
+        on_fail: skip
+        message: "Turning on Social Hall Mics 2"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_020_spare_plug2" }
+        on_fail: skip
+        message: "Turning on Social Hall Amplifier"
+      # Audio routing
+      - type: moip_switch
+        tx: 13
+        rx: 24
+        message: "Setting audio routing (TX 13 → RX 24)"
 
   social_audio_off:
     label: "Social Hall Audio Off"
     icon: "mic_off"
     confirm: "Turn off Social Hall audio?"
     steps:
-      # TODO: Replace with actual HA entity for Social Hall audio power
       - type: ha_service
         domain: "switch"
         service: "turn_off"
-        data: { entity_id: "switch.TODO_social_audio_power" }
+        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_5" }
         on_fail: skip
-        message: "Social Hall audio entity not configured yet"
+        message: "Turning off Social Hall Mics 1"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_6" }
+        on_fail: skip
+        message: "Turning off Social Hall Mics 2"
 
   social_ac_on:
     label: "Social Hall A/C On"
@@ -1255,8 +1722,16 @@ macros:
         code: "IRPowerOn"
         message: "Sending power-on to Conference Room Left TV"
       - type: delay
-        seconds: 5
+        seconds: 4
         message: "Waiting for TV to initialize"
+      - type: moip_ir
+        receiver: 28
+        code: "IRPowerOn"
+        message: "Sending repeat power-on to Left TV"
+      - type: moip_switch
+        tx: 8
+        rx: 28
+        message: "Setting default source to Live Stream"
       - type: moip_ir
         receiver: 28
         code: "IRSourceHDMI1"
@@ -1270,7 +1745,13 @@ macros:
       - type: moip_ir
         receiver: 28
         code: "IRPowerOff"
-        message: "Powering off Conference Room Left TV"
+        message: "Sending power-off to Left TV"
+      - type: delay
+        seconds: 4
+      - type: moip_ir
+        receiver: 28
+        code: "IRPowerOff"
+        message: "Sending repeat power-off to Left TV"
 
   confroom_left_source_laptop:
     label: "Left TV Laptop"
@@ -1287,6 +1768,9 @@ macros:
       - type: moip_switch
         tx: 8
         rx: 28
+      - type: moip_ir
+        receiver: 28
+        code: "IRSourceHDMI1"
 
   confroom_left_source_logo:
     label: "Left TV LOGO"
@@ -1295,6 +1779,9 @@ macros:
       - type: moip_switch
         tx: 16
         rx: 28
+      - type: moip_ir
+        receiver: 28
+        code: "IRSourceHDMI1"
 
   confroom_left_source_announcements:
     label: "Left TV Announcements"
@@ -1303,6 +1790,40 @@ macros:
       - type: moip_switch
         tx: 9
         rx: 28
+      - type: moip_ir
+        receiver: 28
+        code: "IRSourceHDMI1"
+
+  confroom_left_source_slides:
+    label: "Left TV Slides"
+    icon: "slideshow"
+    steps:
+      - type: moip_switch
+        tx: 22
+        rx: 28
+      - type: moip_ir
+        receiver: 28
+        code: "IRSourceHDMI1"
+
+  confroom_left_source_windows:
+    label: "Left TV Windows Display"
+    icon: "desktop_windows"
+    steps:
+      - type: moip_switch
+        tx: 15
+        rx: 28
+      - type: moip_ir
+        receiver: 28
+        code: "IRSourceHDMI1"
+
+  confroom_left_source_appletv:
+    label: "Left TV Apple TV"
+    icon: "cast"
+    steps:
+      - type: moip_ir
+        receiver: 28
+        code: "IRSourceHDMI2"
+        message: "Switching Left TV to Apple TV (HDMI 2)"
 
   # --- Right TV (RX 29 = ConfRoom_Right) ---
 
@@ -1315,8 +1836,16 @@ macros:
         code: "IRPowerOn"
         message: "Sending power-on to Conference Room Right TV"
       - type: delay
-        seconds: 5
+        seconds: 4
         message: "Waiting for TV to initialize"
+      - type: moip_ir
+        receiver: 29
+        code: "IRPowerOn"
+        message: "Sending repeat power-on to Right TV"
+      - type: moip_switch
+        tx: 8
+        rx: 29
+        message: "Setting default source to Live Stream"
       - type: moip_ir
         receiver: 29
         code: "IRSourceHDMI1"
@@ -1330,7 +1859,13 @@ macros:
       - type: moip_ir
         receiver: 29
         code: "IRPowerOff"
-        message: "Powering off Conference Room Right TV"
+        message: "Sending power-off to Right TV"
+      - type: delay
+        seconds: 4
+      - type: moip_ir
+        receiver: 29
+        code: "IRPowerOff"
+        message: "Sending repeat power-off to Right TV"
 
   confroom_right_source_laptop:
     label: "Right TV Laptop"
@@ -1347,6 +1882,9 @@ macros:
       - type: moip_switch
         tx: 8
         rx: 29
+      - type: moip_ir
+        receiver: 29
+        code: "IRSourceHDMI1"
 
   confroom_right_source_logo:
     label: "Right TV LOGO"
@@ -1355,6 +1893,9 @@ macros:
       - type: moip_switch
         tx: 16
         rx: 29
+      - type: moip_ir
+        receiver: 29
+        code: "IRSourceHDMI1"
 
   confroom_right_source_announcements:
     label: "Right TV Announcements"
@@ -1363,6 +1904,40 @@ macros:
       - type: moip_switch
         tx: 9
         rx: 29
+      - type: moip_ir
+        receiver: 29
+        code: "IRSourceHDMI1"
+
+  confroom_right_source_slides:
+    label: "Right TV Slides"
+    icon: "slideshow"
+    steps:
+      - type: moip_switch
+        tx: 22
+        rx: 29
+      - type: moip_ir
+        receiver: 29
+        code: "IRSourceHDMI1"
+
+  confroom_right_source_windows:
+    label: "Right TV Windows Display"
+    icon: "desktop_windows"
+    steps:
+      - type: moip_switch
+        tx: 15
+        rx: 29
+      - type: moip_ir
+        receiver: 29
+        code: "IRSourceHDMI1"
+
+  confroom_right_source_appletv:
+    label: "Right TV Apple TV"
+    icon: "cast"
+    steps:
+      - type: moip_ir
+        receiver: 29
+        code: "IRSourceHDMI2"
+        message: "Switching Right TV to Apple TV (HDMI 2)"
 
   # --- Video Conference System ---
 
@@ -1370,26 +1945,66 @@ macros:
     label: "Video Conference On"
     icon: "video_call"
     steps:
-      # TODO: Replace with actual HA entity for video conference system power
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.TODO_confroom_vidconf_power" }
+        data: { entity_id: "switch.sw_030_confroom_1owl1" }
         on_fail: skip
-        message: "Video conference power entity not configured yet"
+        message: "Turning on Owl Camera 1"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_030_confroom_2owl2" }
+        on_fail: skip
+        message: "Turning on Owl Camera 2"
+      - type: moip_switch
+        tx: 5
+        rx: 28
+      - type: moip_switch
+        tx: 5
+        rx: 29
+      - type: moip_ir
+        receiver: 28
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 29
+        code: "IRSourceHDMI1"
 
   confroom_vidconf_off:
     label: "Video Conference Off"
     icon: "call_end"
     confirm: "Turn off Video Conference system?"
     steps:
-      # TODO: Replace with actual HA entity for video conference system power
       - type: ha_service
         domain: "switch"
         service: "turn_off"
-        data: { entity_id: "switch.TODO_confroom_vidconf_power" }
+        data: { entity_id: "switch.sw_030_confroom_1owl1" }
         on_fail: skip
-        message: "Video conference power entity not configured yet"
+        message: "Turning off Owl Camera 1"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.sw_030_confroom_2owl2" }
+        on_fail: skip
+        message: "Turning off Owl Camera 2"
+
+  confroom_appletv_restart:
+    label: "Restart Conference Room AppleTV"
+    icon: "restart_alt"
+    confirm: "Restart the Conference Room AppleTV?"
+    steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.sw_023_conferenceroom_appletv" }
+      - type: delay
+        seconds: 5
+        message: "Waiting for power cycle"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_023_conferenceroom_appletv" }
+        on_fail: skip
 
 
 # =============================================================================
@@ -1525,7 +2140,7 @@ buttons:
           action: { type: macro, macro: chapel_audio_on }
           state:
             source: ha
-            entity: "switch.chapel_audio_power"
+            entity: "switch.sw_020_spare_plug3"
             on_value: "on"
             on_style: "active"
         - label: "Audio Off"
@@ -1626,7 +2241,7 @@ buttons:
           style: "large"
           state:
             source: ha
-            entity: "switch.wattbox_outlet_1"
+            entity: "switch.sw_020_spare_plug6"
             on_value: "on"
             on_style: "active"
         - label: "Off"
@@ -2090,6 +2705,9 @@ buttons:
           icon: "call_end"
           action: { type: macro, macro: confroom_vidconf_off }
           style: "large danger"
+        - label: "AppleTV Restart"
+          icon: "restart_alt"
+          action: { type: macro, macro: confroom_appletv_restart }
 
     - section: "A/C"
       cols: 4
@@ -2143,6 +2761,25 @@ buttons:
             field: "28.transmitter_id"
             on_value: "9"
             on_style: "active"
+        - label: "Slides"
+          icon: "slideshow"
+          action: { type: macro, macro: confroom_left_source_slides }
+          state:
+            source: moip
+            field: "28.transmitter_id"
+            on_value: "22"
+            on_style: "active"
+        - label: "Windows Display"
+          icon: "desktop_windows"
+          action: { type: macro, macro: confroom_left_source_windows }
+          state:
+            source: moip
+            field: "28.transmitter_id"
+            on_value: "15"
+            on_style: "active"
+        - label: "Apple TV"
+          icon: "cast"
+          action: { type: macro, macro: confroom_left_source_appletv }
 
     - section: "Right TV Sources"
       items:
@@ -2178,3 +2815,22 @@ buttons:
             field: "29.transmitter_id"
             on_value: "9"
             on_style: "active"
+        - label: "Slides"
+          icon: "slideshow"
+          action: { type: macro, macro: confroom_right_source_slides }
+          state:
+            source: moip
+            field: "29.transmitter_id"
+            on_value: "22"
+            on_style: "active"
+        - label: "Windows Display"
+          icon: "desktop_windows"
+          action: { type: macro, macro: confroom_right_source_windows }
+          state:
+            source: moip
+            field: "29.transmitter_id"
+            on_value: "15"
+            on_style: "active"
+        - label: "Apple TV"
+          icon: "cast"
+          action: { type: macro, macro: confroom_right_source_appletv }
