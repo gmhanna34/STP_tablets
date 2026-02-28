@@ -2141,6 +2141,83 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             result["buttons"] = button_defs
         return jsonify(result), 200
 
+    @app.route("/api/macros/switches")
+    def api_macros_switches():
+        """Return all switch entity_ids used by a page's macros (recursive)."""
+        page = request.args.get("page", "")
+        if not page:
+            return jsonify({"error": "page parameter required"}), 400
+
+        sections = button_defs.get(page, [])
+        if not sections:
+            return jsonify({"switches": []}), 200
+
+        # Collect all macro keys referenced by this page's buttons
+        macro_keys = set()
+        for section in sections:
+            for item in section.get("items", []):
+                action = item.get("action", {})
+                if action.get("type") == "macro" and action.get("macro"):
+                    macro_keys.add(action["macro"])
+                toggle = item.get("toggle")
+                if toggle:
+                    for branch in ("on", "off"):
+                        ba = (toggle.get(branch) or {}).get("action", {})
+                        if ba.get("type") == "macro" and ba.get("macro"):
+                            macro_keys.add(ba["macro"])
+
+        # Recursively walk macro steps to find all switch.* entity_ids
+        switch_ids = set()
+        visited = set()
+
+        def _walk_macro(key, depth=0):
+            if depth > 5 or key in visited:
+                return
+            visited.add(key)
+            macro = macro_defs.get(key)
+            if not macro:
+                return
+            for step in macro.get("steps", []):
+                stype = step.get("type", "")
+                if stype == "ha_service":
+                    eid = (step.get("data") or {}).get("entity_id", "")
+                    if eid.startswith("switch."):
+                        switch_ids.add(eid)
+                elif stype == "ha_check":
+                    eid = step.get("entity", "")
+                    if eid.startswith("switch."):
+                        switch_ids.add(eid)
+                elif stype == "macro":
+                    child = step.get("macro", "")
+                    if child:
+                        _walk_macro(child, depth + 1)
+                elif stype == "condition":
+                    for branch_key in ("then", "else"):
+                        for sub in step.get(branch_key, []):
+                            if sub.get("type") == "ha_service":
+                                eid = (sub.get("data") or {}).get("entity_id", "")
+                                if eid.startswith("switch."):
+                                    switch_ids.add(eid)
+
+        for mk in macro_keys:
+            _walk_macro(mk)
+
+        # Also collect switch entities from toggle state bindings on buttons
+        for section in sections:
+            for item in section.get("items", []):
+                toggle = item.get("toggle")
+                if toggle:
+                    tst = toggle.get("state", {})
+                    if tst.get("source") == "ha":
+                        eid = tst.get("entity", "")
+                        if eid.startswith("switch."):
+                            switch_ids.add(eid)
+
+        # Filter out TODO placeholders
+        switch_ids = {s for s in switch_ids if "TODO" not in s.upper()}
+
+        return jsonify({"switches": sorted(switch_ids)}), 200
+
     @app.route("/api/macro/execute", methods=["POST"])
     def api_macro_execute():
         """Execute a macro by key, optionally skipping selected steps."""

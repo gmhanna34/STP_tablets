@@ -355,7 +355,7 @@ body {
   gap: 2px;
   padding: 4px 8px;
   font-size: 13px;
-  color: var(--accent);
+  color: var(--sp-dark);
   text-decoration: none;
   cursor: pointer;
   border-radius: 6px;
@@ -366,7 +366,7 @@ body {
 }
 
 .section-link:hover {
-  background: rgba(255, 140, 0, 0.1);
+  background: rgba(52, 59, 61, 0.1);
   text-decoration: underline;
 }
 
@@ -1970,7 +1970,7 @@ body {
 
 .switch-panel-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
 
@@ -2000,9 +2000,6 @@ body {
 .switch-name {
   font-size: 14px;
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .switch-toggle {

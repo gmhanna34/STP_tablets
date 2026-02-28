@@ -1374,7 +1374,7 @@ const SettingsPage = {
             const attrStr = attrKeys.map(k => `${k}: ${JSON.stringify(attrs[k])}`).join(', ');
             const truncAttrs = attrStr.length > 120 ? attrStr.substring(0, 120) + '...' : attrStr;
             return `<tr style="border-bottom:1px solid var(--border);" class="ha-entity-row" data-entity-id="${e.entity_id}">
-              <td style="padding:6px 8px;color:var(--info);cursor:pointer;white-space:nowrap;" title="Click to copy">${e.entity_id}</td>
+              <td style="padding:6px 8px;color:var(--text);font-weight:bold;cursor:pointer;white-space:nowrap;" title="Click to copy">${e.entity_id}</td>
               <td style="padding:6px 8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.friendly_name || '--'}</td>
               <td style="padding:6px 8px;font-weight:bold;">${e.state || '--'}</td>
               <td style="padding:6px 8px;color:var(--text-secondary);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${attrStr}">${truncAttrs || '--'}</td>

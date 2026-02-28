@@ -1230,4 +1230,134 @@ const MacroAPI = {
     }
   },
 
+  // -----------------------------------------------------------------------
+  // Advanced Power Settings panel — shows all switches used by a room
+  // -----------------------------------------------------------------------
+
+  _powerPanelTimer: null,
+
+  async openPowerPanel(roomId) {
+    // Fetch switch entity_ids for this room from the gateway
+    let switchIds;
+    try {
+      const resp = await fetch(`/api/macros/switches?page=${roomId}`, {
+        headers: { 'X-Tablet-ID': this.tabletId },
+        signal: AbortSignal.timeout(5000),
+      });
+      const data = await resp.json();
+      switchIds = data.switches || [];
+    } catch (e) {
+      console.error('openPowerPanel: failed to fetch switches', e);
+      App.showToast('Failed to load power settings', 3000, 'error');
+      return;
+    }
+
+    if (switchIds.length === 0) {
+      App.showToast('No switches found for this room');
+      return;
+    }
+
+    if (this._powerPanelTimer) {
+      clearInterval(this._powerPanelTimer);
+      this._powerPanelTimer = null;
+    }
+
+    App.showPanel('Advanced Power Settings', async (body) => {
+      body.innerHTML = '<div style="text-align:center;padding:24px;opacity:0.5;">Loading switches...</div>';
+
+      const renderSwitches = async () => {
+        // Fetch current states for all switch entities
+        let entities = [];
+        try {
+          const resp = await fetch('/api/ha/entities?domain=switch', {
+            headers: { 'X-Tablet-ID': this.tabletId },
+            signal: AbortSignal.timeout(5000),
+          });
+          const data = await resp.json();
+          const allEntities = [];
+          for (const [, info] of Object.entries(data.domains || {})) {
+            for (const ent of (info.entities || [])) {
+              allEntities.push(ent);
+            }
+          }
+          // Filter to only our switch IDs
+          const idSet = new Set(switchIds);
+          entities = allEntities.filter(e => idSet.has(e.entity_id));
+        } catch (e) {
+          console.error('openPowerPanel: failed to fetch states', e);
+          return;
+        }
+
+        // Sort: match the order of switchIds
+        const orderMap = {};
+        switchIds.forEach((id, i) => { orderMap[id] = i; });
+        entities.sort((a, b) => (orderMap[a.entity_id] ?? 999) - (orderMap[b.entity_id] ?? 999));
+
+        // Add any missing switches (not returned by HA) as unknown
+        const foundIds = new Set(entities.map(e => e.entity_id));
+        for (const id of switchIds) {
+          if (!foundIds.has(id)) {
+            entities.push({ entity_id: id, state: 'unknown', friendly_name: '' });
+          }
+        }
+
+        const cardsHtml = entities.map(e => {
+          const raw = e.friendly_name || e.entity_id.split('.').pop() || e.entity_id;
+          const name = raw.replace(/^sw[_ ]|^wb[_ ]|^bat[_ ]/i, '').replace(/_/g, ' ');
+          const isOn = e.state === 'on';
+          return `<div class="switch-card${isOn ? ' switch-on' : ''}">
+            <div class="switch-info">
+              <span class="status-dot" style="background:${isOn ? 'var(--ok)' : 'var(--down)'};width:8px;height:8px;border-radius:50%;display:inline-block;"></span>
+              <span class="switch-name">${name}</span>
+            </div>
+            <button class="btn switch-toggle${isOn ? ' on' : ' off'}" data-entity="${e.entity_id}">
+              <span class="material-icons">power_settings_new</span>
+            </button>
+          </div>`;
+        }).join('');
+
+        body.innerHTML = `<div class="switch-panel-grid">${cardsHtml}</div>`;
+
+        // Wire toggle buttons
+        body.querySelectorAll('.switch-toggle').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const entityId = btn.dataset.entity;
+            btn.disabled = true;
+            try {
+              await fetch('/api/ha/service/switch/toggle', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Tablet-ID': this.tabletId,
+                },
+                body: JSON.stringify({ entity_id: entityId }),
+              });
+              // Brief delay then refresh
+              setTimeout(() => renderSwitches(), 500);
+            } catch (e) {
+              App.showToast('Toggle failed', 2000, 'error');
+            } finally {
+              btn.disabled = false;
+            }
+          });
+        });
+      };
+
+      await renderSwitches();
+
+      // Auto-refresh every 5 seconds
+      this._powerPanelTimer = setInterval(renderSwitches, 5000);
+
+      // Clean up on panel close
+      const observer = new MutationObserver(() => {
+        if (!document.contains(body)) {
+          clearInterval(this._powerPanelTimer);
+          this._powerPanelTimer = null;
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    });
+  },
+
 };

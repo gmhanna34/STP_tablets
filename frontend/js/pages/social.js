@@ -12,6 +12,10 @@ const SocialPage = {
         <div id="social-macro-buttons">
           <div class="text-center" style="opacity:0.5;">Loading controls...</div>
         </div>
+        <a class="section-link" href="#" id="social-power-link">
+          <span class="material-icons">chevron_right</span>
+          <span>Advanced Power Settings</span>
+        </a>
       </div>
     `;
   },
@@ -31,6 +35,15 @@ const SocialPage = {
       MacroAPI.updateButtonStates(btnContainer, this._sections);
     };
     MacroAPI.onStateChange(this._stateHandler);
+
+    // Wire Advanced Power Settings link
+    const powerLink = document.getElementById('social-power-link');
+    if (powerLink) {
+      powerLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        MacroAPI.openPowerPanel('social');
+      });
+    }
   },
 
   destroy() {
