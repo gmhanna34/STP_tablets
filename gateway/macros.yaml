@@ -2297,20 +2297,6 @@ buttons:
           action: { type: macro, macro: main_video_off }
           style: "large danger"
           confirm: "Turn OFF the entire video system (all projectors + screens)?"
-        - label: "Projectors Only On"
-          icon: "tv"
-          action: { type: macro, macro: main_proj_only_on }
-        - label: "Projectors Only Off"
-          icon: "tv_off"
-          action: { type: macro, macro: main_proj_only_off }
-          style: "danger"
-        - label: "Portables Only On"
-          icon: "speaker"
-          action: { type: macro, macro: main_port_only_on }
-        - label: "Portables Only Off"
-          icon: "speaker"
-          action: { type: macro, macro: main_port_only_off }
-          style: "danger"
 
     - section: "Audio System"
       cols: 4
@@ -2458,6 +2444,20 @@ buttons:
       display: "link"
       cols: 4
       items:
+        - label: "Projectors Only On"
+          icon: "tv"
+          action: { type: macro, macro: main_proj_only_on }
+        - label: "Projectors Only Off"
+          icon: "tv_off"
+          action: { type: macro, macro: main_proj_only_off }
+          style: "danger"
+        - label: "Portables Only On"
+          icon: "speaker"
+          action: { type: macro, macro: main_port_only_on }
+        - label: "Portables Only Off"
+          icon: "speaker"
+          action: { type: macro, macro: main_port_only_off }
+          style: "danger"
         - label: "PRJ Front Left"
           icon: "tv"
           toggle:

@@ -352,9 +352,10 @@ body {
 .section-link {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 4px 8px;
-  font-size: 13px;
+  gap: 4px;
+  padding: 6px 10px;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--sp-dark);
   text-decoration: none;
   cursor: pointer;
@@ -371,7 +372,7 @@ body {
 }
 
 .section-link .material-icons {
-  font-size: 16px;
+  font-size: 18px;
 }
 
 /* Narrow sections: force 1-column grid */
