@@ -206,25 +206,38 @@ const MacroAPI = {
     // Use page-grid so sections can sit side-by-side via cols
     container.classList.add('page-grid');
 
-    container.innerHTML = sections.map((section, secIdx) => {
+    // Build HTML, grouping consecutive "link" sections into flex rows
+    const htmlParts = [];
+    let linkBuf = [];
+
+    const flushLinks = () => {
+      if (linkBuf.length === 0) return;
+      htmlParts.push(`<div class="section-link-row">${linkBuf.join('')}</div>`);
+      linkBuf = [];
+    };
+
+    sections.forEach((section, secIdx) => {
       const isLink = section.display === 'link';
       const cols = section.cols ? Math.min(section.cols, 12) : 12;
       const colStyle = cols < 12 ? ` col-span-${cols}` : '';
 
-      // "link" sections render as small text links (not full card)
       if (isLink) {
-        return `<a class="section-link${colStyle}" data-link-section="${secIdx}" href="#">
+        linkBuf.push(`<a class="section-link${colStyle}" data-link-section="${secIdx}" href="#">
           <span class="material-icons">chevron_right</span>
           <span>${this._escapeHtml(section.section || '')}</span>
-        </a>`;
+        </a>`);
+        return;
       }
+
+      // Flush any buffered links before a non-link section
+      flushLinks();
 
       const isCollapsed = section.collapsed === true;
       const collapseClass = isCollapsed ? ' collapsed' : '';
       const collapseAttr = isCollapsed ? ' data-collapsible="true"' : '';
       const sectionDisabled = this._checkDisabledWhen(section.disabled_when);
 
-      return `
+      htmlParts.push(`
       <div class="control-section${collapseClass}${colStyle}"${collapseAttr}>
         <div class="section-title${isCollapsed ? ' section-title-toggle' : ''}">${section.section || ''}${isCollapsed ? '<span class="material-icons section-toggle-icon">expand_more</span>' : ''}</div>
         <div class="control-grid${isCollapsed ? ' section-content-collapsed' : ''}" style="grid-template-columns: repeat(${cols <= 4 ? 1 : 'auto-fit'}, ${cols <= 4 ? '1fr' : 'minmax(120px, 1fr)'});">
@@ -232,8 +245,13 @@ const MacroAPI = {
             return this._renderButton(item, idx, section, macros, sectionDisabled);
           }).join('')}
         </div>
-      </div>`;
-    }).join('');
+      </div>`);
+    });
+
+    // Flush trailing links
+    flushLinks();
+
+    container.innerHTML = htmlParts.join('');
 
     // Attach collapsible section toggle handlers
     container.querySelectorAll('.section-title-toggle').forEach(title => {

@@ -30,31 +30,15 @@ const StreamPage = {
           </div>
         </div>
 
-		<!-- Change to: left half -->
-		<div class="control-section col-span-6">
+        <!-- Scenes: left half -->
+        <div class="control-section col-span-6">
           <div class="section-title">Scenes</div>
           <div class="scene-grid" id="scene-grid">
             <div class="text-center" style="grid-column:1/-1;opacity:0.5;">Loading scenes...</div>
           </div>
         </div>
-		
-        <!-- Active Camera Snapshot: click to open PTZ controls -->
-		<!-- Change to: right half, placed immediately after Scenes -->
-		<div class="control-section col-span-6">
-          <div class="section-title">Active Camera</div>
-          <div style="max-width:500px;">
-            <div class="camera-card">
-              <div class="camera-header" id="camera-label">No active camera</div>
-              <div class="camera-feed" id="camera-feed" style="cursor:pointer;">
-                <span class="material-icons">videocam</span>
-                <div style="font-size:11px;margin-top:4px;">Waiting for scene...</div>
-              </div>
-            </div>
-            <div class="text-center" style="font-size:11px;opacity:0.5;margin-top:4px;">Tap image to open camera controls</div>
-          </div>
-		</div>
 
-        <!-- Active Camera Snapshot: right half, click to open PTZ controls -->
+        <!-- Active Camera Snapshot: right half, spans 2 rows -->
         <div class="control-section col-span-6" style="grid-row: span 2;">
           <div class="section-title">Active Camera</div>
           <div class="camera-card">

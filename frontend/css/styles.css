@@ -375,6 +375,14 @@ body {
   font-size: 18px;
 }
 
+.section-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Narrow sections: force 1-column grid */
 .control-section.col-span-3 .control-grid,
 .control-section.col-span-4 .control-grid {

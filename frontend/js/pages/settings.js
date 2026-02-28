@@ -88,18 +88,27 @@ const SettingsPage = {
       <div id="settings-tab-audio" class="settings-tab-content" style="display:none;">
         <div class="page-grid">
           <div class="control-section">
-            <div class="section-title">Audio Mixer (X32)</div>
+            <div class="section-title">Quick Actions</div>
+            <div class="control-grid" style="grid-template-columns:repeat(4, 1fr);" id="x32-quick-actions">
+              <button class="btn" id="x32-mute-all"><span class="material-icons">volume_off</span><span class="btn-label">Mute All</span></button>
+              <button class="btn" id="x32-unmute-all"><span class="material-icons">volume_up</span><span class="btn-label">Unmute All</span></button>
+              <button class="btn" id="x32-reload-scene"><span class="material-icons">refresh</span><span class="btn-label">Reload Scene</span></button>
+              <button class="btn" id="x32-mute-band"><span class="material-icons">music_off</span><span class="btn-label">Mute Music</span></button>
+            </div>
+          </div>
+          <div class="control-section">
+            <div class="section-title">Mixer Scenes</div>
+            <div class="scene-grid" id="x32-scenes"></div>
+          </div>
+          <div class="control-section">
+            <div class="section-title">Input Channels</div>
             <div id="mixer-container">
               <div class="text-center" style="opacity:0.5;">Loading mixer status...</div>
             </div>
-            <div style="margin-top:10px;">
-              <div class="section-title" style="font-size:14px;">Mixer Scenes</div>
-              <div class="scene-grid" id="x32-scenes"></div>
-            </div>
-            <div style="margin-top:10px;">
-              <div class="section-title" style="font-size:14px;">Aux Channels</div>
-              <div id="aux-container" class="mixer-grid"></div>
-            </div>
+          </div>
+          <div class="control-section">
+            <div class="section-title">Bus / Aux Outputs</div>
+            <div id="aux-container" class="mixer-grid"></div>
           </div>
         </div>
       </div>
@@ -340,6 +349,7 @@ const SettingsPage = {
     // ── Audio tab ──────────────────────────────────────────────────
     this.loadMixer();
     this.pollTimer = setInterval(() => this.loadMixer(), 5000);
+    this._wireX32QuickActions();
 
     // ── Schedule tab ───────────────────────────────────────────────
     this.loadSchedules();
@@ -1085,6 +1095,64 @@ const SettingsPage = {
         });
       });
     }
+  },
+
+  _wireX32QuickActions() {
+    document.getElementById('x32-mute-all')?.addEventListener('click', async () => {
+      if (!await App.showConfirm('Mute ALL input channels?')) return;
+      const state = X32API.state;
+      for (const ch of state.channels) {
+        if (ch.name && ch.name.trim() !== '' && ch.muted !== 'ON' && ch.muted !== '1') {
+          await X32API.muteChannel(ch.id);
+        }
+      }
+      App.showToast('All channels muted');
+      setTimeout(() => this.loadMixer(), 500);
+    });
+
+    document.getElementById('x32-unmute-all')?.addEventListener('click', async () => {
+      if (!await App.showConfirm('Unmute ALL input channels?')) return;
+      const state = X32API.state;
+      for (const ch of state.channels) {
+        if (ch.name && ch.name.trim() !== '' && (ch.muted === 'ON' || ch.muted === '1')) {
+          await X32API.unmuteChannel(ch.id);
+        }
+      }
+      App.showToast('All channels unmuted');
+      setTimeout(() => this.loadMixer(), 500);
+    });
+
+    document.getElementById('x32-reload-scene')?.addEventListener('click', async () => {
+      const scene = X32API.state.currentScene;
+      if (!scene && scene !== 0) {
+        App.showToast('No active scene to reload', 2000, 'error');
+        return;
+      }
+      await X32API.loadScene(parseInt(scene));
+      App.showToast('Reloading current scene...');
+      setTimeout(() => this.loadMixer(), 1000);
+    });
+
+    document.getElementById('x32-mute-band')?.addEventListener('click', async () => {
+      // Toggle mute on channels whose names suggest music/band/instruments
+      const musicPatterns = /guitar|bass|drum|key|piano|organ|band|music|inst|synth/i;
+      const state = X32API.state;
+      const musicChs = state.channels.filter(ch => ch.name && musicPatterns.test(ch.name));
+      if (musicChs.length === 0) {
+        App.showToast('No music/band channels found');
+        return;
+      }
+      const anyUnmuted = musicChs.some(ch => ch.muted !== 'ON' && ch.muted !== '1');
+      for (const ch of musicChs) {
+        if (anyUnmuted) {
+          await X32API.muteChannel(ch.id);
+        } else {
+          await X32API.unmuteChannel(ch.id);
+        }
+      }
+      App.showToast(anyUnmuted ? 'Music channels muted' : 'Music channels unmuted');
+      setTimeout(() => this.loadMixer(), 500);
+    });
   },
 
   // -----------------------------------------------------------------------
