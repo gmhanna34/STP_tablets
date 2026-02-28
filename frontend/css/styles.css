@@ -1966,6 +1966,74 @@ body {
   }
 }
 
+/* ── Switch Panel (SmartThings / WattBox) ────────────────── */
+
+.switch-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 8px;
+}
+
+.switch-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.2s;
+}
+
+.switch-card.switch-on {
+  border-color: var(--ok);
+}
+
+.switch-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.switch-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.switch-toggle {
+  min-height: auto;
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+
+.switch-toggle .material-icons {
+  font-size: 28px;
+}
+
+.switch-toggle.active {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #fff;
+}
+
+@media (max-width: 599px) {
+  .switch-panel-grid {
+    grid-template-columns: 1fr;
+  }
+  .switch-name { font-size: 13px; }
+}
+
+/* ── Settings Tab Content ────────────────────────────────── */
+
+.settings-tab-content {
+  animation: fadeIn 0.2s ease-out;
+}
+
 /* ── HA Entity Browser ────────────────────────────────────── */
 
 #ha-results table {

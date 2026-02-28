@@ -1,5 +1,6 @@
 const SettingsPage = {
   pollTimer: null,
+  _activeTab: 'admin',
 
   render(container) {
     const roles = Auth.getRoles();
@@ -12,198 +13,302 @@ const SettingsPage = {
         <h1>SETTINGS</h1>
       </div>
 
-      <div class="control-section">
-        <div class="section-title">Tablet Location</div>
-        <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
-          This tablet's location is determined by its URL. Change by updating the Fully Kiosk start URL.
-        </div>
-        <div style="padding:12px;background:#1a1a2e;border-radius:8px;font-size:16px;font-weight:bold;text-align:center;">
-          <span class="material-icons" style="vertical-align:middle;margin-right:6px;">place</span>
-          ${locationName}
-        </div>
+      <div class="cam-tab-bar" id="settings-tabs">
+        <button class="cam-tab" data-settings-tab="power">
+          <span class="material-icons">power</span>
+          <span>Power</span>
+        </button>
+        <button class="cam-tab" data-settings-tab="audio">
+          <span class="material-icons">equalizer</span>
+          <span>Audio</span>
+        </button>
+        <button class="cam-tab" data-settings-tab="thermostats">
+          <span class="material-icons">thermostat</span>
+          <span>Thermostats</span>
+        </button>
+        <button class="cam-tab" data-settings-tab="tvs">
+          <span class="material-icons">tv</span>
+          <span>TV's</span>
+        </button>
+        <button class="cam-tab" data-settings-tab="schedule">
+          <span class="material-icons">schedule</span>
+          <span>Schedule</span>
+        </button>
+        <button class="cam-tab" data-settings-tab="logs">
+          <span class="material-icons">history</span>
+          <span>Logs</span>
+        </button>
+        <button class="cam-tab active" data-settings-tab="admin">
+          <span class="material-icons">admin_panel_settings</span>
+          <span>Admin</span>
+        </button>
       </div>
 
-      <div class="control-section">
-        <div class="section-title">Permission Role</div>
-        <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
-          Controls which menu items are visible. Defaults to the location's role but can be overridden.
-          ${isOverridden ? '<br><span style="color:#ff9800;">Currently overridden from default.</span>' : ''}
-        </div>
-        <div class="control-grid" style="grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));">
-          ${roles.map(role => `
-            <button class="btn ${role.key === currentRole ? 'active' : ''}" data-role="${role.key}">
-              <span class="material-icons">${role.key === currentRole ? 'radio_button_checked' : 'radio_button_unchecked'}</span>
-              <span class="btn-label">${role.displayName}</span>
-            </button>
-          `).join('')}
-        </div>
-        ${isOverridden ? `
-        <div class="mt-16 text-center">
-          <button class="btn" id="btn-reset-role" style="display:inline-flex;max-width:300px;">
-            <span class="material-icons">restart_alt</span>
-            <span class="btn-label">Reset to Default Role</span>
-          </button>
-        </div>` : ''}
-      </div>
-
-        <!-- Audio Mixer: full width -->
-        <div class="control-section">
-          <div class="section-title">Audio Mixer (X32)</div>
-          <div id="mixer-container">
-            <div class="text-center" style="opacity:0.5;">Loading mixer status...</div>
-          </div>
-          <div style="margin-top:10px;">
-            <div class="section-title" style="font-size:14px;">Mixer Scenes</div>
-            <div class="scene-grid" id="x32-scenes"></div>
-          </div>
-          <div style="margin-top:10px;">
-            <div class="section-title" style="font-size:14px;">Aux Channels</div>
-            <div id="aux-container" class="mixer-grid"></div>
-          </div>
-        </div>
-
-        <!-- System Health: left half -->
-        <div class="control-section col-span-6">
-          <div class="section-title">System Health</div>
-          <div class="text-center">
-            <button class="btn" id="btn-open-health" style="display:inline-flex;">
-              <span class="material-icons">monitor_heart</span>
-              <span class="btn-label">Open Health Dashboard</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- HA Entities: right half -->
-        <div class="control-section col-span-6">
-          <div class="section-title">Home Assistant</div>
-          <div class="control-grid" style="grid-template-columns:1fr 1fr;">
-            <button class="btn" id="btn-ha-browse">
-              <span class="material-icons">search</span>
-              <span class="btn-label">Browse Entities</span>
-            </button>
-            <button class="btn" id="btn-ha-yaml">
-              <span class="material-icons">download</span>
-              <span class="btn-label">Download YAML</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- System Info: left half -->
-        <div class="control-section col-span-6">
-          <div class="section-title">System Information</div>
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 8px;font-size:13px;">
-            <div>Version:</div><div id="info-version">--</div>
-            <div>Location:</div><div id="info-location">--</div>
-            <div>Connection:</div><div id="info-connection">--</div>
-            <div>OBS:</div><div id="info-obs">--</div>
-            <div>X32:</div><div id="info-x32">--</div>
-          </div>
-        </div>
-
-        <!-- Security + Reload: right half -->
-        <div class="control-section col-span-6">
-          <div class="section-title">Security</div>
-          <div class="control-grid" style="grid-template-columns:1fr 1fr 1fr;">
-            <button class="btn" id="btn-change-pin"><span class="material-icons">lock</span><span class="btn-label">Change PIN</span></button>
-            <button class="btn" id="btn-logout"><span class="material-icons">logout</span><span class="btn-label">Lock Settings</span></button>
-            <button class="btn" id="btn-reload-app"><span class="material-icons">refresh</span><span class="btn-label">Reload App</span></button>
-          </div>
-        </div>
-
-        <!-- Logging: full width -->
-        <div class="control-section">
-          <div class="section-title">Logging</div>
-          <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
-            Verbose logging adds detailed request/response info to the server log for troubleshooting AV control issues.
-          </div>
-          <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:#1a1a2e;border-radius:8px;">
-            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:15px;">
-              <input type="checkbox" id="toggle-verbose-logging" style="width:20px;height:20px;cursor:pointer;">
-              <span>Verbose Logging</span>
-            </label>
-            <span id="verbose-logging-status" style="font-size:12px;opacity:0.6;"></span>
-          </div>
-        </div>
-
-        <!-- Audit Log: full width -->
-        <div class="control-section">
-          <div class="section-title">Audit Log</div>
-          <div class="text-center" style="margin-bottom:8px;">
-            <button class="btn" id="btn-load-audit" style="display:inline-flex;max-width:300px;">
-              <span class="material-icons">history</span>
-              <span class="btn-label">Load Recent Activity</span>
-            </button>
-          </div>
-          <div id="audit-container" class="hidden">
-            <div class="audit-controls" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
-              <select id="audit-filter" style="padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;">
-                <option value="">All Actions</option>
-                <option value="scene:execute">Scenes</option>
-                <option value="moip:">MoIP</option>
-                <option value="ptz:">PTZ</option>
-                <option value="projector:">Projectors</option>
-                <option value="ha:">Home Assistant</option>
-                <option value="x32:">X32 Mixer</option>
-              </select>
-              <span id="audit-count" style="font-size:12px;opacity:0.6;"></span>
+      <!-- ============================================================ -->
+      <!-- POWER TAB                                                     -->
+      <!-- ============================================================ -->
+      <div id="settings-tab-power" class="settings-tab-content" style="display:none;">
+        <div class="page-grid">
+          <div class="control-section col-span-6">
+            <div class="section-title">SmartThings Switches</div>
+            <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+              Control SmartThings-connected power outlets and switches.
             </div>
-            <div id="audit-log" style="max-height:300px;overflow-y:auto;font-size:12px;font-family:monospace;"></div>
-          </div>
-        </div>
-
-        <!-- Schedules: left half -->
-        <div class="control-section col-span-6">
-          <div class="section-title">Scheduled Automations</div>
-          <div id="schedule-container">
-            <div class="text-center" style="opacity:0.5;font-size:13px;">Loading schedules...</div>
-          </div>
-          <div style="margin-top:8px;" class="text-center">
-            <button class="btn" id="btn-add-schedule" style="display:inline-flex;max-width:300px;">
-              <span class="material-icons">add_alarm</span>
-              <span class="btn-label">Add Schedule</span>
+            <button class="btn" id="btn-open-smartthings" style="display:inline-flex;">
+              <span class="material-icons">power</span>
+              <span class="btn-label">Open SmartThings Panel</span>
             </button>
           </div>
-          <div id="schedule-form" class="hidden" style="margin-top:12px;background:#1a1a2e;padding:12px;border-radius:8px;">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-              <div>
-                <label style="font-size:11px;opacity:0.7;">Name</label>
-                <input type="text" id="sched-name" placeholder="e.g. Sunday Morning Setup"
-                  style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;font-family:inherit;">
-              </div>
-              <div>
-                <label style="font-size:11px;opacity:0.7;">Macro</label>
-                <select id="sched-macro" style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;font-family:inherit;"></select>
-              </div>
-              <div>
-                <label style="font-size:11px;opacity:0.7;">Time</label>
-                <input type="time" id="sched-time" value="08:00"
-                  style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;font-family:inherit;">
-              </div>
-              <div>
-                <label style="font-size:11px;opacity:0.7;">Days</label>
-                <div id="sched-days" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">
-                  <label style="font-size:11px;"><input type="checkbox" value="0" checked> Mon</label>
-                  <label style="font-size:11px;"><input type="checkbox" value="1" checked> Tue</label>
-                  <label style="font-size:11px;"><input type="checkbox" value="2" checked> Wed</label>
-                  <label style="font-size:11px;"><input type="checkbox" value="3" checked> Thu</label>
-                  <label style="font-size:11px;"><input type="checkbox" value="4" checked> Fri</label>
-                  <label style="font-size:11px;"><input type="checkbox" value="5" checked> Sat</label>
-                  <label style="font-size:11px;"><input type="checkbox" value="6" checked> Sun</label>
+          <div class="control-section col-span-6">
+            <div class="section-title">WattBox Outlets</div>
+            <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+              Control WattBox IP power distribution outlets.
+            </div>
+            <button class="btn" id="btn-open-wattbox" style="display:inline-flex;">
+              <span class="material-icons">electrical_services</span>
+              <span class="btn-label">Open WattBox Panel</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- AUDIO TAB                                                     -->
+      <!-- ============================================================ -->
+      <div id="settings-tab-audio" class="settings-tab-content" style="display:none;">
+        <div class="page-grid">
+          <div class="control-section">
+            <div class="section-title">Audio Mixer (X32)</div>
+            <div id="mixer-container">
+              <div class="text-center" style="opacity:0.5;">Loading mixer status...</div>
+            </div>
+            <div style="margin-top:10px;">
+              <div class="section-title" style="font-size:14px;">Mixer Scenes</div>
+              <div class="scene-grid" id="x32-scenes"></div>
+            </div>
+            <div style="margin-top:10px;">
+              <div class="section-title" style="font-size:14px;">Aux Channels</div>
+              <div id="aux-container" class="mixer-grid"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- THERMOSTATS TAB                                               -->
+      <!-- ============================================================ -->
+      <div id="settings-tab-thermostats" class="settings-tab-content" style="display:none;">
+        <div class="page-grid">
+          <div class="control-section">
+            <div class="text-center" style="opacity:0.5;padding:30px;">
+              <span class="material-icons" style="font-size:48px;opacity:0.3;">thermostat</span>
+              <div style="margin-top:8px;">Thermostat controls coming soon.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- TV'S TAB                                                      -->
+      <!-- ============================================================ -->
+      <div id="settings-tab-tvs" class="settings-tab-content" style="display:none;">
+        <div class="page-grid">
+          <div class="control-section">
+            <div class="text-center" style="opacity:0.5;padding:30px;">
+              <span class="material-icons" style="font-size:48px;opacity:0.3;">tv</span>
+              <div style="margin-top:8px;">TV controls coming soon.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- SCHEDULE TAB                                                  -->
+      <!-- ============================================================ -->
+      <div id="settings-tab-schedule" class="settings-tab-content" style="display:none;">
+        <div class="page-grid">
+          <div class="control-section">
+            <div class="section-title">Scheduled Automations</div>
+            <div id="schedule-container">
+              <div class="text-center" style="opacity:0.5;font-size:13px;">Loading schedules...</div>
+            </div>
+            <div style="margin-top:8px;" class="text-center">
+              <button class="btn" id="btn-add-schedule" style="display:inline-flex;max-width:300px;">
+                <span class="material-icons">add_alarm</span>
+                <span class="btn-label">Add Schedule</span>
+              </button>
+            </div>
+            <div id="schedule-form" class="hidden" style="margin-top:12px;background:#1a1a2e;padding:12px;border-radius:8px;">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div>
+                  <label style="font-size:11px;opacity:0.7;">Name</label>
+                  <input type="text" id="sched-name" placeholder="e.g. Sunday Morning Setup"
+                    style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;font-family:inherit;">
+                </div>
+                <div>
+                  <label style="font-size:11px;opacity:0.7;">Macro</label>
+                  <select id="sched-macro" style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;font-family:inherit;"></select>
+                </div>
+                <div>
+                  <label style="font-size:11px;opacity:0.7;">Time</label>
+                  <input type="time" id="sched-time" value="08:00"
+                    style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;font-family:inherit;">
+                </div>
+                <div>
+                  <label style="font-size:11px;opacity:0.7;">Days</label>
+                  <div id="sched-days" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">
+                    <label style="font-size:11px;"><input type="checkbox" value="0" checked> Mon</label>
+                    <label style="font-size:11px;"><input type="checkbox" value="1" checked> Tue</label>
+                    <label style="font-size:11px;"><input type="checkbox" value="2" checked> Wed</label>
+                    <label style="font-size:11px;"><input type="checkbox" value="3" checked> Thu</label>
+                    <label style="font-size:11px;"><input type="checkbox" value="4" checked> Fri</label>
+                    <label style="font-size:11px;"><input type="checkbox" value="5" checked> Sat</label>
+                    <label style="font-size:11px;"><input type="checkbox" value="6" checked> Sun</label>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end;">
-              <button class="btn" id="btn-sched-cancel" style="min-height:auto;padding:6px 12px;">Cancel</button>
-              <button class="btn btn-success" id="btn-sched-save" style="min-height:auto;padding:6px 12px;background:#00b050;border-color:#00b050;">Save</button>
+              <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end;">
+                <button class="btn" id="btn-sched-cancel" style="min-height:auto;padding:6px 12px;">Cancel</button>
+                <button class="btn btn-success" id="btn-sched-save" style="min-height:auto;padding:6px 12px;background:#00b050;border-color:#00b050;">Save</button>
+              </div>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Connected Tablets: right half -->
-        <div class="control-section col-span-6">
-          <div class="section-title">Connected Tablets</div>
-          <div id="sessions-container">
-            <div class="text-center" style="opacity:0.5;font-size:13px;">Load audit log to see connected tablets</div>
+      <!-- ============================================================ -->
+      <!-- LOGS TAB                                                      -->
+      <!-- ============================================================ -->
+      <div id="settings-tab-logs" class="settings-tab-content" style="display:none;">
+        <div class="page-grid">
+          <div class="control-section">
+            <div class="section-title">Audit Log</div>
+            <div class="text-center" style="margin-bottom:8px;">
+              <button class="btn" id="btn-load-audit" style="display:inline-flex;max-width:300px;">
+                <span class="material-icons">history</span>
+                <span class="btn-label">Load Recent Activity</span>
+              </button>
+            </div>
+            <div id="audit-container" class="hidden">
+              <div class="audit-controls" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+                <select id="audit-filter" style="padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;">
+                  <option value="">All Actions</option>
+                  <option value="scene:execute">Scenes</option>
+                  <option value="moip:">MoIP</option>
+                  <option value="ptz:">PTZ</option>
+                  <option value="projector:">Projectors</option>
+                  <option value="ha:">Home Assistant</option>
+                  <option value="x32:">X32 Mixer</option>
+                </select>
+                <span id="audit-count" style="font-size:12px;opacity:0.6;"></span>
+              </div>
+              <div id="audit-log" style="max-height:300px;overflow-y:auto;font-size:12px;font-family:monospace;"></div>
+            </div>
+          </div>
+          <div class="control-section">
+            <div class="section-title">Connected Tablets</div>
+            <div id="sessions-container">
+              <div class="text-center" style="opacity:0.5;font-size:13px;">Load audit log to see connected tablets</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- ADMIN TAB                                                     -->
+      <!-- ============================================================ -->
+      <div id="settings-tab-admin" class="settings-tab-content">
+        <div class="page-grid">
+          <div class="control-section">
+            <div class="section-title">Tablet Location</div>
+            <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+              This tablet's location is determined by its URL. Change by updating the Fully Kiosk start URL.
+            </div>
+            <div style="padding:12px;background:#1a1a2e;border-radius:8px;font-size:16px;font-weight:bold;text-align:center;">
+              <span class="material-icons" style="vertical-align:middle;margin-right:6px;">place</span>
+              ${locationName}
+            </div>
+          </div>
+
+          <div class="control-section">
+            <div class="section-title">Permission Role</div>
+            <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+              Controls which menu items are visible. Defaults to the location's role but can be overridden.
+              ${isOverridden ? '<br><span style="color:#ff9800;">Currently overridden from default.</span>' : ''}
+            </div>
+            <div class="control-grid" style="grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));">
+              ${roles.map(role => `
+                <button class="btn ${role.key === currentRole ? 'active' : ''}" data-role="${role.key}">
+                  <span class="material-icons">${role.key === currentRole ? 'radio_button_checked' : 'radio_button_unchecked'}</span>
+                  <span class="btn-label">${role.displayName}</span>
+                </button>
+              `).join('')}
+            </div>
+            ${isOverridden ? `
+            <div class="mt-16 text-center">
+              <button class="btn" id="btn-reset-role" style="display:inline-flex;max-width:300px;">
+                <span class="material-icons">restart_alt</span>
+                <span class="btn-label">Reset to Default Role</span>
+              </button>
+            </div>` : ''}
+          </div>
+
+          <div class="control-section col-span-6">
+            <div class="section-title">System Health</div>
+            <div class="text-center">
+              <button class="btn" id="btn-open-health" style="display:inline-flex;">
+                <span class="material-icons">monitor_heart</span>
+                <span class="btn-label">Open Health Dashboard</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="control-section col-span-6">
+            <div class="section-title">Home Assistant</div>
+            <div class="control-grid" style="grid-template-columns:1fr 1fr;">
+              <button class="btn" id="btn-ha-browse">
+                <span class="material-icons">search</span>
+                <span class="btn-label">Browse Entities</span>
+              </button>
+              <button class="btn" id="btn-ha-yaml">
+                <span class="material-icons">download</span>
+                <span class="btn-label">Download YAML</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="control-section col-span-6">
+            <div class="section-title">System Information</div>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 8px;font-size:13px;">
+              <div>Version:</div><div id="info-version">--</div>
+              <div>Location:</div><div id="info-location">--</div>
+              <div>Connection:</div><div id="info-connection">--</div>
+              <div>OBS:</div><div id="info-obs">--</div>
+              <div>X32:</div><div id="info-x32">--</div>
+            </div>
+          </div>
+
+          <div class="control-section col-span-6">
+            <div class="section-title">Security</div>
+            <div class="control-grid" style="grid-template-columns:1fr 1fr 1fr;">
+              <button class="btn" id="btn-change-pin"><span class="material-icons">lock</span><span class="btn-label">Change PIN</span></button>
+              <button class="btn" id="btn-logout"><span class="material-icons">logout</span><span class="btn-label">Lock Settings</span></button>
+              <button class="btn" id="btn-reload-app"><span class="material-icons">refresh</span><span class="btn-label">Reload App</span></button>
+            </div>
+          </div>
+
+          <div class="control-section">
+            <div class="section-title">Logging</div>
+            <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+              Verbose logging adds detailed request/response info to the server log for troubleshooting AV control issues.
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:#1a1a2e;border-radius:8px;">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:15px;">
+                <input type="checkbox" id="toggle-verbose-logging" style="width:20px;height:20px;cursor:pointer;">
+                <span>Verbose Logging</span>
+              </label>
+              <span id="verbose-logging-status" style="font-size:12px;opacity:0.6;"></span>
+            </div>
           </div>
         </div>
       </div>
@@ -211,20 +316,51 @@ const SettingsPage = {
   },
 
   init() {
+    // ── Tab switching ──────────────────────────────────────────────
+    this._activeTab = 'admin';
+    document.querySelectorAll('[data-settings-tab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._switchTab(btn.dataset.settingsTab);
+      });
+    });
+
+    // ── Power tab ──────────────────────────────────────────────────
+    document.getElementById('btn-open-smartthings')?.addEventListener('click', () => this._openSwitchPanel('SmartThings', 'SW_'));
+    document.getElementById('btn-open-wattbox')?.addEventListener('click', () => this._openSwitchPanel('WattBox', 'WB_'));
+
+    // ── Audio tab ──────────────────────────────────────────────────
+    this.loadMixer();
+    this.pollTimer = setInterval(() => this.loadMixer(), 5000);
+
+    // ── Schedule tab ───────────────────────────────────────────────
+    this.loadSchedules();
+    this.loadMacroDropdown();
+
+    document.getElementById('btn-add-schedule')?.addEventListener('click', () => {
+      document.getElementById('schedule-form')?.classList.remove('hidden');
+    });
+    document.getElementById('btn-sched-cancel')?.addEventListener('click', () => {
+      document.getElementById('schedule-form')?.classList.add('hidden');
+    });
+    document.getElementById('btn-sched-save')?.addEventListener('click', () => this.saveSchedule());
+
+    // ── Logs tab ───────────────────────────────────────────────────
+    document.getElementById('btn-load-audit')?.addEventListener('click', () => this.loadAuditLog());
+    document.getElementById('audit-filter')?.addEventListener('change', () => this.filterAuditLog());
+
+    // ── Admin tab ──────────────────────────────────────────────────
     // Role selection
     document.querySelectorAll('[data-role]').forEach(btn => {
       btn.addEventListener('click', () => {
         const role = btn.dataset.role;
         Auth.setRole(role);
         Router.updateNavVisibility();
-        // Re-render to show updated selection
         Router.navigate('settings');
         App.updateStatusBar();
         App.showToast('Role set to: ' + Auth.getRoleDisplayName());
       });
     });
 
-    // Reset role to location default
     document.getElementById('btn-reset-role')?.addEventListener('click', () => {
       Auth.resetRole();
       Router.updateNavVisibility();
@@ -233,22 +369,16 @@ const SettingsPage = {
       App.showToast('Role reset to default: ' + Auth.getRoleDisplayName());
     });
 
-    // Load mixer
-    this.loadMixer();
-    this.pollTimer = setInterval(() => this.loadMixer(), 5000);
-
     // System info
-    document.getElementById('info-version')?.textContent && (document.getElementById('info-version').textContent = App.settings?.app?.version || '--');
-    document.getElementById('info-location')?.textContent && (document.getElementById('info-location').textContent = Auth.getDisplayName());
     const infoVersion = document.getElementById('info-version');
     if (infoVersion) infoVersion.textContent = App.settings?.app?.version || '--';
     const infoLoc = document.getElementById('info-location');
     if (infoLoc) infoLoc.textContent = Auth.getDisplayName();
 
-    // Health dashboard (opens in panel overlay)
+    // Health dashboard
     document.getElementById('btn-open-health')?.addEventListener('click', () => this.openHealthPanel());
 
-    // HA Entity Browser (opens in panel overlay)
+    // HA Entity Browser
     document.getElementById('btn-ha-browse')?.addEventListener('click', () => this.openHABrowserPanel());
     document.getElementById('btn-ha-yaml')?.addEventListener('click', () => this.downloadHAYaml());
 
@@ -280,23 +410,127 @@ const SettingsPage = {
         e.target.checked = !e.target.checked;
       }
     });
-
-    // Audit log
-    document.getElementById('btn-load-audit')?.addEventListener('click', () => this.loadAuditLog());
-    document.getElementById('audit-filter')?.addEventListener('change', () => this.filterAuditLog());
-
-    // Schedules
-    this.loadSchedules();
-    this.loadMacroDropdown();
-
-    document.getElementById('btn-add-schedule')?.addEventListener('click', () => {
-      document.getElementById('schedule-form')?.classList.remove('hidden');
-    });
-    document.getElementById('btn-sched-cancel')?.addEventListener('click', () => {
-      document.getElementById('schedule-form')?.classList.add('hidden');
-    });
-    document.getElementById('btn-sched-save')?.addEventListener('click', () => this.saveSchedule());
   },
+
+  // =====================================================================
+  // Tab Switching
+  // =====================================================================
+
+  _switchTab(tab) {
+    this._activeTab = tab;
+
+    // Update tab button states
+    document.querySelectorAll('[data-settings-tab]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.settingsTab === tab);
+    });
+
+    // Show/hide tab content
+    document.querySelectorAll('.settings-tab-content').forEach(el => {
+      el.style.display = 'none';
+    });
+    const activeContent = document.getElementById(`settings-tab-${tab}`);
+    if (activeContent) activeContent.style.display = '';
+  },
+
+  // =====================================================================
+  // Power Tab — SmartThings / WattBox Switch Panel
+  // =====================================================================
+
+  _switchPanelTimer: null,
+
+  async _openSwitchPanel(title, prefix) {
+    const self = this;
+    const tabletId = localStorage.getItem('tabletId') || 'WebApp';
+
+    App.showPanel(title, async (body) => {
+      body.innerHTML = '<div class="text-center" style="padding:30px;opacity:0.5;">Loading switches...</div>';
+
+      const renderSwitches = async () => {
+        try {
+          const resp = await fetch(`/api/ha/entities?domain=switch&q=${prefix}`, {
+            headers: { 'X-Tablet-ID': tabletId },
+          });
+          const data = await resp.json();
+          if (data.error) {
+            body.innerHTML = `<div style="color:var(--danger);padding:16px;">${data.error}</div>`;
+            return;
+          }
+
+          const entities = [];
+          for (const [, info] of Object.entries(data.domains || {})) {
+            for (const ent of (info.entities || [])) {
+              if (ent.entity_id.includes(prefix)) entities.push(ent);
+            }
+          }
+
+          entities.sort((a, b) => (a.friendly_name || a.entity_id).localeCompare(b.friendly_name || b.entity_id));
+
+          if (entities.length === 0) {
+            body.innerHTML = `<div style="opacity:0.5;padding:20px;text-align:center;">No ${title} switches found (switch.${prefix}*).</div>`;
+            return;
+          }
+
+          body.innerHTML = `
+            <div style="margin-bottom:12px;font-size:13px;opacity:0.6;">${entities.length} switches</div>
+            <div class="switch-panel-grid">
+              ${entities.map(e => {
+                const isOn = e.state === 'on';
+                const name = (e.friendly_name || e.entity_id).replace(/^SW_|^WB_/i, '').replace(/_/g, ' ');
+                return `<div class="switch-card ${isOn ? 'switch-on' : 'switch-off'}">
+                  <div class="switch-info">
+                    <span class="status-dot ${isOn ? 'idle' : 'offline'}"></span>
+                    <span class="switch-name">${name}</span>
+                  </div>
+                  <button class="btn switch-toggle ${isOn ? 'active' : ''}" data-switch-entity="${e.entity_id}">
+                    <span class="material-icons">${isOn ? 'toggle_on' : 'toggle_off'}</span>
+                  </button>
+                </div>`;
+              }).join('')}
+            </div>
+          `;
+
+          // Wire toggle handlers
+          body.querySelectorAll('[data-switch-entity]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const entityId = btn.dataset.switchEntity;
+              btn.disabled = true;
+              try {
+                await fetch(`/api/ha/service/switch/toggle`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': tabletId },
+                  body: JSON.stringify({ entity_id: entityId }),
+                });
+                // Refresh after short delay to let HA update
+                setTimeout(() => renderSwitches(), 800);
+              } catch (err) {
+                App.showToast('Failed to toggle switch');
+                btn.disabled = false;
+              }
+            });
+          });
+
+        } catch (err) {
+          body.innerHTML = '<div style="color:var(--danger);padding:16px;">Failed to load switches. Is Home Assistant connected?</div>';
+        }
+      };
+
+      await renderSwitches();
+
+      // Auto-refresh every 5 seconds while panel is open
+      self._switchPanelTimer = setInterval(() => {
+        if (!body.isConnected) {
+          clearInterval(self._switchPanelTimer);
+          self._switchPanelTimer = null;
+          return;
+        }
+        renderSwitches();
+      }, 5000);
+    });
+  },
+
+  // =====================================================================
+  // Existing methods (unchanged)
+  // =====================================================================
 
   _auditData: [],
 
@@ -623,7 +857,7 @@ const SettingsPage = {
   },
 
   // -----------------------------------------------------------------------
-  // Health Dashboard Panel (iframe embed of existing health dashboard)
+  // Health Dashboard Panel
   // -----------------------------------------------------------------------
 
   openHealthPanel() {
@@ -643,7 +877,7 @@ const SettingsPage = {
   // HA Entity Browser
   // -----------------------------------------------------------------------
 
-  _haDomainSummary: null,  // { domain: count } — lightweight, fetched once
+  _haDomainSummary: null,
   _haSearchTimer: null,
 
   async openHABrowserPanel() {
@@ -666,14 +900,12 @@ const SettingsPage = {
         </div>
       `;
 
-      // Debounced search: wait 400ms after typing stops, require 2+ chars
       body.querySelector('#ha-search').addEventListener('input', () => {
         clearTimeout(self._haSearchTimer);
         self._haSearchTimer = setTimeout(() => self._fetchAndRenderEntities(body), 400);
       });
       body.querySelector('#ha-domain-filter').addEventListener('change', () => self._fetchAndRenderEntities(body));
 
-      // Load domain summary (lightweight — just names + counts)
       if (!self._haDomainSummary) {
         try {
           const resp = await fetch('/api/ha/entities', {
@@ -692,7 +924,6 @@ const SettingsPage = {
         }
       }
 
-      // Populate domain dropdown
       const domainSelect = body.querySelector('#ha-domain-filter');
       if (domainSelect && self._haDomainSummary) {
         const totalEntities = Object.values(self._haDomainSummary).reduce((a, b) => a + b, 0);
@@ -717,7 +948,6 @@ const SettingsPage = {
     const query = (container.querySelector('#ha-search')?.value || '').trim();
     const domainFilter = container.querySelector('#ha-domain-filter')?.value || '';
 
-    // Require at least a domain selection or 2+ char search
     if (!domainFilter && query.length < 2) {
       results.innerHTML = '<div style="opacity:0.5;padding:20px;text-align:center;">Select a domain or type at least 2 characters to search.</div>';
       if (countEl && this._haDomainSummary) {
@@ -729,7 +959,6 @@ const SettingsPage = {
 
     results.innerHTML = '<div style="opacity:0.5;padding:8px;">Loading entities...</div>';
 
-    // Build query params — let the gateway do the filtering
     const params = new URLSearchParams();
     if (domainFilter) params.set('domain', domainFilter);
     if (query) params.set('q', query);
@@ -754,7 +983,6 @@ const SettingsPage = {
     const countEl = container.querySelector('#ha-entity-count');
     if (!results || !data?.domains) return;
 
-    // Flatten all entities from the filtered response
     let entities = [];
     for (const [domain, info] of Object.entries(data.domains)) {
       for (const ent of (info.entities || [])) {
@@ -769,7 +997,6 @@ const SettingsPage = {
       return;
     }
 
-    // Cap at 200 to avoid DOM overload
     const capped = entities.slice(0, 200);
     const showMore = entities.length > 200;
 
@@ -801,7 +1028,6 @@ const SettingsPage = {
       ${showMore ? `<div style="padding:8px;opacity:0.6;text-align:center;">Showing first 200 of ${entities.length} — narrow your search to see more.</div>` : ''}
     `;
 
-    // Click to copy entity_id
     results.querySelectorAll('.ha-entity-row td:first-child').forEach(td => {
       td.addEventListener('click', () => {
         const id = td.textContent.trim();
@@ -837,6 +1063,7 @@ const SettingsPage = {
 
   destroy() {
     if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
+    if (this._switchPanelTimer) { clearInterval(this._switchPanelTimer); this._switchPanelTimer = null; }
     this._haDomainSummary = null;
     clearTimeout(this._haSearchTimer);
   }
