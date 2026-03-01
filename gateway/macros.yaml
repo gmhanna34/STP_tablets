@@ -396,12 +396,12 @@ macros:
   # MAIN CHURCH (examples — expand as needed)
   # ---------------------------------------------------------------------------
 
-  main_video_on:
-    label: "Video System On"
-    icon: "tv"
-    description: "Power on shared video, projectors, lower screens, cry room"
+  # --- Child: Shared video components (reusable by Main Church & other rooms) ---
+  shared_video_on:
+    label: "Shared Video Components On"
+    icon: "settings_input_hdmi"
+    description: "MoIP controller, Blackmagic ATEM, OBS BMATEM webcam re-enable"
     steps:
-      # Shared video components
       - type: ha_service
         domain: "switch"
         service: "turn_on"
@@ -414,6 +414,28 @@ macros:
         data: { entity_id: "switch.sw_003_hall_leftspeaker2" }
         on_fail: skip
         message: "Turning on Blackmagic ATEM"
+      - type: delay
+        seconds: 5
+        message: "Waiting for ATEM to initialize"
+      - type: obs_emit
+        action: "CallVendorRequest"
+        data:
+          vendorName: "AdvancedSceneSwitcher"
+          requestType: "AdvancedSceneSwitcherMessage"
+          requestData:
+            message: "reEnableBMATEMWebcam"
+        on_fail: skip
+        message: "Re-enabling BMATEM webcam in OBS"
+
+  # --- Child: Turn on projectors (shared video → power outlets → staggered Epson) ---
+  main_projectors_on:
+    label: "Projectors On"
+    icon: "tv"
+    description: "Shared video components, power outlets, then each projector with stagger delays"
+    steps:
+      - type: macro
+        macro: "shared_video_on"
+        message: "Starting shared video components"
       # Projector power switches (Kasa plugs)
       - type: ha_service
         domain: "switch"
@@ -439,51 +461,160 @@ macros:
         data: { entity_id: "switch.sw_037_mc_rearleft" }
         on_fail: skip
         message: "Powering on rear-left projector outlet"
-      # Turn on Epson projectors
-      - type: epson_all
+      # Individual Epson projectors with 1s stagger delays
+      - type: epson_power
+        projector: "epson1"
         state: "on"
-        message: "Powering on all projectors"
-      # Virtual switches for projectors
+        on_fail: skip
+        message: "Powering on Projector 1 (Front Left)"
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.vs_epsonprojector1" }
         on_fail: skip
+      - type: delay
+        seconds: 1
+      - type: epson_power
+        projector: "epson2"
+        state: "on"
+        on_fail: skip
+        message: "Powering on Projector 2 (Front Right)"
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.vs_epsonprojector2" }
         on_fail: skip
+      - type: delay
+        seconds: 1
+      - type: epson_power
+        projector: "epson3"
+        state: "on"
+        on_fail: skip
+        message: "Powering on Projector 3 (Rear Left)"
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.vs_epsonprojector3" }
         on_fail: skip
+      - type: delay
+        seconds: 1
+      - type: epson_power
+        projector: "epson4"
+        state: "on"
+        on_fail: skip
+        message: "Powering on Projector 4 (Rear Right)"
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.vs_epsonprojector4" }
         on_fail: skip
-      # Cry room TV on (IR to receiver 35)
+      # Retry Projector 3 (known flaky per THR)
+      - type: delay
+        seconds: 2
+        message: "Waiting before Projector 3 retry"
+      - type: epson_power
+        projector: "epson3"
+        state: "on"
+        on_fail: skip
+        message: "Retrying Projector 3 (Rear Left)"
+
+  # --- Child: Lower screens and projector shelves (Insteon relay) ---
+  main_screens_shelf_down:
+    label: "Screens & Shelf Down"
+    icon: "expand_more"
+    description: "Lower projection screens and shelves via Insteon I/O Linc relay"
+    steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.i_o_linc_70_7e_96_relay" }
+        on_fail: skip
+        message: "Lowering screens and projector shelves"
+
+  # --- Child: Raise screens and projector shelves (Insteon relay) ---
+  main_screens_shelf_up:
+    label: "Screens & Shelf Up"
+    icon: "expand_less"
+    description: "Raise projection screens and shelves via Insteon I/O Linc relay"
+    steps:
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.i_o_linc_70_7e_96_relay" }
+        on_fail: skip
+        message: "Raising screens and projector shelves"
+
+  # --- Child: Cry room TV on ---
+  main_cryroom_on:
+    label: "Cry Room TV On"
+    icon: "tv"
+    description: "Power on cry room TV and set to HDMI 1"
+    steps:
       - type: moip_ir
         receiver: 35
         code: "IRPowerOn"
         message: "Turning on cry room TV"
       - type: delay
         seconds: 20
+        message: "Waiting for cry room TV to boot"
       - type: moip_ir
         receiver: 35
         code: "IRSourceHDMI1"
         message: "Setting cry room TV to HDMI 1"
+
+  # --- Child: Cry room TV off ---
+  main_cryroom_off:
+    label: "Cry Room TV Off"
+    icon: "tv_off"
+    description: "Power off cry room TV"
+    steps:
+      - type: moip_ir
+        receiver: 35
+        code: "IRPowerOff"
+        message: "Turning off cry room TV"
+
+  # --- Child: Portables off ---
+  main_portables_off:
+    label: "Portables Off"
+    icon: "tv_off"
+    description: "Power off portable displays (IR sent twice for reliability)"
+    steps:
+      - type: moip_ir
+        receiver: 34
+        code: "IRPowerOff"
+        message: "Turning off portables"
+      - type: delay
+        seconds: 2
+      - type: moip_ir
+        receiver: 34
+        code: "IRPowerOff"
+        message: "Repeat power-off for portables"
+
+  # --- Parent: Main Church Video On ---
+  main_video_on:
+    label: "Video System On"
+    icon: "tv"
+    description: "Power on shared video, projectors, lower screens, cry room"
+    steps:
+      - type: macro
+        macro: "main_projectors_on"
+        message: "Turning on projectors"
+      - type: macro
+        macro: "main_screens_shelf_down"
+        message: "Lowering screens and shelves"
+      - type: macro
+        macro: "main_cryroom_on"
+        message: "Turning on cry room"
       - type: notify
         message: "Main church video system turning on"
 
+  # --- Parent: Main Church Video Off ---
   main_video_off:
     label: "Video System Off"
     icon: "tv_off"
     confirm: "Turn OFF the entire video system (all projectors + screens)?"
     steps:
-      # Turn off projectors
+      # Turn off all projectors
       - type: epson_all
         state: "off"
         message: "Powering off all projectors"
@@ -508,22 +639,18 @@ macros:
         service: "turn_off"
         data: { entity_id: "switch.vs_epsonprojector4" }
         on_fail: skip
+      # Raise screens and shelves
+      - type: macro
+        macro: "main_screens_shelf_up"
+        message: "Raising screens and shelves"
       # Cry room off
-      - type: moip_ir
-        receiver: 35
-        code: "IRPowerOff"
-        message: "Turning off cry room TV"
-      # Portables off (IR to receiver 34, sent twice)
-      - type: moip_ir
-        receiver: 34
-        code: "IRPowerOff"
+      - type: macro
+        macro: "main_cryroom_off"
+        message: "Turning off cry room"
+      # Portables off
+      - type: macro
+        macro: "main_portables_off"
         message: "Turning off portables"
-      - type: delay
-        seconds: 2
-      - type: moip_ir
-        receiver: 34
-        code: "IRPowerOff"
-        message: "Repeat power-off for portables"
       - type: notify
         message: "Main church video system powered off"
 
