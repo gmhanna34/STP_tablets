@@ -2104,6 +2104,84 @@ body {
   }
 }
 
+/* ── TV Controls Grid ─────────────────────────────────────── */
+
+.tv-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.tv-control-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  gap: 8px;
+}
+
+.tv-control-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+  flex: 1;
+}
+
+.tv-control-label span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-control-buttons {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.tv-btn {
+  min-height: 36px;
+  min-width: 36px;
+  padding: 4px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 6px;
+}
+
+.tv-btn .material-icons {
+  font-size: 18px;
+}
+
+.tv-btn-on:hover { background: var(--ok); color: #fff; border-color: var(--ok); }
+.tv-btn-off:hover { background: var(--down); color: #fff; border-color: var(--down); }
+.tv-btn-src:hover { background: var(--info); color: #fff; border-color: var(--info); }
+
+.tv-quick-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tv-btn-quick {
+  flex: 1;
+  min-width: 160px;
+}
+
+@media (max-width: 599px) {
+  .tv-controls-grid {
+    grid-template-columns: 1fr;
+  }
+  .tv-control-label { font-size: 12px; }
+  .tv-btn { min-height: 32px; min-width: 32px; padding: 3px 5px; }
+  .tv-btn .material-icons { font-size: 16px; }
+}
+
 /* ── Settings Tab Content ────────────────────────────────── */
 
 .settings-tab-content {

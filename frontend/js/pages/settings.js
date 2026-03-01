@@ -126,13 +126,8 @@ const SettingsPage = {
       <!-- TV'S TAB                                                      -->
       <!-- ============================================================ -->
       <div id="settings-tab-tvs" class="settings-tab-content" style="display:none;">
-        <div class="page-grid">
-          <div class="control-section">
-            <div class="text-center" style="opacity:0.5;padding:30px;">
-              <span class="material-icons" style="font-size:48px;opacity:0.3;">tv</span>
-              <div style="margin-top:8px;">TV controls coming soon.</div>
-            </div>
-          </div>
+        <div class="page-grid" id="tv-controls-grid">
+          <div class="text-center" style="opacity:0.5;padding:30px;">Loading TV controls...</div>
         </div>
       </div>
 
@@ -345,6 +340,9 @@ const SettingsPage = {
 
     // ── Thermostats tab ─────────────────────────────────────────────
     this._loadThermostats();
+
+    // ── TV's tab ──────────────────────────────────────────────────
+    this._loadTVControls();
 
     // ── Audio tab ──────────────────────────────────────────────────
     this.loadMixer();
@@ -893,6 +891,216 @@ const SettingsPage = {
       } catch (e) { /* ignore poll errors */ }
     }, 10000);
     self._thermostatTimers.push(pollTimer);
+  },
+
+  // =====================================================================
+  // TV's Tab — TV & Projector Controls
+  // =====================================================================
+
+  // TV definitions grouped by room/section
+  // Each TV specifies: label, receiver id, brand (samsung|vizio|rca|epson)
+  _tvRooms: [
+    {
+      room: 'Main Church',
+      icon: 'church',
+      devices: [
+        { label: 'Front Left Projector',  type: 'epson', key: 'epson1' },
+        { label: 'Front Right Projector', type: 'epson', key: 'epson2' },
+        { label: 'Rear Left Projector',   type: 'epson', key: 'epson3' },
+        { label: 'Rear Right Projector',  type: 'epson', key: 'epson4' },
+        { label: 'Portable TV',           type: 'vizio', rx: 34 },
+        { label: 'Cry Room',              type: 'samsung', rx: 35 },
+      ]
+    },
+    {
+      room: 'Social Hall',
+      icon: 'grid_view',
+      devices: [
+        { label: 'Video Wall Left P1',  type: 'samsung', rx: 1 },
+        { label: 'Video Wall Left P2',  type: 'samsung', rx: 2 },
+        { label: 'Video Wall Left P3',  type: 'samsung', rx: 3 },
+        { label: 'Video Wall Left P4',  type: 'samsung', rx: 4 },
+        { label: 'Video Wall Right P1', type: 'samsung', rx: 5 },
+        { label: 'Video Wall Right P2', type: 'samsung', rx: 6 },
+        { label: 'Video Wall Right P3', type: 'samsung', rx: 7 },
+        { label: 'Video Wall Right P4', type: 'samsung', rx: 8 },
+      ]
+    },
+    {
+      room: 'Chapel',
+      icon: 'meeting_room',
+      devices: [
+        { label: 'Portable TV (Vizio)', type: 'vizio', rx: 9 },
+        { label: 'Floating TV (RCA)',   type: 'rca', rx: 9 },
+      ]
+    },
+    {
+      room: 'Conference Room',
+      icon: 'groups',
+      devices: [
+        { label: 'Left TV',  type: 'samsung', rx: 28 },
+        { label: 'Right TV', type: 'samsung', rx: 29 },
+      ]
+    },
+    {
+      room: 'Sunday School',
+      icon: 'school',
+      devices: [
+        { label: 'Angels I (PreK)',     type: 'samsung', rx: 13 },
+        { label: 'Angels II (Kinder)',  type: 'samsung', rx: 14 },
+        { label: '1st & 2nd Grade',     type: 'samsung', rx: 15 },
+        { label: '3rd & 4th Grade',     type: 'samsung', rx: 16 },
+        { label: '5th & 6th Grade',     type: 'samsung', rx: 17 },
+        { label: '7th & 8th Grade',     type: 'samsung', rx: 30 },
+        { label: 'High School',         type: 'samsung', rx: 21 },
+        { label: 'Open Room',           type: 'samsung', rx: 33 },
+        { label: 'Fr. Andrew Office',   type: 'samsung', rx: 18 },
+        { label: 'Fr. Kyrillos Office', type: 'samsung', rx: 20 },
+        { label: 'Old P5',              type: 'samsung', rx: 23 },
+      ]
+    },
+    {
+      room: 'Other',
+      icon: 'tv',
+      devices: [
+        { label: 'Lounge',     type: 'samsung', rx: 26 },
+        { label: 'Hamal Room', type: 'samsung', rx: 27 },
+      ]
+    },
+  ],
+
+  _loadTVControls() {
+    const grid = document.getElementById('tv-controls-grid');
+    if (!grid) return;
+
+    const tabletId = localStorage.getItem('tabletId') || 'WebApp';
+
+    // IR code mappings per brand
+    const irCodes = {
+      samsung: { on: 'IRPowerOn', off: 'IRPowerOff', hdmi1: 'IRSourceHDMI1', hdmi2: 'IRSourceHDMI2' },
+      vizio:   { on: 'IRPowerOnVizio', off: 'IRPowerOffVizio', hdmi1: 'IRSourceHDMI1Vizio', hdmi2: 'IRSourceHDMI2Vizio' },
+      rca:     { on: 'IRPowerOnRCA', off: 'IRPowerOffRCA' },
+    };
+
+    let html = '';
+
+    this._tvRooms.forEach(room => {
+      html += `<div class="control-section">
+        <div class="section-title"><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">${room.icon}</span>${room.room}</div>
+        <div class="tv-controls-grid">`;
+
+      room.devices.forEach(dev => {
+        const isEpson = dev.type === 'epson';
+        const codes = irCodes[dev.type];
+        const hasHdmi = codes && codes.hdmi1;
+
+        html += `<div class="tv-control-card">
+          <div class="tv-control-label">
+            <span class="material-icons" style="font-size:16px;opacity:0.5;">${isEpson ? 'videocam' : 'tv'}</span>
+            <span>${dev.label}</span>
+          </div>
+          <div class="tv-control-buttons">
+            <button class="btn btn-sm tv-btn tv-btn-on" data-tv-action="on" data-tv-type="${dev.type}" ${isEpson ? `data-epson-key="${dev.key}"` : `data-rx="${dev.rx}" data-ir-code="${codes.on}"`} title="Power On">
+              <span class="material-icons">power_settings_new</span>
+            </button>
+            <button class="btn btn-sm tv-btn tv-btn-off" data-tv-action="off" data-tv-type="${dev.type}" ${isEpson ? `data-epson-key="${dev.key}"` : `data-rx="${dev.rx}" data-ir-code="${codes.off}"`} title="Power Off">
+              <span class="material-icons">power_off</span>
+            </button>`;
+
+        if (hasHdmi) {
+          html += `
+            <button class="btn btn-sm tv-btn tv-btn-src" data-tv-action="hdmi1" data-tv-type="${dev.type}" data-rx="${dev.rx}" data-ir-code="${codes.hdmi1}" title="HDMI 1">
+              <span>H1</span>
+            </button>
+            <button class="btn btn-sm tv-btn tv-btn-src" data-tv-action="hdmi2" data-tv-type="${dev.type}" data-rx="${dev.rx}" data-ir-code="${codes.hdmi2}" title="HDMI 2">
+              <span>H2</span>
+            </button>`;
+        }
+
+        html += `</div></div>`;
+      });
+
+      html += '</div></div>';
+    });
+
+    // Add "All Projectors" quick actions at the top
+    const projectorActions = `<div class="control-section">
+      <div class="section-title"><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">settings_remote</span>Quick Actions</div>
+      <div class="tv-quick-actions">
+        <button class="btn tv-btn-quick" id="tv-all-projectors-on" title="Turn on all 4 Main Church projectors">
+          <span class="material-icons">videocam</span>
+          <span class="btn-label">All Projectors On</span>
+        </button>
+        <button class="btn tv-btn-quick" id="tv-all-projectors-off" title="Turn off all 4 Main Church projectors">
+          <span class="material-icons">videocam_off</span>
+          <span class="btn-label">All Projectors Off</span>
+        </button>
+      </div>
+    </div>`;
+
+    grid.innerHTML = projectorActions + html;
+
+    // Wire all TV control buttons
+    grid.querySelectorAll('.tv-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const type = btn.dataset.tvType;
+        const action = btn.dataset.tvAction;
+
+        btn.classList.add('loading');
+        btn.disabled = true;
+
+        try {
+          if (type === 'epson') {
+            const key = btn.dataset.epsonKey;
+            if (action === 'on') {
+              await EpsonAPI.powerOn(key);
+            } else {
+              await EpsonAPI.powerOff(key);
+            }
+            App.showToast(`${btn.closest('.tv-control-card').querySelector('.tv-control-label span:last-child').textContent}: ${action === 'on' ? 'Powering on' : 'Powering off'}`);
+          } else {
+            const rx = btn.dataset.rx;
+            const code = btn.dataset.irCode;
+            await MoIPAPI.sendIR('0', rx, code);
+            App.showToast(`${btn.closest('.tv-control-card').querySelector('.tv-control-label span:last-child').textContent}: ${action.toUpperCase()}`);
+          }
+        } catch (e) {
+          App.showToast('Command failed', 3000, 'error');
+        } finally {
+          setTimeout(() => {
+            btn.classList.remove('loading');
+            btn.disabled = false;
+          }, 1000);
+        }
+      });
+    });
+
+    // Wire quick action buttons
+    document.getElementById('tv-all-projectors-on')?.addEventListener('click', async function() {
+      this.classList.add('loading');
+      this.disabled = true;
+      try {
+        await EpsonAPI.allOn();
+        App.showToast('All projectors: Powering on');
+      } catch (e) {
+        App.showToast('Failed to power on projectors', 3000, 'error');
+      } finally {
+        setTimeout(() => { this.classList.remove('loading'); this.disabled = false; }, 2000);
+      }
+    });
+
+    document.getElementById('tv-all-projectors-off')?.addEventListener('click', async function() {
+      this.classList.add('loading');
+      this.disabled = true;
+      try {
+        await EpsonAPI.allOff();
+        App.showToast('All projectors: Powering off');
+      } catch (e) {
+        App.showToast('Failed to power off projectors', 3000, 'error');
+      } finally {
+        setTimeout(() => { this.classList.remove('loading'); this.disabled = false; }, 2000);
+      }
+    });
   },
 
   // =====================================================================
