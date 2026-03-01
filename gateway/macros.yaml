@@ -2461,6 +2461,11 @@ buttons:
           icon: "tv"
           action: { type: macro, macro: main_video_on }
           style: "large"
+          state:
+            source: ha
+            entity: "switch.i_o_linc_70_7e_96_relay"
+            on_value: "on"
+            on_style: "active"
         - label: "Off / Up"
           icon: "tv_off"
           action: { type: macro, macro: main_video_off }
