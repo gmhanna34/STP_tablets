@@ -615,6 +615,10 @@ macros:
     icon: "tv_off"
     confirm: "Turn OFF the entire video system (all projectors + screens)?"
     steps:
+      # Raise screens and shelves first (instant relay toggle)
+      - type: macro
+        macro: "main_screens_shelf_up"
+        message: "Raising screens and shelves"
       # Turn off all projectors
       - type: epson_all
         state: "off"
@@ -640,10 +644,6 @@ macros:
         service: "turn_off"
         data: { entity_id: "switch.vs_epsonprojector4" }
         on_fail: skip
-      # Raise screens and shelves
-      - type: macro
-        macro: "main_screens_shelf_up"
-        message: "Raising screens and shelves"
       # Cry room off
       - type: macro
         macro: "main_cryroom_off"
