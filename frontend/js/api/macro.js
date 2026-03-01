@@ -683,7 +683,7 @@ const MacroAPI = {
         if (labelEl) labelEl.textContent = resolved.label || item.label || '';
 
         // Clear previous state classes, apply current
-        btn.classList.remove('active', 'active-danger', 'live', 'recording');
+        btn.classList.remove('active', 'active-source', 'active-danger', 'live', 'recording');
         // Clear dynamic btn-* style classes (but keep btn and structural classes)
         [...btn.classList].forEach(c => {
           if (c.startsWith('btn-') && c !== 'btn-badge' && c !== 'btn-disabled-state' && c !== 'btn-label') {
@@ -1472,6 +1472,9 @@ const MacroAPI = {
       case 'power':
         this._renderAdvPowerTab(container, roomId);
         break;
+      case 'tv':
+        this._renderAdvTVTab(container, tab, roomId, section, macros);
+        break;
       case 'video':
         this._renderAdvVideoTab(container, roomId);
         break;
@@ -1665,6 +1668,146 @@ const MacroAPI = {
       } catch (e) { console.error('Camlytics poll error:', e); }
     }, 5000);
     this._advancedPanelTimers.push(pollTimer);
+  },
+
+  // TV devices per room for Advanced Settings TV Controls tab
+  _tvDevicesByRoom: {
+    chapel: [
+      { label: 'Portable TV (Vizio)', type: 'vizio', rx: 9 },
+      { label: 'Floating TV (RCA)',   type: 'rca', rx: 9 },
+    ],
+    main: [
+      { label: 'Front Left Projector',  type: 'epson', key: 'epson1' },
+      { label: 'Front Right Projector', type: 'epson', key: 'epson2' },
+      { label: 'Rear Left Projector',   type: 'epson', key: 'epson3' },
+      { label: 'Rear Right Projector',  type: 'epson', key: 'epson4' },
+      { label: 'Portable TV',           type: 'vizio', rx: 34 },
+      { label: 'Cry Room',              type: 'samsung', rx: 35 },
+    ],
+    social: [
+      { label: 'Video Wall Left P1',  type: 'samsung', rx: 1 },
+      { label: 'Video Wall Left P2',  type: 'samsung', rx: 2 },
+      { label: 'Video Wall Left P3',  type: 'samsung', rx: 3 },
+      { label: 'Video Wall Left P4',  type: 'samsung', rx: 4 },
+      { label: 'Video Wall Right P1', type: 'samsung', rx: 5 },
+      { label: 'Video Wall Right P2', type: 'samsung', rx: 6 },
+      { label: 'Video Wall Right P3', type: 'samsung', rx: 7 },
+      { label: 'Video Wall Right P4', type: 'samsung', rx: 8 },
+    ],
+    gym: [
+      { label: 'Portable TV (Vizio)', type: 'vizio', rx: 9 },
+      { label: 'Floating TV (RCA)',   type: 'rca', rx: 9 },
+    ],
+    confroom: [
+      { label: 'Left TV',  type: 'samsung', rx: 28 },
+      { label: 'Right TV', type: 'samsung', rx: 29 },
+    ],
+  },
+
+  _renderAdvTVTab(container, tab, roomId, section, macros) {
+    const devices = this._tvDevicesByRoom[roomId];
+    const items = tab.items || [];
+
+    // If no hardcoded devices for this room, fall back to items-based rendering
+    if (!devices || devices.length === 0) {
+      if (items.length > 0) {
+        this._renderAdvItemsTab(container, tab, section, macros);
+      } else {
+        container.innerHTML = `
+          <div class="text-center" style="opacity:0.5;padding:30px;">
+            <span class="material-icons" style="font-size:48px;opacity:0.3;">tv</span>
+            <div style="margin-top:8px;">No TV controls for this room.</div>
+          </div>`;
+      }
+      return;
+    }
+
+    const irCodes = {
+      samsung: { on: 'IRPowerOn', off: 'IRPowerOff', hdmi1: 'IRSourceHDMI1', hdmi2: 'IRSourceHDMI2' },
+      vizio:   { on: 'IRPowerOnVizio', off: 'IRPowerOffVizio', hdmi1: 'IRSourceHDMI1Vizio', hdmi2: 'IRSourceHDMI2Vizio' },
+      rca:     { on: 'IRPowerOnRCA', off: 'IRPowerOffRCA' },
+    };
+
+    let html = '<div class="tv-controls-grid">';
+    devices.forEach(dev => {
+      const isEpson = dev.type === 'epson';
+      const codes = irCodes[dev.type];
+      const hasHdmi = codes && codes.hdmi1;
+
+      html += `<div class="tv-control-card">
+        <div class="tv-control-label">
+          <span class="material-icons" style="font-size:16px;opacity:0.5;">${isEpson ? 'videocam' : 'tv'}</span>
+          <span>${dev.label}</span>
+        </div>
+        <div class="tv-control-buttons">
+          <button class="btn btn-sm tv-btn tv-btn-on" data-tv-action="on" data-tv-type="${dev.type}" ${isEpson ? `data-epson-key="${dev.key}"` : `data-rx="${dev.rx}" data-ir-code="${codes.on}"`} title="Power On">
+            <span class="material-icons">power_settings_new</span>
+          </button>
+          <button class="btn btn-sm tv-btn tv-btn-off" data-tv-action="off" data-tv-type="${dev.type}" ${isEpson ? `data-epson-key="${dev.key}"` : `data-rx="${dev.rx}" data-ir-code="${codes.off}"`} title="Power Off">
+            <span class="material-icons">power_off</span>
+          </button>`;
+
+      if (hasHdmi) {
+        html += `
+          <button class="btn btn-sm tv-btn tv-btn-src" data-tv-action="hdmi1" data-tv-type="${dev.type}" data-rx="${dev.rx}" data-ir-code="${codes.hdmi1}" title="HDMI 1">
+            <span>H1</span>
+          </button>
+          <button class="btn btn-sm tv-btn tv-btn-src" data-tv-action="hdmi2" data-tv-type="${dev.type}" data-rx="${dev.rx}" data-ir-code="${codes.hdmi2}" title="HDMI 2">
+            <span>H2</span>
+          </button>`;
+      }
+
+      html += '</div></div>';
+    });
+    html += '</div>';
+
+    // If the tab also has macro-based items, render those below
+    if (items.length > 0) {
+      html += '<div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;"></div>';
+    }
+
+    container.innerHTML = html;
+
+    // Render macro items below if present
+    if (items.length > 0) {
+      const tempSection = { section: tab.label || tab.key, items: items };
+      const grid = document.createElement('div');
+      grid.className = 'control-grid';
+      grid.innerHTML = items.map((item, idx) => {
+        return this._renderButton(item, idx, tempSection, macros, false);
+      }).join('');
+      container.appendChild(grid);
+      this._attachButtonHandlers(container, [tempSection]);
+    }
+
+    // Wire TV control buttons
+    container.querySelectorAll('.tv-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const type = btn.dataset.tvType;
+        const action = btn.dataset.tvAction;
+
+        btn.classList.add('loading');
+        btn.disabled = true;
+
+        try {
+          if (type === 'epson') {
+            const key = btn.dataset.epsonKey;
+            if (action === 'on') await EpsonAPI.powerOn(key);
+            else await EpsonAPI.powerOff(key);
+            App.showToast(`${btn.closest('.tv-control-card').querySelector('.tv-control-label span:last-child').textContent}: ${action === 'on' ? 'Powering on' : 'Powering off'}`);
+          } else {
+            const rx = btn.dataset.rx;
+            const code = btn.dataset.irCode;
+            await MoIPAPI.sendIR('0', rx, code);
+            App.showToast(`${btn.closest('.tv-control-card').querySelector('.tv-control-label span:last-child').textContent}: ${action.toUpperCase()}`);
+          }
+        } catch (e) {
+          App.showToast('Command failed', 3000, 'error');
+        } finally {
+          setTimeout(() => { btn.classList.remove('loading'); btn.disabled = false; }, 1000);
+        }
+      });
+    });
   },
 
   _renderAdvItemsTab(container, tab, section, macros) {

@@ -2258,7 +2258,7 @@ buttons:
             source: moip
             field: "47.transmitter_id"
             on_value: "1"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Apple TV"
           icon: "cast"
           action: { type: macro, macro: chapel_source_appletv }
@@ -2266,7 +2266,7 @@ buttons:
             source: moip
             field: "47.transmitter_id"
             on_value: "14"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Windows Disp"
           icon: "laptop"
           action: { type: macro, macro: chapel_source_windows_display }
@@ -2274,7 +2274,7 @@ buttons:
             source: moip
             field: "47.transmitter_id"
             on_value: "15"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Announcements"
           icon: "announcement"
           action: { type: macro, macro: chapel_source_announcements }
@@ -2282,7 +2282,7 @@ buttons:
             source: moip
             field: "47.transmitter_id"
             on_value: "9"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Google Streamer"
           icon: "cast_connected"
           action: { type: macro, macro: chapel_source_google_streamer }
@@ -2290,7 +2290,7 @@ buttons:
             source: moip
             field: "47.transmitter_id"
             on_value: "25"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Live Stream"
           icon: "live_tv"
           action: { type: macro, macro: chapel_source_livestream }
@@ -2298,7 +2298,7 @@ buttons:
             source: moip
             field: "47.transmitter_id"
             on_value: "8"
-            on_style: "active"
+            on_style: "active-source"
 
     - section: "Advanced Settings"
       display: "link"
@@ -2374,7 +2374,7 @@ buttons:
             source: moip
             field: "36.transmitter_id"
             on_value: "22"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Right Podium"
           icon: "computer"
           action: { type: macro, macro: main_source_right_podium }
@@ -2382,7 +2382,7 @@ buttons:
             source: moip
             field: "36.transmitter_id"
             on_value: "23"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Announcements"
           icon: "announcement"
           action: { type: macro, macro: main_source_announcements }
@@ -2390,7 +2390,7 @@ buttons:
             source: moip
             field: "36.transmitter_id"
             on_value: "9"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Live Stream"
           icon: "live_tv"
           action: { type: macro, macro: main_source_livestream }
@@ -2398,7 +2398,7 @@ buttons:
             source: moip
             field: "36.transmitter_id"
             on_value: "8"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Apple TV (No Page #s)"
           icon: "cast"
           action: { type: macro, macro: main_source_appletv_no_pages }
@@ -2406,7 +2406,7 @@ buttons:
             source: moip
             field: "36.transmitter_id"
             on_value: "24"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Apple TV (Page #s)"
           icon: "cast"
           action: { type: macro, macro: main_source_appletv_pages }
@@ -2414,7 +2414,7 @@ buttons:
             source: moip
             field: "36.transmitter_id"
             on_value: "27"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Google Streamer"
           icon: "cast_connected"
           action: { type: macro, macro: main_source_google_streamer }
@@ -2422,7 +2422,7 @@ buttons:
             source: moip
             field: "36.transmitter_id"
             on_value: "25"
-            on_style: "active"
+            on_style: "active-source"
 
     - section: "People Counts"
       cols: 12
@@ -2602,7 +2602,7 @@ buttons:
             source: moip
             field: "11.transmitter_id"
             on_value: "6"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Live Stream"
           icon: "live_tv"
           action: { type: macro, macro: social_source_livestream }
@@ -2610,7 +2610,7 @@ buttons:
             source: moip
             field: "11.transmitter_id"
             on_value: "8"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Announcements"
           icon: "announcement"
           action: { type: macro, macro: social_source_announcements }
@@ -2618,7 +2618,7 @@ buttons:
             source: moip
             field: "11.transmitter_id"
             on_value: "9"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Camera"
           icon: "videocam"
           action: { type: macro, macro: social_source_camera }
@@ -2626,7 +2626,7 @@ buttons:
             source: moip
             field: "11.transmitter_id"
             on_value: "2"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Laptop"
           icon: "computer"
           action: { type: macro, macro: social_source_laptop }
@@ -2634,7 +2634,7 @@ buttons:
             source: moip
             field: "11.transmitter_id"
             on_value: "1"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Windows Display"
           icon: "desktop_windows"
           action: { type: macro, macro: social_source_windows_display }
@@ -2642,7 +2642,7 @@ buttons:
             source: moip
             field: "11.transmitter_id"
             on_value: "15"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Google Streamer"
           icon: "cast_connected"
           action: { type: macro, macro: social_source_google_streamer }
@@ -2650,7 +2650,7 @@ buttons:
             source: moip
             field: "11.transmitter_id"
             on_value: "25"
-            on_style: "active"
+            on_style: "active-source"
         - label: "VBS"
           icon: "child_care"
           action: { type: macro, macro: social_source_vbs }
@@ -2658,7 +2658,7 @@ buttons:
             source: moip
             field: "11.transmitter_id"
             on_value: "1"
-            on_style: "active"
+            on_style: "active-source"
 
     - section: "Advanced Settings"
       display: "link"
@@ -2710,7 +2710,7 @@ buttons:
             source: moip
             field: "9.transmitter_id"
             on_value: "8"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Announcements"
           icon: "announcement"
           action: { type: macro, macro: gym_source_announcements }
@@ -2718,7 +2718,7 @@ buttons:
             source: moip
             field: "9.transmitter_id"
             on_value: "9"
-            on_style: "active"
+            on_style: "active-source"
 
     - section: "Advanced Settings"
       display: "link"
@@ -2738,7 +2738,7 @@ buttons:
 
   confroom:
     - section: "Left TV"
-      cols: 4
+      cols: 3
       items:
         - label: "On"
           icon: "tv"
@@ -2750,7 +2750,7 @@ buttons:
           style: "large danger"
 
     - section: "Right TV"
-      cols: 4
+      cols: 3
       items:
         - label: "On"
           icon: "tv"
@@ -2762,7 +2762,7 @@ buttons:
           style: "large danger"
 
     - section: "Video Conference"
-      cols: 4
+      cols: 3
       items:
         - label: "On"
           icon: "video_call"
@@ -2772,12 +2772,9 @@ buttons:
           icon: "call_end"
           action: { type: macro, macro: confroom_vidconf_off }
           style: "large danger"
-        - label: "AppleTV Restart"
-          icon: "restart_alt"
-          action: { type: macro, macro: confroom_appletv_restart }
 
     - section: "A/C"
-      cols: 4
+      cols: 3
       items:
         - label: "Thermostat"
           icon: "thermostat"
@@ -2803,7 +2800,7 @@ buttons:
             source: moip
             field: "28.transmitter_id"
             on_value: "5"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Live Stream"
           icon: "live_tv"
           action: { type: macro, macro: confroom_left_source_livestream }
@@ -2811,7 +2808,7 @@ buttons:
             source: moip
             field: "28.transmitter_id"
             on_value: "8"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Announcements"
           icon: "announcement"
           action: { type: macro, macro: confroom_left_source_announcements }
@@ -2819,7 +2816,7 @@ buttons:
             source: moip
             field: "28.transmitter_id"
             on_value: "9"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Slides"
           icon: "slideshow"
           action: { type: macro, macro: confroom_left_source_slides }
@@ -2827,7 +2824,7 @@ buttons:
             source: moip
             field: "28.transmitter_id"
             on_value: "22"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Windows Display"
           icon: "desktop_windows"
           action: { type: macro, macro: confroom_left_source_windows }
@@ -2835,7 +2832,7 @@ buttons:
             source: moip
             field: "28.transmitter_id"
             on_value: "15"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Apple TV"
           icon: "cast"
           action: { type: macro, macro: confroom_left_source_appletv }
@@ -2846,7 +2843,7 @@ buttons:
             source: moip
             field: "28.transmitter_id"
             on_value: "25"
-            on_style: "active"
+            on_style: "active-source"
 
     - section: "Right TV Sources"
       items:
@@ -2857,7 +2854,7 @@ buttons:
             source: moip
             field: "29.transmitter_id"
             on_value: "5"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Live Stream"
           icon: "live_tv"
           action: { type: macro, macro: confroom_right_source_livestream }
@@ -2865,7 +2862,7 @@ buttons:
             source: moip
             field: "29.transmitter_id"
             on_value: "8"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Announcements"
           icon: "announcement"
           action: { type: macro, macro: confroom_right_source_announcements }
@@ -2873,7 +2870,7 @@ buttons:
             source: moip
             field: "29.transmitter_id"
             on_value: "9"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Slides"
           icon: "slideshow"
           action: { type: macro, macro: confroom_right_source_slides }
@@ -2881,7 +2878,7 @@ buttons:
             source: moip
             field: "29.transmitter_id"
             on_value: "22"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Windows Display"
           icon: "desktop_windows"
           action: { type: macro, macro: confroom_right_source_windows }
@@ -2889,7 +2886,7 @@ buttons:
             source: moip
             field: "29.transmitter_id"
             on_value: "15"
-            on_style: "active"
+            on_style: "active-source"
         - label: "Apple TV"
           icon: "cast"
           action: { type: macro, macro: confroom_right_source_appletv }
@@ -2900,7 +2897,7 @@ buttons:
             source: moip
             field: "29.transmitter_id"
             on_value: "25"
-            on_style: "active"
+            on_style: "active-source"
 
     - section: "Advanced Settings"
       display: "link"
@@ -2913,7 +2910,10 @@ buttons:
         - key: "tv"
           label: "TV Controls"
           icon: "tv"
-          items: []
+          items:
+            - label: "AppleTV Restart"
+              icon: "restart_alt"
+              action: { type: macro, macro: confroom_appletv_restart }
         - key: "video"
           label: "Video Source"
           icon: "settings_input_hdmi"
