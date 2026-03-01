@@ -38,8 +38,17 @@ macros:
   chapel_tv_on:
     label: "Chapel TVs On"
     icon: "tv"
-    description: "Enable power supplies, send IR power-on, set HDMI input"
+    description: "Send IR power-on immediately, then enable power supplies and repeat IR"
     steps:
+      # Send IR power-on immediately (in case TVs already have power)
+      - type: moip_ir
+        receiver: 09
+        code: "IRPowerOnVizio"
+        message: "Quick power-on to Chapel Vizio TV"
+      - type: moip_ir
+        receiver: 09
+        code: "IRPowerOnRCA"
+        message: "Quick power-on to Chapel Floating TV"
       # Enable Chapel HDMI Transmitter and IR
       - type: ha_service
         domain: "switch"
