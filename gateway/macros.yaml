@@ -2300,17 +2300,21 @@ buttons:
             on_value: "8"
             on_style: "active"
 
-    - section: "Advanced Display Settings"
+    - section: "Advanced Settings"
       display: "link"
-      panel: "display"
+      panel: "advanced"
       page: "chapel"
-      items: []
-
-    - section: "Advanced Power Settings"
-      display: "link"
-      panel: "power"
-      page: "chapel"
-      items: []
+      tabs:
+        - key: "power"
+          label: "Power"
+          icon: "power_settings_new"
+        - key: "tv"
+          label: "TV Controls"
+          icon: "tv"
+          items: []
+        - key: "video"
+          label: "Video Source"
+          icon: "settings_input_hdmi"
 
   main:
     - section: "Video"
@@ -2436,136 +2440,112 @@ buttons:
             source: camlytics
             field: "communion_adjusted"
             
-    - section: "Advanced People Count Settings"
+    - section: "Advanced Settings"
       display: "link"
-      cols: 4
-      items:
-        - label: "Peak Bldg Occupancy"
+      panel: "advanced"
+      page: "main"
+      tabs:
+        - key: "power"
+          label: "Power"
+          icon: "power_settings_new"
+        - key: "tv"
+          label: "TV Controls"
+          icon: "tv"
+          items:
+            - label: "Projectors Only On"
+              icon: "tv"
+              action: { type: macro, macro: main_proj_only_on }
+            - label: "Projectors Only Off"
+              icon: "tv_off"
+              action: { type: macro, macro: main_proj_only_off }
+              style: "danger"
+            - label: "Portables Only On"
+              icon: "speaker"
+              action: { type: macro, macro: main_port_only_on }
+            - label: "Portables Only Off"
+              icon: "speaker"
+              action: { type: macro, macro: main_port_only_off }
+              style: "danger"
+            - label: "AppleTV Restart"
+              icon: "restart_alt"
+              action: { type: macro, macro: main_appletv_restart }
+            - label: "PRJ Front Left"
+              icon: "tv"
+              toggle:
+                state:
+                  source: projectors
+                  field: "epson1.power"
+                  on_value: "on"
+                  on_style: "active"
+                on:
+                  label: "PRJ Front Left On"
+                  icon: "tv"
+                  action: { type: macro, macro: main_epson1_off }
+                off:
+                  label: "PRJ Front Left Off"
+                  icon: "tv_off"
+                  action: { type: macro, macro: main_epson1_on }
+            - label: "PRJ Front Right"
+              icon: "tv"
+              toggle:
+                state:
+                  source: projectors
+                  field: "epson2.power"
+                  on_value: "on"
+                  on_style: "active"
+                on:
+                  label: "PRJ Front Right On"
+                  icon: "tv"
+                  action: { type: macro, macro: main_epson2_off }
+                off:
+                  label: "PRJ Front Right Off"
+                  icon: "tv_off"
+                  action: { type: macro, macro: main_epson2_on }
+            - label: "PRJ Rear Left"
+              icon: "tv"
+              toggle:
+                state:
+                  source: projectors
+                  field: "epson3.power"
+                  on_value: "on"
+                  on_style: "active"
+                on:
+                  label: "PRJ Rear Left On"
+                  icon: "tv"
+                  action: { type: macro, macro: main_epson3_off }
+                off:
+                  label: "PRJ Rear Left Off"
+                  icon: "tv_off"
+                  action: { type: macro, macro: main_epson3_on }
+            - label: "PRJ Rear Right"
+              icon: "tv"
+              toggle:
+                state:
+                  source: projectors
+                  field: "epson4.power"
+                  on_value: "on"
+                  on_style: "active"
+                on:
+                  label: "PRJ Rear Right On"
+                  icon: "tv"
+                  action: { type: macro, macro: main_epson4_off }
+                off:
+                  label: "PRJ Rear Right Off"
+                  icon: "tv_off"
+                  action: { type: macro, macro: main_epson4_on }
+        - key: "video"
+          label: "Video Source"
+          icon: "settings_input_hdmi"
+        - key: "people"
+          label: "People Count"
           icon: "groups"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "occupancy_adjusted"
-        - label: "Communion Count"
-          icon: "how_to_reg"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "communion_adjusted"
-        - label: "Building Entry Count"
-          icon: "sensor_door"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "enter_adjusted"
-        - label: "Live Occupancy"
-          icon: "person"
-          action: { type: camlytics_panel }
-          badge:
-            source: camlytics
-            field: "occupancy_live"
-            
-    - section: "Advanced Display Settings"
-      display: "link"
-      panel: "display"
-      page: "main"
-      cols: 4
-      items:
-        - label: "Projectors Only On"
-          icon: "tv"
-          action: { type: macro, macro: main_proj_only_on }
-        - label: "Projectors Only Off"
-          icon: "tv_off"
-          action: { type: macro, macro: main_proj_only_off }
-          style: "danger"
-        - label: "Portables Only On"
-          icon: "speaker"
-          action: { type: macro, macro: main_port_only_on }
-        - label: "Portables Only Off"
-          icon: "speaker"
-          action: { type: macro, macro: main_port_only_off }
-          style: "danger"
-        - label: "AppleTV Restart"
-          icon: "restart_alt"
-          action: { type: macro, macro: main_appletv_restart }
-        - label: "PRJ Front Left"
-          icon: "tv"
-          toggle:
-            state:
-              source: projectors
-              field: "epson1.power"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "PRJ Front Left On"
-              icon: "tv"
-              action: { type: macro, macro: main_epson1_off }
-            off:
-              label: "PRJ Front Left Off"
-              icon: "tv_off"
-              action: { type: macro, macro: main_epson1_on }
-        - label: "PRJ Front Right"
-          icon: "tv"
-          toggle:
-            state:
-              source: projectors
-              field: "epson2.power"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "PRJ Front Right On"
-              icon: "tv"
-              action: { type: macro, macro: main_epson2_off }
-            off:
-              label: "PRJ Front Right Off"
-              icon: "tv_off"
-              action: { type: macro, macro: main_epson2_on }
-        - label: "PRJ Rear Left"
-          icon: "tv"
-          toggle:
-            state:
-              source: projectors
-              field: "epson3.power"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "PRJ Rear Left On"
-              icon: "tv"
-              action: { type: macro, macro: main_epson3_off }
-            off:
-              label: "PRJ Rear Left Off"
-              icon: "tv_off"
-              action: { type: macro, macro: main_epson3_on }
-        - label: "PRJ Rear Right"
-          icon: "tv"
-          toggle:
-            state:
-              source: projectors
-              field: "epson4.power"
-              on_value: "on"
-              on_style: "active"
-            on:
-              label: "PRJ Rear Right On"
-              icon: "tv"
-              action: { type: macro, macro: main_epson4_off }
-            off:
-              label: "PRJ Rear Right Off"
-              icon: "tv_off"
-              action: { type: macro, macro: main_epson4_on }
-
-    - section: "Advanced Power Settings"
-      display: "link"
-      panel: "power"
-      page: "main"
-      items: []
-
-    - section: "Baptism / Wedding"
-      display: "link"
-      cols: 4
-      items:
-        - label: "Baptism Camera View"
-          icon: "videocam"
-          action: { type: macro, macro: main_baptism_camera }
+        - key: "baptism"
+          label: "Baptism / Wedding"
+          icon: "church"
+          items:
+            - label: "Baptism Camera View"
+              icon: "videocam"
+              action: { type: macro, macro: main_baptism_camera }
 
   social:
     - section: "Video"
@@ -2680,17 +2660,21 @@ buttons:
             on_value: "1"
             on_style: "active"
 
-    - section: "Advanced Display Settings"
+    - section: "Advanced Settings"
       display: "link"
-      panel: "display"
+      panel: "advanced"
       page: "social"
-      items: []
-
-    - section: "Advanced Power Settings"
-      display: "link"
-      panel: "power"
-      page: "social"
-      items: []
+      tabs:
+        - key: "power"
+          label: "Power"
+          icon: "power_settings_new"
+        - key: "tv"
+          label: "TV Controls"
+          icon: "tv"
+          items: []
+        - key: "video"
+          label: "Video Source"
+          icon: "settings_input_hdmi"
 
   gym:
     - section: "Video"
@@ -2736,17 +2720,21 @@ buttons:
             on_value: "9"
             on_style: "active"
 
-    - section: "Advanced Display Settings"
+    - section: "Advanced Settings"
       display: "link"
-      panel: "display"
+      panel: "advanced"
       page: "gym"
-      items: []
-
-    - section: "Advanced Power Settings"
-      display: "link"
-      panel: "power"
-      page: "gym"
-      items: []
+      tabs:
+        - key: "power"
+          label: "Power"
+          icon: "power_settings_new"
+        - key: "tv"
+          label: "TV Controls"
+          icon: "tv"
+          items: []
+        - key: "video"
+          label: "Video Source"
+          icon: "settings_input_hdmi"
 
   confroom:
     - section: "Left TV"
@@ -2914,14 +2902,18 @@ buttons:
             on_value: "25"
             on_style: "active"
 
-    - section: "Advanced Display Settings"
+    - section: "Advanced Settings"
       display: "link"
-      panel: "display"
+      panel: "advanced"
       page: "confroom"
-      items: []
-
-    - section: "Advanced Power Settings"
-      display: "link"
-      panel: "power"
-      page: "confroom"
-      items: []
+      tabs:
+        - key: "power"
+          label: "Power"
+          icon: "power_settings_new"
+        - key: "tv"
+          label: "TV Controls"
+          icon: "tv"
+          items: []
+        - key: "video"
+          label: "Video Source"
+          icon: "settings_input_hdmi"
