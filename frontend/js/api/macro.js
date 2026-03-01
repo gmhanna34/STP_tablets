@@ -274,6 +274,8 @@ const MacroAPI = {
         if (!section) return;
         if (section.panel === 'power') {
           this.openPowerPanel(section.page || '');
+        } else if (section.panel === 'display') {
+          this.openDisplayPanel(section.page || '', section, macros);
         } else {
           this._openSectionPanel(section, macros);
         }
@@ -1255,6 +1257,146 @@ const MacroAPI = {
   // -----------------------------------------------------------------------
   // Advanced Power Settings panel — shows all switches used by a room
   // -----------------------------------------------------------------------
+
+  // Room → MoIP location name mapping
+  _roomLocationMap: {
+    main:     'Main Church',
+    chapel:   'Chapel',
+    social:   'SocialHall',
+    gym:      'Chapel',       // Gym uses the Chapel portable receiver
+    confroom: 'Conference Room',
+  },
+
+  _displayPanelTimer: null,
+
+  openDisplayPanel(roomId, section, macros) {
+    const self = this;
+
+    if (this._displayPanelTimer) {
+      clearInterval(this._displayPanelTimer);
+      this._displayPanelTimer = null;
+    }
+
+    const hasItems = section && section.items && section.items.length > 0;
+
+    App.showPanel('Advanced Display Settings', (body) => {
+      // Tab bar
+      const tabHtml = `
+        <div class="cam-tab-bar" style="margin-bottom:12px;">
+          <button class="cam-tab active" data-display-tab="tv">
+            <span class="material-icons">tv</span>
+            <span>TV Controls</span>
+          </button>
+          <button class="cam-tab" data-display-tab="video">
+            <span class="material-icons">settings_input_hdmi</span>
+            <span>Video / Source</span>
+          </button>
+        </div>
+        <div id="display-tab-tv"></div>
+        <div id="display-tab-video" style="display:none;"></div>
+      `;
+      body.innerHTML = tabHtml;
+
+      const tvContent = body.querySelector('#display-tab-tv');
+      const videoContent = body.querySelector('#display-tab-video');
+
+      // Tab switching
+      body.querySelectorAll('[data-display-tab]').forEach(tab => {
+        tab.addEventListener('click', () => {
+          const target = tab.dataset.displayTab;
+          body.querySelectorAll('[data-display-tab]').forEach(t => t.classList.toggle('active', t.dataset.displayTab === target));
+          tvContent.style.display = target === 'tv' ? '' : 'none';
+          videoContent.style.display = target === 'video' ? '' : 'none';
+        });
+      });
+
+      // --- TV Controls tab ---
+      if (hasItems) {
+        const sectionDisabled = self._checkDisabledWhen(section.disabled_when);
+        const grid = document.createElement('div');
+        grid.className = 'control-grid';
+        grid.innerHTML = section.items.map((item, idx) => {
+          return self._renderButton(item, idx, section, macros, sectionDisabled);
+        }).join('');
+        tvContent.appendChild(grid);
+        self._attachButtonHandlers(tvContent, [section]);
+      } else {
+        tvContent.innerHTML = `
+          <div class="text-center" style="opacity:0.5;padding:30px;">
+            <span class="material-icons" style="font-size:48px;opacity:0.3;">tv</span>
+            <div style="margin-top:8px;">No TV controls configured for this room.</div>
+          </div>`;
+      }
+
+      // --- Video / Source tab ---
+      const loadRouting = async () => {
+        const state = await MoIPAPI.poll();
+        if (!videoContent || !document.contains(videoContent)) return;
+
+        const moip = App.devicesConfig?.moip;
+        if (!moip) {
+          videoContent.innerHTML = '<div class="text-center" style="color:#cc0000;">No MoIP configuration found.</div>';
+          return;
+        }
+
+        const transmitters = moip.transmitters || [];
+        const location = self._roomLocationMap[roomId];
+        const roomReceivers = (moip.receivers || []).filter(rx => rx.location === location);
+
+        if (roomReceivers.length === 0) {
+          videoContent.innerHTML = '<div class="text-center" style="opacity:0.5;padding:20px;">No MoIP receivers found for this room.</div>';
+          return;
+        }
+
+        let html = '<div class="routing-grid">';
+        roomReceivers.forEach(rx => {
+          const currentTx = state.receivers?.[rx.id]?.transmitter_id || '';
+          const connected = state.receivers?.[rx.id]?.connected || false;
+          html += `
+            <div class="routing-card">
+              <div class="card-title">
+                <span class="material-icons" style="font-size:16px;vertical-align:middle;color:${connected ? '#00b050' : '#666'};">
+                  ${connected ? 'link' : 'link_off'}
+                </span>
+                RX ${rx.id} - ${rx.name}
+              </div>
+              <select class="routing-select" data-rx="${rx.id}">
+                <option value="">-- Select Source --</option>
+                ${transmitters.map(tx => `<option value="${tx.id}" ${String(currentTx) === String(tx.id) ? 'selected' : ''}>${tx.id} - ${tx.name}</option>`).join('')}
+              </select>
+            </div>
+          `;
+        });
+        html += '</div>';
+        videoContent.innerHTML = html;
+
+        // Attach change handlers
+        videoContent.querySelectorAll('.routing-select').forEach(sel => {
+          sel.addEventListener('change', async (e) => {
+            const rxId = e.target.dataset.rx;
+            const txId = e.target.value;
+            if (txId) {
+              await MoIPAPI.switchSource(txId, rxId);
+              App.showToast(`RX ${rxId} → TX ${txId}`);
+            }
+          });
+        });
+      };
+
+      loadRouting();
+      self._displayPanelTimer = setInterval(loadRouting, 10000);
+
+      // Clean up on panel close
+      const observer = new MutationObserver(() => {
+        if (!document.contains(body)) {
+          clearInterval(self._displayPanelTimer);
+          self._displayPanelTimer = null;
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    });
+  },
 
   _powerPanelTimer: null,
 
