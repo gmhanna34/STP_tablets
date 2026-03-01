@@ -2155,7 +2155,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         # Collect all macro keys referenced by this page's buttons
         macro_keys = set()
         for section in sections:
-            for item in section.get("items", []):
+            all_items = list(section.get("items", []))
+            for tab in section.get("tabs", []):
+                all_items.extend(tab.get("items", []))
+            for item in all_items:
                 action = item.get("action", {})
                 if action.get("type") == "macro" and action.get("macro"):
                     macro_keys.add(action["macro"])

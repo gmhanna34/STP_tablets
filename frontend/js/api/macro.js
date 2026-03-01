@@ -276,6 +276,8 @@ const MacroAPI = {
           this.openPowerPanel(section.page || '');
         } else if (section.panel === 'display') {
           this.openDisplayPanel(section.page || '', section, macros);
+        } else if (section.panel === 'advanced') {
+          this.openAdvancedPanel(section.page || '', section, macros);
         } else {
           this._openSectionPanel(section, macros);
         }
@@ -1396,6 +1398,293 @@ const MacroAPI = {
       });
       observer.observe(document.body, { childList: true, subtree: true });
     });
+  },
+
+  // -----------------------------------------------------------------------
+  // Advanced Settings Panel — consolidated Power/TV/Video/People/Custom
+  // -----------------------------------------------------------------------
+
+  _advancedPanelTimers: [],
+
+  openAdvancedPanel(roomId, section, macros) {
+    const self = this;
+    const tabs = section.tabs || [];
+    if (tabs.length === 0) return;
+
+    // Clear any previous timers
+    this._advancedPanelTimers.forEach(t => clearInterval(t));
+    this._advancedPanelTimers = [];
+
+    App.showPanel('Advanced Settings', (body) => {
+      body.innerHTML = `
+        <div class="cam-tab-bar" style="margin-bottom:12px;">
+          ${tabs.map((tab, i) => `
+            <button class="cam-tab${i === 0 ? ' active' : ''}" data-adv-tab="${tab.key}">
+              <span class="material-icons">${tab.icon || 'settings'}</span>
+              <span>${self._escapeHtml(tab.label)}</span>
+            </button>
+          `).join('')}
+        </div>
+        ${tabs.map((tab, i) => `<div id="adv-tab-${tab.key}" style="${i > 0 ? 'display:none;' : ''}"></div>`).join('')}
+      `;
+
+      const loadedTabs = new Set();
+      body.querySelectorAll('[data-adv-tab]').forEach(tabBtn => {
+        tabBtn.addEventListener('click', () => {
+          const key = tabBtn.dataset.advTab;
+          body.querySelectorAll('[data-adv-tab]').forEach(t => t.classList.toggle('active', t.dataset.advTab === key));
+          tabs.forEach(tab => {
+            const el = body.querySelector(`#adv-tab-${tab.key}`);
+            if (el) el.style.display = tab.key === key ? '' : 'none';
+          });
+          if (!loadedTabs.has(key)) {
+            loadedTabs.add(key);
+            const tab = tabs.find(t => t.key === key);
+            if (tab) self._initAdvancedTab(body, tab, roomId, section, macros);
+          }
+        });
+      });
+
+      // Initialize first tab
+      loadedTabs.add(tabs[0].key);
+      self._initAdvancedTab(body, tabs[0], roomId, section, macros);
+
+      // Cleanup on panel close
+      const observer = new MutationObserver(() => {
+        if (!document.contains(body)) {
+          self._advancedPanelTimers.forEach(t => clearInterval(t));
+          self._advancedPanelTimers = [];
+          if (loadedTabs.has('people')) {
+            self._setScreensaverTimeout(20);
+          }
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    });
+  },
+
+  _initAdvancedTab(body, tab, roomId, section, macros) {
+    const container = body.querySelector(`#adv-tab-${tab.key}`);
+    if (!container) return;
+
+    switch (tab.key) {
+      case 'power':
+        this._renderAdvPowerTab(container, roomId);
+        break;
+      case 'video':
+        this._renderAdvVideoTab(container, roomId);
+        break;
+      case 'people':
+        this._renderAdvPeopleTab(container);
+        break;
+      default:
+        this._renderAdvItemsTab(container, tab, section, macros);
+        break;
+    }
+  },
+
+  async _renderAdvPowerTab(container, roomId) {
+    const self = this;
+    container.innerHTML = '<div style="text-align:center;padding:24px;opacity:0.5;">Loading switches...</div>';
+
+    let switchIds;
+    try {
+      const resp = await fetch(`/api/macros/switches?page=${roomId}`, {
+        headers: { 'X-Tablet-ID': this.tabletId },
+        signal: AbortSignal.timeout(5000),
+      });
+      const data = await resp.json();
+      switchIds = data.switches || [];
+    } catch (e) {
+      container.innerHTML = '<div style="text-align:center;color:#cc0000;padding:24px;">Failed to load power settings</div>';
+      return;
+    }
+
+    if (switchIds.length === 0) {
+      container.innerHTML = '<div style="text-align:center;opacity:0.5;padding:24px;">No switches found for this room.</div>';
+      return;
+    }
+
+    const renderSwitches = async () => {
+      let entities = [];
+      try {
+        const resp = await fetch('/api/ha/entities?domain=switch', {
+          headers: { 'X-Tablet-ID': self.tabletId },
+          signal: AbortSignal.timeout(5000),
+        });
+        const data = await resp.json();
+        const allEntities = [];
+        for (const [, info] of Object.entries(data.domains || {})) {
+          for (const ent of (info.entities || [])) allEntities.push(ent);
+        }
+        const idSet = new Set(switchIds);
+        entities = allEntities.filter(e => idSet.has(e.entity_id));
+      } catch (e) { return; }
+
+      const orderMap = {};
+      switchIds.forEach((id, i) => { orderMap[id] = i; });
+      entities.sort((a, b) => (orderMap[a.entity_id] ?? 999) - (orderMap[b.entity_id] ?? 999));
+      const foundIds = new Set(entities.map(e => e.entity_id));
+      for (const id of switchIds) {
+        if (!foundIds.has(id)) {
+          entities.push({ entity_id: id, state: 'unknown', friendly_name: '' });
+        }
+      }
+
+      const cardsHtml = entities.map(e => {
+        const raw = e.friendly_name || e.entity_id.split('.').pop() || e.entity_id;
+        const name = raw.replace(/^sw[_ ]|^wb[_ ]|^bat[_ ]/i, '').replace(/_/g, ' ');
+        const isOn = e.state === 'on';
+        return `<div class="switch-card ${isOn ? 'switch-on' : 'switch-off'}">
+          <div class="switch-info">
+            <span class="status-dot ${isOn ? 'idle' : 'offline'}"></span>
+            <span class="switch-name">${name}</span>
+          </div>
+          <button class="btn switch-toggle ${isOn ? 'active' : ''}" data-entity="${e.entity_id}">
+            <span class="material-icons">${isOn ? 'toggle_on' : 'toggle_off'}</span>
+          </button>
+        </div>`;
+      }).join('');
+
+      container.innerHTML = `<div class="switch-panel-grid">${cardsHtml}</div>`;
+      container.querySelectorAll('.switch-toggle').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const entityId = btn.dataset.entity;
+          btn.disabled = true;
+          try {
+            await fetch('/api/ha/service/switch/toggle', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': self.tabletId },
+              body: JSON.stringify({ entity_id: entityId }),
+            });
+            setTimeout(() => renderSwitches(), 500);
+          } catch (e) {
+            App.showToast('Toggle failed', 2000, 'error');
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+    };
+
+    await renderSwitches();
+    this._advancedPanelTimers.push(setInterval(renderSwitches, 5000));
+  },
+
+  _renderAdvVideoTab(container, roomId) {
+    const self = this;
+    const loadRouting = async () => {
+      const state = await MoIPAPI.poll();
+      if (!container || !document.contains(container)) return;
+      const moip = App.devicesConfig?.moip;
+      if (!moip) {
+        container.innerHTML = '<div class="text-center" style="color:#cc0000;">No MoIP configuration found.</div>';
+        return;
+      }
+
+      const transmitters = moip.transmitters || [];
+      const location = self._roomLocationMap[roomId];
+      const roomReceivers = (moip.receivers || []).filter(rx => rx.location === location);
+      if (roomReceivers.length === 0) {
+        container.innerHTML = '<div class="text-center" style="opacity:0.5;padding:20px;">No MoIP receivers found for this room.</div>';
+        return;
+      }
+
+      let html = '<div class="routing-grid">';
+      roomReceivers.forEach(rx => {
+        const currentTx = state.receivers?.[rx.id]?.transmitter_id || '';
+        const connected = state.receivers?.[rx.id]?.connected || false;
+        html += `
+          <div class="routing-card">
+            <div class="card-title">
+              <span class="material-icons" style="font-size:16px;vertical-align:middle;color:${connected ? '#00b050' : '#666'};">
+                ${connected ? 'link' : 'link_off'}
+              </span>
+              RX ${rx.id} - ${rx.name}
+            </div>
+            <select class="routing-select" data-rx="${rx.id}">
+              <option value="">-- Select Source --</option>
+              ${transmitters.map(tx => `<option value="${tx.id}" ${String(currentTx) === String(tx.id) ? 'selected' : ''}>${tx.id} - ${tx.name}</option>`).join('')}
+            </select>
+          </div>
+        `;
+      });
+      html += '</div>';
+      container.innerHTML = html;
+
+      container.querySelectorAll('.routing-select').forEach(sel => {
+        sel.addEventListener('change', async (e) => {
+          const rxId = e.target.dataset.rx;
+          const txId = e.target.value;
+          if (txId) {
+            await MoIPAPI.switchSource(txId, rxId);
+            App.showToast(`RX ${rxId} → TX ${txId}`);
+          }
+        });
+      });
+    };
+
+    loadRouting();
+    this._advancedPanelTimers.push(setInterval(loadRouting, 10000));
+  },
+
+  async _renderAdvPeopleTab(container) {
+    const self = this;
+    let state = null;
+    try {
+      const resp = await fetch('/api/camlytics/state', {
+        headers: { 'X-Tablet-ID': this.tabletId },
+      });
+      if (resp.ok) state = await resp.json();
+    } catch (e) {
+      console.error('Camlytics fetch error:', e);
+    }
+    if (!state || Object.keys(state).length === 0) {
+      state = {
+        communion_raw: 0, communion_adjusted: 0, communion_buffer: 0,
+        occupancy_raw: 0, occupancy_adjusted: 0, occupancy_live: 0, occupancy_buffer: 0,
+        enter_raw: 0, enter_adjusted: 0, enter_buffer: 0,
+      };
+    }
+
+    self._setScreensaverTimeout(10800);
+    container.style.padding = '24px';
+    container.innerHTML = self._camlyticsHTML(state);
+    self._wireCamlyticsEvents(container, state);
+
+    const pollTimer = setInterval(async () => {
+      try {
+        const r = await fetch('/api/camlytics/state', {
+          headers: { 'X-Tablet-ID': self.tabletId },
+        });
+        if (!r.ok) return;
+        const s = await r.json();
+        Object.assign(state, s);
+        self._updateCamlyticsValues(container, s);
+      } catch (e) { console.error('Camlytics poll error:', e); }
+    }, 5000);
+    this._advancedPanelTimers.push(pollTimer);
+  },
+
+  _renderAdvItemsTab(container, tab, section, macros) {
+    const items = tab.items || [];
+    if (items.length === 0) {
+      container.innerHTML = `
+        <div class="text-center" style="opacity:0.5;padding:30px;">
+          <span class="material-icons" style="font-size:48px;opacity:0.3;">${tab.icon || 'settings'}</span>
+          <div style="margin-top:8px;">No items configured.</div>
+        </div>`;
+      return;
+    }
+    const tempSection = { section: tab.label || tab.key, items: items };
+    const grid = document.createElement('div');
+    grid.className = 'control-grid';
+    grid.innerHTML = items.map((item, idx) => {
+      return this._renderButton(item, idx, tempSection, macros, false);
+    }).join('');
+    container.appendChild(grid);
+    this._attachButtonHandlers(container, [tempSection]);
   },
 
   _powerPanelTimer: null,
