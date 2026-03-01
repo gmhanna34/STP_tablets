@@ -2663,11 +2663,6 @@ buttons:
         - label: "VBS"
           icon: "child_care"
           action: { type: macro, macro: social_source_vbs }
-          state:
-            source: moip
-            field: "11.transmitter_id"
-            on_value: "1"
-            on_style: "active-source"
 
     - section: "Advanced Settings"
       display: "link"
