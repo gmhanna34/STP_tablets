@@ -16,28 +16,35 @@
        STATUS BAR
        ========================================================= -->
   <header id="status-bar">
-    <div id="status-version" class="status-section">
+    <div id="status-left" class="status-section">
       <span id="version-label">v1.0.0</span>
+      <div id="status-health" class="status-section">
+        <span class="health-badge health-down" id="health-down-count" title="Down">0</span>
+        <span class="health-badge health-warning" id="health-warning-count" title="Warning">0</span>
+        <span class="health-badge health-healthy" id="health-healthy-count" title="Healthy">0</span>
+      </div>
     </div>
 
-    <div id="status-identity" class="status-section">
+    <div id="status-center" class="status-section">
       <span id="tablet-name">Tablet</span>
+      <span>&ndash;</span>
       <span id="connection-status" class="status-indicator">Connecting…</span>
     </div>
 
-    <div id="status-health" class="status-section">
-      <span class="health-badge health-down" id="health-down-count" title="Down">0</span>
-      <span class="health-badge health-warning" id="health-warning-count" title="Warning">0</span>
-      <span class="health-badge health-healthy" id="health-healthy-count" title="Healthy">0</span>
-    </div>
-
-    <div id="status-clock" class="status-section">
+    <div id="status-right" class="status-section">
       <button id="density-toggle" title="Toggle compact mode">
         <span class="material-icons">density_medium</span>
       </button>
       <button id="theme-toggle" title="Toggle light/dark mode">
         <span class="material-icons">dark_mode</span>
       </button>
+      <span id="status-wifi" class="status-device-info" title="WiFi">
+        <span class="material-icons" style="font-size:16px;">wifi</span>
+      </span>
+      <span id="status-battery" class="status-device-info" title="Battery">
+        <span class="material-icons" style="font-size:16px;">battery_full</span>
+        <span id="battery-pct"></span>
+      </span>
       <span id="clock"></span>
     </div>
   </header>

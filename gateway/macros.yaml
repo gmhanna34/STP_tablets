@@ -2568,9 +2568,6 @@ buttons:
           icon: "tv_off"
           action: { type: macro, macro: social_video_off }
           style: "large danger"
-        - label: "AppleTV Restart"
-          icon: "restart_alt"
-          action: { type: macro, macro: social_appletv_restart }
 
     - section: "Audio System"
       cols: 4
@@ -2675,7 +2672,10 @@ buttons:
         - key: "tv"
           label: "TV Controls"
           icon: "tv"
-          items: []
+          items:
+            - label: "AppleTV Restart"
+              icon: "restart_alt"
+              action: { type: macro, macro: social_appletv_restart }
         - key: "video"
           label: "Video Source"
           icon: "settings_input_hdmi"

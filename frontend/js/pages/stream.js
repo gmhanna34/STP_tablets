@@ -43,9 +43,21 @@ const StreamPage = {
           <div class="section-title">Active Camera</div>
           <div class="camera-card">
             <div class="camera-header" id="camera-label">No active camera</div>
-            <div class="camera-feed" id="camera-feed" style="cursor:pointer;">
-              <span class="material-icons">videocam</span>
-              <div style="font-size:11px;margin-top:4px;">Waiting for scene...</div>
+            <div class="camera-feed-wrapper">
+              <div class="camera-feed" id="camera-feed" style="cursor:pointer;">
+                <span class="material-icons">videocam</span>
+                <div style="font-size:11px;margin-top:4px;">Waiting for scene...</div>
+              </div>
+              <div class="camera-preset-bar" id="camera-preset-bar" style="display:none;">
+                <button class="btn camera-preset-btn" id="btn-preset-full" title="Preset 1: Full View">
+                  <span class="material-icons">panorama_wide_angle</span>
+                  <span class="btn-label">Full View</span>
+                </button>
+                <button class="btn camera-preset-btn" id="btn-preset-podium" title="Preset 2: Podium View">
+                  <span class="material-icons">podium</span>
+                  <span class="btn-label">Podium View</span>
+                </button>
+              </div>
             </div>
           </div>
           <div class="text-center" style="font-size:11px;opacity:0.5;margin-top:4px;">Tap image to open camera controls</div>
@@ -115,6 +127,18 @@ const StreamPage = {
       if (camKey) this._openPtzPanel(camKey);
     });
 
+    // Preset buttons on camera snapshot
+    document.getElementById('btn-preset-full')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const camKey = this.getCurrentCameraKey();
+      if (camKey) PtzAPI.callPreset(camKey, '1');
+    });
+    document.getElementById('btn-preset-podium')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const camKey = this.getCurrentCameraKey();
+      if (camKey) PtzAPI.callPreset(camKey, '2');
+    });
+
     // Footer links
     document.getElementById('link-obs-web')?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -163,6 +187,8 @@ const StreamPage = {
     const labelEl = document.getElementById('camera-label');
     if (!feedEl) return;
 
+    const presetBar = document.getElementById('camera-preset-bar');
+
     // No camera mapped to current scene
     if (!camKey) {
       if (this._activeCamKey) {
@@ -171,9 +197,12 @@ const StreamPage = {
         this._activeCamKey = null;
       }
       if (labelEl) labelEl.textContent = 'No active camera';
+      if (presetBar) presetBar.style.display = 'none';
       this._feedTimeout = setTimeout(() => this._refreshCameraFeed(), 2000);
       return;
     }
+
+    if (presetBar) presetBar.style.display = '';
 
     // Camera changed — swap to img element
     if (camKey !== this._activeCamKey) {
@@ -321,8 +350,9 @@ const StreamPage = {
 
     if (btnStartStream) {
       btnStartStream.disabled = state.streaming;
-      btnStartStream.classList.toggle('active', state.streaming);
-      btnStartStream.classList.toggle('btn-danger', false);
+      btnStartStream.classList.toggle('active-danger', state.streaming);
+      const streamLabel = btnStartStream.querySelector('.btn-label');
+      if (streamLabel) streamLabel.textContent = state.streaming ? 'Stream is Live' : 'Start Stream';
     }
     if (btnStopStream) {
       btnStopStream.disabled = !state.streaming;
@@ -330,6 +360,8 @@ const StreamPage = {
     if (btnStartRecord) {
       btnStartRecord.disabled = state.recording;
       btnStartRecord.classList.toggle('active-danger', state.recording);
+      const recordLabel = btnStartRecord.querySelector('.btn-label');
+      if (recordLabel) recordLabel.textContent = state.recording ? 'Recording is Live' : 'Start Record';
     }
     if (btnStopRecord) {
       btnStopRecord.disabled = !state.recording;
