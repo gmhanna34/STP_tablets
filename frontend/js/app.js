@@ -117,6 +117,7 @@ const App = {
       this.socket.emit('join', { room: 'obs' });
       this.socket.emit('join', { room: 'projectors' });
       this.socket.emit('join', { room: 'camlytics' });
+      this.socket.emit('join', { room: 'ha' });
     });
 
     this.socket.on('disconnect', (reason) => {
