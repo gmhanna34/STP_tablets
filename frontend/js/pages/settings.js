@@ -199,19 +199,26 @@ const SettingsPage = {
               </button>
             </div>
             <div id="audit-container" class="hidden">
-              <div class="audit-controls" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
-                <select id="audit-filter" style="padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;">
+              <div class="audit-controls" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap;">
+                <select id="audit-filter" style="padding:6px;border-radius:4px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;">
                   <option value="">All Actions</option>
-                  <option value="scene:execute">Scenes</option>
+                  <option value="macro:">Macros</option>
                   <option value="moip:">MoIP</option>
+                  <option value="obs:">OBS</option>
                   <option value="ptz:">PTZ</option>
                   <option value="projector:">Projectors</option>
                   <option value="ha:">Home Assistant</option>
                   <option value="x32:">X32 Mixer</option>
+                  <option value="fully:">Fully Kiosk</option>
+                  <option value="settings:">Settings</option>
                 </select>
-                <span id="audit-count" style="font-size:12px;opacity:0.6;"></span>
+                <div class="switch-search-bar" style="flex:1;min-width:150px;margin:0;">
+                  <span class="material-icons" style="opacity:0.5;font-size:16px;">search</span>
+                  <input type="text" class="switch-search-input" id="audit-search" placeholder="Search logs..." style="font-size:12px;">
+                </div>
+                <span id="audit-count" style="font-size:12px;opacity:0.6;white-space:nowrap;"></span>
               </div>
-              <div id="audit-log" style="max-height:300px;overflow-y:auto;font-size:12px;font-family:monospace;"></div>
+              <div id="audit-log" style="max-height:400px;overflow-y:auto;font-size:12px;font-family:monospace;"></div>
             </div>
           </div>
           <div class="control-section">
@@ -364,6 +371,7 @@ const SettingsPage = {
     // ── Logs tab ───────────────────────────────────────────────────
     document.getElementById('btn-load-audit')?.addEventListener('click', () => this.loadAuditLog());
     document.getElementById('audit-filter')?.addEventListener('change', () => this.filterAuditLog());
+    document.getElementById('audit-search')?.addEventListener('input', () => this.filterAuditLog());
 
     // ── Admin tab ──────────────────────────────────────────────────
     // Role selection
@@ -1170,15 +1178,16 @@ const SettingsPage = {
 
   async loadAuditLog() {
     try {
+      const tabletId = localStorage.getItem('tabletId') || 'WebApp';
       const [logsResp, sessionsResp] = await Promise.all([
-        fetch('/api/audit/logs?limit=200', { headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' } }),
-        fetch('/api/audit/sessions', { headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' } }),
+        fetch('/api/audit/logs?limit=500', { headers: { 'X-Tablet-ID': tabletId } }),
+        fetch('/api/audit/sessions', { headers: { 'X-Tablet-ID': tabletId } }),
       ]);
       this._auditData = await logsResp.json();
       const sessions = await sessionsResp.json();
 
       document.getElementById('audit-container')?.classList.remove('hidden');
-      this.renderAuditLog(this._auditData);
+      this.filterAuditLog();
       this.renderSessions(sessions);
     } catch (e) {
       App.showToast('Failed to load audit log');
@@ -1190,7 +1199,8 @@ const SettingsPage = {
     const countEl = document.getElementById('audit-count');
     if (!container) return;
 
-    if (countEl) countEl.textContent = `${logs.length} entries`;
+    const total = this._auditData ? this._auditData.length : logs.length;
+    if (countEl) countEl.textContent = logs.length === total ? `${total} entries` : `${logs.length} of ${total} entries`;
 
     if (logs.length === 0) {
       container.innerHTML = '<div style="opacity:0.5;padding:8px;">No activity recorded yet.</div>';
@@ -1202,24 +1212,33 @@ const SettingsPage = {
       const tablet = (log.tablet_id || '').replace('Tablet_', '');
       const latency = log.latency_ms ? `${Math.round(log.latency_ms)}ms` : '';
       const resultShort = (log.result || '').substring(0, 60);
-      return `<div class="audit-row" style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid #333;">
-        <span style="color:#888;min-width:90px;">${ts}</span>
-        <span style="color:#4fc3f7;min-width:80px;">${tablet}</span>
-        <span style="color:#fff;min-width:140px;">${log.action || ''}</span>
-        <span style="color:#aaa;min-width:80px;">${log.target || ''}</span>
-        <span style="color:#81c784;">${latency}</span>
-        <span style="color:#666;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${resultShort}</span>
+      return `<div class="audit-row">
+        <span class="audit-ts">${ts}</span>
+        <span class="audit-tablet">${tablet}</span>
+        <span class="audit-action">${log.action || ''}</span>
+        <span class="audit-target">${log.target || ''}</span>
+        <span class="audit-latency">${latency}</span>
+        <span class="audit-result">${resultShort}</span>
       </div>`;
     }).join('');
   },
 
   filterAuditLog() {
-    const filter = document.getElementById('audit-filter')?.value || '';
-    if (!filter) {
-      this.renderAuditLog(this._auditData);
-      return;
+    const typeFilter = document.getElementById('audit-filter')?.value || '';
+    const searchTerm = (document.getElementById('audit-search')?.value || '').toLowerCase();
+
+    let filtered = this._auditData;
+
+    if (typeFilter) {
+      filtered = filtered.filter(log => (log.action || '').startsWith(typeFilter));
     }
-    const filtered = this._auditData.filter(log => (log.action || '').startsWith(filter));
+    if (searchTerm) {
+      filtered = filtered.filter(log => {
+        const searchable = `${log.action || ''} ${log.target || ''} ${log.tablet_id || ''} ${log.result || ''}`.toLowerCase();
+        return searchable.includes(searchTerm);
+      });
+    }
+
     this.renderAuditLog(filtered);
   },
 

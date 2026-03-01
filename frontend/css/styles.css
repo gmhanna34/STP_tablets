@@ -2131,6 +2131,28 @@ body {
   font-size: 13px;
 }
 
+/* ── Audit Log ───────────────────────────────────────────── */
+
+.audit-row {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.audit-ts     { color: var(--text-secondary); min-width: 90px; }
+.audit-tablet { color: var(--accent); min-width: 80px; }
+.audit-action { color: var(--text); min-width: 140px; }
+.audit-target { color: var(--text-secondary); min-width: 80px; }
+.audit-latency { color: var(--ok); }
+.audit-result {
+  color: var(--text-secondary);
+  opacity: 0.6;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── Switch Panel (SmartThings / WattBox) ────────────────── */
 
 .switch-search-bar {

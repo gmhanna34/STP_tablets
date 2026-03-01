@@ -11,6 +11,9 @@ const SourcePage = {
         <div class="page-header">
           <h1>SOURCE ROUTING</h1>
           <div class="subtitle">MoIP Video &amp; Audio Distribution</div>
+          <button class="help-icon-btn" id="source-help-btn" title="Page Help">
+            <span class="material-icons">help_outline</span>
+          </button>
         </div>
 
         <div class="cam-tab-bar">
@@ -68,6 +71,8 @@ const SourcePage = {
   },
 
   init() {
+    document.getElementById('source-help-btn')?.addEventListener('click', () => this._showHelp());
+
     // Load device config
     if (App.devicesConfig?.moip) {
       this.transmitters = App.devicesConfig.moip.transmitters || [];
@@ -304,6 +309,53 @@ const SourcePage = {
           App.showToast(`RX ${rxId} → TX ${txId}`);
         }
       });
+    });
+  },
+
+  _showHelp() {
+    App.showPanel('Source Routing - Help', (body) => {
+      body.innerHTML = `
+        <div class="help-content">
+          <div class="help-intro">
+            <p>This page provides low-level control over the MoIP video routing matrix and the X32 audio mixer. It is intended for advanced users and troubleshooting.</p>
+          </div>
+
+          <div class="help-section">
+            <h3>Video Tab</h3>
+            <p class="help-note">Shows every MoIP receiver grouped by location. Each receiver has a dropdown to select which transmitter (source) it receives from.</p>
+            <dl class="help-list">
+              <dt><span class="material-icons">refresh</span> Refresh</dt>
+              <dd>Reloads the current routing state from all receivers.</dd>
+              <dt>Receiver Dropdowns</dt>
+              <dd>Select a transmitter source for each receiver. Changes take effect immediately. Green link icon means the receiver is connected.</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3>Audio Tab - Quick Actions</h3>
+            <dl class="help-list">
+              <dt><span class="material-icons">volume_off</span> Mute All</dt>
+              <dd>Mutes every named input channel on the X32 mixer.</dd>
+              <dt><span class="material-icons">volume_up</span> Unmute All</dt>
+              <dd>Unmutes every named input channel.</dd>
+              <dt><span class="material-icons">refresh</span> Reload Scene</dt>
+              <dd>Reloads the currently active mixer scene, resetting all faders and mutes to their saved positions.</dd>
+              <dt><span class="material-icons">music_off</span> Mute Music</dt>
+              <dd>Toggles mute on all channels identified as music/band channels (guitar, bass, drums, keys, etc.).</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3>Audio Tab - Mixer Scenes</h3>
+            <p class="help-note">Saved mixer presets. Click to load a scene — this resets all channel volumes and mutes to the saved configuration. Requires confirmation.</p>
+          </div>
+
+          <div class="help-section">
+            <h3>Audio Tab - Input Channels & Bus Outputs</h3>
+            <p class="help-note">Shows individual channel faders with volume sliders and mute buttons. Bus/Aux outputs show mute state and volume levels. Only channels with names assigned on the X32 are shown.</p>
+          </div>
+        </div>
+      `;
     });
   },
 
