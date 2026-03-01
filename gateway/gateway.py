@@ -30,7 +30,6 @@ from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import subprocess
 
 import requests as http_requests
 import yaml
@@ -780,7 +779,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         obs_cfg = cfg.get("obs", {})
         safe_settings = {
             "app": settings_data.get("app", {}),
-            "ptzCameras": {k: {"name": v.get("name", k), "ip": v.get("ip", ""), "hasLive": bool(v.get("rtsp_url"))} for k, v in cfg.get("ptz_cameras", {}).items()},
+            "ptzCameras": {k: {"name": v.get("name", k), "ip": v.get("ip", "")} for k, v in cfg.get("ptz_cameras", {}).items()},
             "projectors": {k: {"displayName": v.get("name", k)} for k, v in cfg.get("projectors", {}).items()},
             "healthCheck": settings_data.get("healthCheck", {}),
             "obs": {"maxScenes": obs_cfg.get("max_scenes", 10)},
@@ -1104,72 +1103,6 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return "Camera timeout", 504
         except http_requests.ConnectionError:
             return "Camera unreachable", 503
-
-    @app.route("/api/ptz/<camera_key>/live")
-    def ptz_live(camera_key: str):
-        """Stream live MJPEG from a PTZ camera's RTSP feed via ffmpeg."""
-        cameras = cfg.get("ptz_cameras", {})
-        cam = cameras.get(camera_key)
-        if not cam:
-            return jsonify({"error": f"Unknown camera: {camera_key}"}), 404
-
-        rtsp_url = cam.get("rtsp_url")
-        if not rtsp_url:
-            return jsonify({"error": "No RTSP URL configured for this camera"}), 404
-
-        ffmpeg_path = cfg.get("ffmpeg", {}).get("path", "ffmpeg")
-
-        def generate():
-            proc = subprocess.Popen(
-                [
-                    ffmpeg_path,
-                    "-rtsp_transport", "tcp",
-                    "-i", rtsp_url,
-                    "-f", "mjpeg",
-                    "-q:v", "5",
-                    "-r", "15",
-                    "-vf", "scale=800:-1",
-                    "-an",
-                    "pipe:1",
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-            )
-            try:
-                buf = b""
-                fd = proc.stdout.fileno()
-                while True:
-                    chunk = os.read(fd, 8192)
-                    if not chunk:
-                        break
-                    buf += chunk
-                    # Extract complete JPEG frames (FFD8 … FFD9)
-                    while True:
-                        start = buf.find(b"\xff\xd8")
-                        if start == -1:
-                            buf = b""
-                            break
-                        end = buf.find(b"\xff\xd9", start + 2)
-                        if end == -1:
-                            buf = buf[start:]
-                            break
-                        frame = buf[start:end + 2]
-                        buf = buf[end + 2:]
-                        yield (
-                            b"--frame\r\n"
-                            b"Content-Type: image/jpeg\r\n\r\n"
-                            + frame
-                            + b"\r\n"
-                        )
-            finally:
-                proc.kill()
-                proc.wait()
-
-        return Response(
-            generate(),
-            mimetype="multipart/x-mixed-replace; boundary=frame",
-            headers={"Cache-Control": "no-store"},
-        )
 
     # -------------------------------------------------------------------------
     # EPSON PROJECTOR CONTROL (server-side)
