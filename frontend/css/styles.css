@@ -588,6 +588,13 @@ body {
   color: #fff;
 }
 
+/* Active-source state (orange) — for video source selection */
+.btn.active-source {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 /* Active-danger state (red) — for streaming/recording toggles */
 .btn.active-danger {
   background: var(--danger);
@@ -620,6 +627,7 @@ body {
 }
 
 .btn.active .btn-badge,
+.btn.active-source .btn-badge,
 .btn.active-danger .btn-badge,
 .btn.live .btn-badge,
 .btn.recording .btn-badge {
@@ -2108,14 +2116,13 @@ body {
 
 .tv-controls-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 8px;
 }
 
 .tv-control-card {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   padding: 10px 12px;
   background: var(--surface-alt);
   border: 1px solid var(--border);
@@ -2130,7 +2137,6 @@ body {
   font-size: 13px;
   font-weight: 600;
   min-width: 0;
-  flex: 1;
 }
 
 .tv-control-label span:last-child {
@@ -2142,7 +2148,6 @@ body {
 .tv-control-buttons {
   display: flex;
   gap: 4px;
-  flex-shrink: 0;
 }
 
 .tv-btn {
@@ -2175,7 +2180,7 @@ body {
 
 @media (max-width: 599px) {
   .tv-controls-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
   .tv-control-label { font-size: 12px; }
   .tv-btn { min-height: 32px; min-width: 32px; padding: 3px 5px; }
