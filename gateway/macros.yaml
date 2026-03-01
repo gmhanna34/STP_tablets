@@ -2300,6 +2300,12 @@ buttons:
             on_value: "8"
             on_style: "active"
 
+    - section: "Advanced Display Settings"
+      display: "link"
+      panel: "display"
+      page: "chapel"
+      items: []
+
     - section: "Advanced Power Settings"
       display: "link"
       panel: "power"
@@ -2336,9 +2342,6 @@ buttons:
           icon: "mic_off"
           action: { type: macro, macro: main_audio_off }
           style: "large danger"
-        - label: "AppleTV Restart"
-          icon: "restart_alt"
-          action: { type: macro, macro: main_appletv_restart }
 
     - section: "A/C"
       cols: 4
@@ -2464,6 +2467,8 @@ buttons:
             
     - section: "Advanced Display Settings"
       display: "link"
+      panel: "display"
+      page: "main"
       cols: 4
       items:
         - label: "Projectors Only On"
@@ -2480,6 +2485,9 @@ buttons:
           icon: "speaker"
           action: { type: macro, macro: main_port_only_off }
           style: "danger"
+        - label: "AppleTV Restart"
+          icon: "restart_alt"
+          action: { type: macro, macro: main_appletv_restart }
         - label: "PRJ Front Left"
           icon: "tv"
           toggle:
@@ -2672,6 +2680,12 @@ buttons:
             on_value: "1"
             on_style: "active"
 
+    - section: "Advanced Display Settings"
+      display: "link"
+      panel: "display"
+      page: "social"
+      items: []
+
     - section: "Advanced Power Settings"
       display: "link"
       panel: "power"
@@ -2721,6 +2735,12 @@ buttons:
             field: "9.transmitter_id"
             on_value: "9"
             on_style: "active"
+
+    - section: "Advanced Display Settings"
+      display: "link"
+      panel: "display"
+      page: "gym"
+      items: []
 
     - section: "Advanced Power Settings"
       display: "link"
@@ -2893,6 +2913,12 @@ buttons:
             field: "29.transmitter_id"
             on_value: "25"
             on_style: "active"
+
+    - section: "Advanced Display Settings"
+      display: "link"
+      panel: "display"
+      page: "confroom"
+      items: []
 
     - section: "Advanced Power Settings"
       display: "link"

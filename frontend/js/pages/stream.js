@@ -313,6 +313,28 @@ const StreamPage = {
     if (dotRec) dotRec.className = 'status-dot ' + (state.recording ? 'recording' : 'idle');
     if (lblRec) lblRec.textContent = 'Record: ' + (state.recording ? 'Recording' : 'Off');
 
+    // Stream/Record button states
+    const btnStartStream = document.getElementById('btn-start-stream');
+    const btnStopStream = document.getElementById('btn-stop-stream');
+    const btnStartRecord = document.getElementById('btn-start-record');
+    const btnStopRecord = document.getElementById('btn-stop-record');
+
+    if (btnStartStream) {
+      btnStartStream.disabled = state.streaming;
+      btnStartStream.classList.toggle('active', state.streaming);
+      btnStartStream.classList.toggle('btn-danger', false);
+    }
+    if (btnStopStream) {
+      btnStopStream.disabled = !state.streaming;
+    }
+    if (btnStartRecord) {
+      btnStartRecord.disabled = state.recording;
+      btnStartRecord.classList.toggle('active-danger', state.recording);
+    }
+    if (btnStopRecord) {
+      btnStopRecord.disabled = !state.recording;
+    }
+
     // Current scene
     const sceneLabel = document.getElementById('current-scene-name');
     if (sceneLabel) sceneLabel.textContent = state.currentScene || '--';
