@@ -15,6 +15,9 @@ const SecurityPage = {
         <div class="page-header">
           <h1>SECURITY</h1>
           <div class="subtitle">Cameras &amp; Access Control</div>
+          <button class="help-icon-btn" id="security-help-btn" title="Page Help">
+            <span class="material-icons">help_outline</span>
+          </button>
         </div>
 
         <div class="cam-tab-bar">
@@ -76,6 +79,8 @@ const SecurityPage = {
   init() {
     this._activeTab = 'ptz';
     this._selected = new Set();
+
+    document.getElementById('security-help-btn')?.addEventListener('click', () => this._showHelp());
 
     // Tab switching
     document.querySelectorAll('.cam-tab').forEach(tab => {
@@ -1043,6 +1048,45 @@ const SecurityPage = {
   _stopAllFeeds() {
     Object.values(this._feedTimers).forEach(t => clearTimeout(t));
     this._feedTimers = {};
+  },
+
+  _showHelp() {
+    App.showPanel('Security - Help', (body) => {
+      body.innerHTML = `
+        <div class="help-content">
+          <div class="help-intro">
+            <p>This page provides camera monitoring and door access control for the building.</p>
+          </div>
+
+          <div class="help-section">
+            <h3>PTZ Cameras</h3>
+            <dl class="help-list">
+              <dt>Camera Cards</dt>
+              <dd>Each card shows a live snapshot from a PTZ camera with preset buttons (P1, P2, P3) for quick positioning. Tap the snapshot to open full pan/tilt/zoom controls.</dd>
+              <dt><span class="material-icons">grid_view</span> View Security Grid on Displays</dt>
+              <dd>Sends the security camera grid layout to the lobby TVs so multiple camera feeds are visible on the displays.</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3>Security Cameras</h3>
+            <p class="help-note">Shows all Home Assistant-integrated security cameras. Tap any camera card to view its live stream at full size.</p>
+          </div>
+
+          <div class="help-section">
+            <h3>Access Control</h3>
+            <dl class="help-list">
+              <dt>Door Cards</dt>
+              <dd>Each card shows a door with its current lock state: green = locked, red = unlocked, orange = transitioning, gray = jammed. Tap a card to control that individual door.</dd>
+              <dt>Multi-Select</dt>
+              <dd>Use the checkboxes to select multiple doors, then use the batch Lock/Unlock buttons that appear at the top.</dd>
+              <dt>Timed Unlock</dt>
+              <dd>When controlling a single door, you can set a timed unlock duration (hours and minutes) or choose "Until re-locked" for indefinite unlock.</dd>
+            </dl>
+          </div>
+        </div>
+      `;
+    });
   },
 
   destroy() {

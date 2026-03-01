@@ -1,11 +1,15 @@
 const StreamPage = {
   pollTimer: null,
+  _resetTimer: null,
 
   render(container) {
     container.innerHTML = `
       <div class="page-grid">
         <div class="page-header">
           <h1>LIVE STREAM</h1>
+          <button class="help-icon-btn" id="stream-help-btn" title="Page Help">
+            <span class="material-icons">help_outline</span>
+          </button>
         </div>
 
         <!-- Status: full width, compact inline -->
@@ -101,12 +105,22 @@ const StreamPage = {
     this.updateStatus();
     this.pollTimer = setInterval(() => this.updateStatus(), 3000);
 
+    // Help button
+    document.getElementById('stream-help-btn')?.addEventListener('click', () => this._showHelp());
+
     // Stream/Record buttons
-    document.getElementById('btn-start-stream')?.addEventListener('click', async () => { await ObsAPI.startStream(); this.updateStatus(); });
+    document.getElementById('btn-start-stream')?.addEventListener('click', async () => {
+      // Safety reset before starting — clears any stale YouTube state
+      try { await ObsAPI.resetLiveStream(); } catch {}
+      await ObsAPI.startStream();
+      this.updateStatus();
+    });
     document.getElementById('btn-stop-stream')?.addEventListener('click', async () => {
       if (!await App.showConfirm('Stop the live stream? This will end the broadcast for all viewers.')) return;
       await ObsAPI.stopStream();
       this.updateStatus();
+      // Schedule a stream reset after 3 minutes to acknowledge YouTube end-of-stream
+      this._scheduleStreamReset();
     });
     document.getElementById('btn-start-record')?.addEventListener('click', async () => { await ObsAPI.startRecord(); this.updateStatus(); });
     document.getElementById('btn-stop-record')?.addEventListener('click', async () => { await ObsAPI.stopRecord(); this.updateStatus(); });
@@ -392,11 +406,89 @@ const StreamPage = {
     }
   },
 
+  _scheduleStreamReset() {
+    // Clear any previous reset timer
+    if (this._resetTimer) clearTimeout(this._resetTimer);
+    App.showToast('Stream reset scheduled in 3 minutes...', 4000);
+    this._resetTimer = setTimeout(async () => {
+      this._resetTimer = null;
+      try {
+        await ObsAPI.resetLiveStream();
+        App.showToast('YouTube stream reset complete', 3000);
+      } catch {
+        App.showToast('Stream reset failed — try Reset Stream manually', 4000);
+      }
+    }, 180000); // 3 minutes
+  },
+
+  _showHelp() {
+    App.showPanel('Live Stream - Help', (body) => {
+      body.innerHTML = `
+        <div class="help-content">
+          <div class="help-intro">
+            <p>This page controls the YouTube live stream and recording via OBS, manages camera views, and provides scene switching.</p>
+          </div>
+
+          <div class="help-section">
+            <h3>Status Bar</h3>
+            <p class="help-note">Shows real-time connection, stream, and recording status with color-coded indicators. Also displays the current active OBS scene.</p>
+          </div>
+
+          <div class="help-section">
+            <h3>Scenes</h3>
+            <p class="help-note">Click any scene button to switch the OBS output to that camera/view. The active scene is highlighted.</p>
+          </div>
+
+          <div class="help-section">
+            <h3>Active Camera</h3>
+            <dl class="help-list">
+              <dt>Camera Snapshot</dt>
+              <dd>Shows a live preview from the current scene's camera. Tap the image to open full PTZ (pan/tilt/zoom) controls.</dd>
+              <dt><span class="material-icons">panorama_wide_angle</span> Full View</dt>
+              <dd>Moves the active camera to Preset 1 (wide/full view of the space).</dd>
+              <dt><span class="material-icons">podium</span> Podium View</dt>
+              <dd>Moves the active camera to Preset 2 (zoomed in on the podium/altar).</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3>Stream & Record</h3>
+            <dl class="help-list">
+              <dt><span class="material-icons">play_arrow</span> Start Stream / Stream is Live</dt>
+              <dd>Starts the YouTube live stream. When active, the button turns red and pulsates. The stream goes live to all viewers.</dd>
+              <dt><span class="material-icons">stop</span> Stop Stream</dt>
+              <dd>Stops the YouTube live stream. Shows a confirmation dialog first. After stopping, a 3-minute delayed reset prepares YouTube for the next stream.</dd>
+              <dt><span class="material-icons">fiber_manual_record</span> Start Record / Recording is Live</dt>
+              <dd>Starts local recording. When active, the button turns red and pulsates.</dd>
+              <dt><span class="material-icons">stop</span> Stop Record</dt>
+              <dd>Stops local recording.</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3>Slides & Advanced</h3>
+            <dl class="help-list">
+              <dt><span class="material-icons">slideshow</span> Slides On / Off / Toggle</dt>
+              <dd>Controls the slides overlay on the live stream output.</dd>
+              <dt><span class="material-icons">restart_alt</span> Reset Stream</dt>
+              <dd>Resets the OBS live stream configuration via Advanced Scene Switcher. Use if YouTube shows a stream error.</dd>
+              <dt><span class="material-icons">mic_external_on</span> Shure Mic</dt>
+              <dd>Sets the OBS audio input to the Shure wireless microphone.</dd>
+              <dt><span class="material-icons">videocam</span> ATEM</dt>
+              <dd>Re-enables the Blackmagic ATEM webcam input in OBS.</dd>
+            </dl>
+          </div>
+        </div>
+      `;
+    });
+  },
+
   destroy() {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
     this._stopCameraFeed();
+    // Don't clear _resetTimer on page navigation — the 3-min reset should still fire
   }
 };

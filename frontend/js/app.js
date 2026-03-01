@@ -237,7 +237,7 @@ const App = {
     const tabletEl = document.getElementById('tablet-name');
 
     if (versionEl) {
-      versionEl.textContent = `Version: ${this.settings?.app?.version || '26-006'} - Web App`;
+      versionEl.textContent = `Version: ${this.settings?.app?.version || '26-012'} - Web App`;
     }
     if (tabletEl) {
       let label = Auth.getDisplayName();

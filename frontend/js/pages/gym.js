@@ -8,6 +8,9 @@ const GymPage = {
       <div class="page-grid">
         <div class="page-header">
           <h1>GYM</h1>
+          <button class="help-icon-btn" id="gym-help-btn" title="Page Help">
+            <span class="material-icons">help_outline</span>
+          </button>
         </div>
         <div id="gym-macro-buttons">
           <div class="text-center" style="opacity:0.5;">Loading controls...</div>
@@ -20,6 +23,8 @@ const GymPage = {
     const btnContainer = document.getElementById('gym-macro-buttons');
     if (!btnContainer) return;
 
+    document.getElementById('gym-help-btn')?.addEventListener('click', () => this._showHelp());
+
     const data = await MacroAPI.getButtons('gym');
     this._sections = data.buttons || [];
     this._macros = data.macros || {};
@@ -31,6 +36,61 @@ const GymPage = {
       MacroAPI.updateButtonStates(btnContainer, this._sections);
     };
     MacroAPI.onStateChange(this._stateHandler);
+  },
+
+  _showHelp() {
+    App.showPanel('Gym - Help', (body) => {
+      body.innerHTML = `
+        <div class="help-content">
+          <div class="help-intro">
+            <p>This page controls the Gym AV system including video display and audio.</p>
+          </div>
+
+          <div class="help-section">
+            <h3>Video</h3>
+            <dl class="help-list">
+              <dt><span class="material-icons">tv</span> On</dt>
+              <dd>Powers on the Gym TV display.</dd>
+              <dt><span class="material-icons">tv_off</span> Off</dt>
+              <dd>Powers off the Gym TV display.</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3>Audio</h3>
+            <dl class="help-list">
+              <dt><span class="material-icons">mic</span> On</dt>
+              <dd>Powers on the Gym audio system.</dd>
+              <dt><span class="material-icons">mic_off</span> Off</dt>
+              <dd>Powers off the Gym audio system.</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3>Video Sources</h3>
+            <p class="help-note">These buttons route video inputs to the Gym TV. The active source is highlighted in orange.</p>
+            <dl class="help-list">
+              <dt><span class="material-icons">live_tv</span> Live Stream</dt>
+              <dd>Routes the live stream camera feed to the Gym TV.</dd>
+              <dt><span class="material-icons">announcement</span> Announcements</dt>
+              <dd>Routes the Announcements PC to the Gym TV.</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3>Advanced Settings</h3>
+            <dl class="help-list">
+              <dt>Power Tab</dt>
+              <dd>Individual power control for Gym devices.</dd>
+              <dt>TV Controls Tab</dt>
+              <dd>IR remote controls for the Gym TV.</dd>
+              <dt>Video Source Tab</dt>
+              <dd>Advanced video routing options.</dd>
+            </dl>
+          </div>
+        </div>
+      `;
+    });
   },
 
   destroy() {
