@@ -455,81 +455,125 @@ const SettingsPage = {
 
   _switchPanelTimer: null,
 
+  _switchSearchTerm: '',
+
   async _openSwitchPanel(title, prefix) {
     const self = this;
     const tabletId = localStorage.getItem('tabletId') || 'WebApp';
+    self._switchSearchTerm = '';
 
     App.showPanel(title, async (body) => {
       body.innerHTML = '<div class="text-center" style="padding:30px;opacity:0.5;">Loading switches...</div>';
 
-      const renderSwitches = async () => {
-        try {
-          const resp = await fetch(`/api/ha/entities?domain=switch&q=${prefix}`, {
-            headers: { 'X-Tablet-ID': tabletId },
-          });
-          const data = await resp.json();
-          if (data.error) {
-            body.innerHTML = `<div style="color:var(--danger);padding:16px;">${data.error}</div>`;
-            return;
-          }
+      let allEntities = [];
 
-          const entities = [];
-          const prefixLower = prefix.toLowerCase();
-          for (const [, info] of Object.entries(data.domains || {})) {
-            for (const ent of (info.entities || [])) {
-              if (ent.entity_id.toLowerCase().includes(prefixLower)) entities.push(ent);
+      const fetchEntities = async () => {
+        const resp = await fetch(`/api/ha/entities?domain=switch&q=${prefix}`, {
+          headers: { 'X-Tablet-ID': tabletId },
+        });
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+
+        const entities = [];
+        const prefixLower = prefix.toLowerCase();
+        for (const [, info] of Object.entries(data.domains || {})) {
+          for (const ent of (info.entities || [])) {
+            const eid = ent.entity_id.toLowerCase();
+            const fname = (ent.friendly_name || '').toLowerCase();
+            if (eid.includes(prefixLower) || fname.includes(prefixLower)) {
+              entities.push(ent);
             }
           }
+        }
+        entities.sort((a, b) => (a.friendly_name || a.entity_id).localeCompare(b.friendly_name || b.entity_id));
+        return entities;
+      };
 
-          entities.sort((a, b) => (a.friendly_name || a.entity_id).localeCompare(b.friendly_name || b.entity_id));
+      const renderList = () => {
+        const search = self._switchSearchTerm.toLowerCase();
+        const filtered = search
+          ? allEntities.filter(e => {
+              const raw = e.friendly_name || e.entity_id.split('.').pop() || e.entity_id;
+              const name = raw.replace(/^SW[_ ]|^WB[_ ]/i, '').replace(/_/g, ' ');
+              return name.toLowerCase().includes(search) || e.entity_id.toLowerCase().includes(search);
+            })
+          : allEntities;
 
-          if (entities.length === 0) {
-            body.innerHTML = `<div style="opacity:0.5;padding:20px;text-align:center;">No ${title} switches found (switch.${prefix}*).</div>`;
+        const gridEl = body.querySelector('.switch-panel-grid');
+        const countEl = body.querySelector('.switch-count');
+        if (!gridEl) return;
+
+        if (countEl) countEl.textContent = `${filtered.length} of ${allEntities.length} switches`;
+
+        if (filtered.length === 0) {
+          gridEl.innerHTML = `<div style="opacity:0.5;padding:20px;text-align:center;grid-column:1/-1;">No matches found.</div>`;
+          return;
+        }
+
+        gridEl.innerHTML = filtered.map(e => {
+          const isOn = e.state === 'on';
+          const raw = e.friendly_name || e.entity_id.split('.').pop() || e.entity_id;
+          const name = raw.replace(/^SW[_ ]|^WB[_ ]/i, '').replace(/_/g, ' ');
+          return `<div class="switch-card ${isOn ? 'switch-on' : 'switch-off'}">
+            <div class="switch-info">
+              <span class="status-dot ${isOn ? 'idle' : 'offline'}"></span>
+              <span class="switch-name">${name}</span>
+            </div>
+            <button class="btn switch-toggle ${isOn ? 'active' : ''}" data-switch-entity="${e.entity_id}">
+              <span class="material-icons">${isOn ? 'toggle_on' : 'toggle_off'}</span>
+            </button>
+          </div>`;
+        }).join('');
+
+        // Wire toggle handlers
+        gridEl.querySelectorAll('[data-switch-entity]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const entityId = btn.dataset.switchEntity;
+            btn.disabled = true;
+            try {
+              await fetch(`/api/ha/service/switch/toggle`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': tabletId },
+                body: JSON.stringify({ entity_id: entityId }),
+              });
+              setTimeout(() => renderSwitches(), 800);
+            } catch (err) {
+              App.showToast('Failed to toggle switch');
+              btn.disabled = false;
+            }
+          });
+        });
+      };
+
+      const renderSwitches = async () => {
+        try {
+          allEntities = await fetchEntities();
+
+          if (allEntities.length === 0) {
+            body.innerHTML = `<div style="opacity:0.5;padding:20px;text-align:center;">No ${title} switches found.</div>`;
             return;
           }
 
-          body.innerHTML = `
-            <div style="margin-bottom:12px;font-size:13px;opacity:0.6;">${entities.length} switches</div>
-            <div class="switch-panel-grid">
-              ${entities.map(e => {
-                const isOn = e.state === 'on';
-                const raw = e.friendly_name || e.entity_id.split('.').pop() || e.entity_id;
-                const name = raw.replace(/^SW[_ ]|^WB[_ ]/i, '').replace(/_/g, ' ');
-                return `<div class="switch-card ${isOn ? 'switch-on' : 'switch-off'}">
-                  <div class="switch-info">
-                    <span class="status-dot ${isOn ? 'idle' : 'offline'}"></span>
-                    <span class="switch-name">${name}</span>
-                  </div>
-                  <button class="btn switch-toggle ${isOn ? 'active' : ''}" data-switch-entity="${e.entity_id}">
-                    <span class="material-icons">${isOn ? 'toggle_on' : 'toggle_off'}</span>
-                  </button>
-                </div>`;
-              }).join('')}
-            </div>
-          `;
-
-          // Wire toggle handlers
-          body.querySelectorAll('[data-switch-entity]').forEach(btn => {
-            btn.addEventListener('click', async () => {
-              const entityId = btn.dataset.switchEntity;
-              btn.disabled = true;
-              try {
-                await fetch(`/api/ha/service/switch/toggle`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': tabletId },
-                  body: JSON.stringify({ entity_id: entityId }),
-                });
-                // Refresh after short delay to let HA update
-                setTimeout(() => renderSwitches(), 800);
-              } catch (err) {
-                App.showToast('Failed to toggle switch');
-                btn.disabled = false;
-              }
+          // Only rebuild the full layout on first render
+          if (!body.querySelector('.switch-search-input')) {
+            body.innerHTML = `
+              <div class="switch-search-bar">
+                <span class="material-icons" style="opacity:0.5;">search</span>
+                <input type="text" class="switch-search-input" placeholder="Filter switches..." value="${self._switchSearchTerm}">
+                <span class="switch-count" style="font-size:12px;opacity:0.5;white-space:nowrap;">${allEntities.length} of ${allEntities.length} switches</span>
+              </div>
+              <div class="switch-panel-grid"></div>
+            `;
+            body.querySelector('.switch-search-input')?.addEventListener('input', (e) => {
+              self._switchSearchTerm = e.target.value;
+              renderList();
             });
-          });
+          }
+
+          renderList();
 
         } catch (err) {
-          body.innerHTML = '<div style="color:var(--danger);padding:16px;">Failed to load switches. Is Home Assistant connected?</div>';
+          body.innerHTML = `<div style="color:var(--danger);padding:16px;">Failed to load switches. ${err.message || 'Is Home Assistant connected?'}</div>`;
         }
       };
 

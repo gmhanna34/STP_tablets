@@ -65,6 +65,7 @@ const App = {
     this.updateStatusBar();
     this.startClock();
     this.startHealthPolling();
+    this.startDeviceInfoPolling();
 
     // Setup PIN overlay
     this.setupPINOverlay();
@@ -293,6 +294,59 @@ const App = {
     if (healthSection) {
       healthSection.style.cursor = 'pointer';
       healthSection.addEventListener('click', () => this.openHealthDashPanel());
+    }
+  },
+
+  startDeviceInfoPolling() {
+    const update = async () => {
+      try {
+        const resp = await fetch('http://127.0.0.1:2323/?password=admin&cmd=deviceInfo&type=json',
+          { signal: AbortSignal.timeout(3000) });
+        const info = await resp.json();
+        this._updateBattery(info.batteryLevel, info.isPlugged);
+        this._updateWifi(info.wifiSignalLevel);
+      } catch {
+        // Not running in Fully Kiosk — hide device info indicators
+        const bat = document.getElementById('status-battery');
+        const wifi = document.getElementById('status-wifi');
+        if (bat) bat.style.display = 'none';
+        if (wifi) wifi.style.display = 'none';
+      }
+    };
+    update();
+    this._deviceInfoTimer = setInterval(update, 30000);
+  },
+
+  _updateBattery(level, isPlugged) {
+    const pctEl = document.getElementById('battery-pct');
+    const batEl = document.getElementById('status-battery');
+    if (!batEl) return;
+    const icon = batEl.querySelector('.material-icons');
+    if (level == null) { batEl.style.display = 'none'; return; }
+    batEl.style.display = '';
+    if (pctEl) pctEl.textContent = `${Math.round(level)}%`;
+    if (icon) {
+      if (isPlugged) icon.textContent = 'battery_charging_full';
+      else if (level > 80) icon.textContent = 'battery_full';
+      else if (level > 50) icon.textContent = 'battery_5_bar';
+      else if (level > 20) icon.textContent = 'battery_3_bar';
+      else icon.textContent = 'battery_1_bar';
+    }
+    if (level <= 15) batEl.style.color = 'var(--down)';
+    else batEl.style.color = '';
+  },
+
+  _updateWifi(signalLevel) {
+    const wifiEl = document.getElementById('status-wifi');
+    if (!wifiEl) return;
+    const icon = wifiEl.querySelector('.material-icons');
+    if (signalLevel == null) { wifiEl.style.display = 'none'; return; }
+    wifiEl.style.display = '';
+    if (icon) {
+      if (signalLevel >= 3) icon.textContent = 'wifi';
+      else if (signalLevel >= 2) icon.textContent = 'wifi_2_bar';
+      else if (signalLevel >= 1) icon.textContent = 'wifi_1_bar';
+      else icon.textContent = 'wifi_off';
     }
   },
 

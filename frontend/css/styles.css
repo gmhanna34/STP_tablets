@@ -99,7 +99,7 @@ body {
   height: 100dvh;
   width: 100%;
   overflow: hidden;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: Tahoma, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: var(--text);
   background: var(--bg);
   transition: background 0.3s, color 0.3s;
@@ -112,7 +112,6 @@ body {
   background: var(--nav-bg);
   color: var(--text-on-nav);
   display: flex;
-  justify-content: space-between;
   align-items: center;
   padding: 2px 12px;
   font-size: 11px;
@@ -124,6 +123,21 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+#status-left,
+#status-right {
+  flex: 1;
+}
+#status-right { justify-content: flex-end; }
+#status-center { white-space: nowrap; font-weight: 600; }
+
+.status-device-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0.7;
+  font-size: 10px;
 }
 
 .health-badge {
@@ -316,11 +330,68 @@ body {
   margin: 0 4px;
 }
 
+/* ── Home Page ────────────────────────────────────────────── */
+
+.home-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 20px;
+  text-align: center;
+  gap: 0;
+}
+
+.home-title {
+  font-size: 26px;
+  font-weight: bold;
+  margin-bottom: 12px;
+}
+
+.home-logo-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.home-logo {
+  max-width: 280px;
+  max-height: 280px;
+  width: auto;
+  height: auto;
+  opacity: 0.25;
+  object-fit: contain;
+}
+
+.home-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 600px;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.home-footer-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+.home-refresh-btn {
+  flex-shrink: 0;
+}
+
 /* ── Page Header ──────────────────────────────────────────── */
 
 .page-header {
   text-align: center;
   margin-bottom: 10px;
+  position: relative;
 }
 
 .page-header h1 {
@@ -328,6 +399,22 @@ body {
   font-weight: bold;
   margin-bottom: 4px;
 }
+
+.help-icon-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.help-icon-btn:hover { opacity: 1; }
+.help-icon-btn .material-icons { font-size: 22px; }
 
 .page-header .subtitle {
   font-size: 14px;
@@ -946,6 +1033,32 @@ body {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+.camera-feed-wrapper {
+  position: relative;
+}
+
+.camera-preset-bar {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 0 0 10px 10px;
+}
+
+.camera-preset-btn {
+  flex: 1;
+  max-width: 180px;
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  padding: 8px 12px !important;
+}
+.camera-preset-btn:hover {
+  background: rgba(255, 255, 255, 0.25) !important;
 }
 
 .camera-card .camera-controls {
@@ -1986,7 +2099,61 @@ body {
   }
 }
 
+/* ── Help Panel Content ──────────────────────────────────── */
+
+.help-content { font-size: 14px; line-height: 1.5; }
+.help-intro { margin-bottom: 16px; color: var(--text-secondary); }
+.help-section { margin-bottom: 18px; }
+.help-section h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.help-note {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.help-list { margin: 0; padding: 0; }
+.help-list dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+.help-list dt .material-icons { font-size: 18px; opacity: 0.7; }
+.help-list dd {
+  margin: 2px 0 0 24px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 /* ── Switch Panel (SmartThings / WattBox) ────────────────── */
+
+.switch-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+}
+
+.switch-search-input {
+  flex: 1;
+  border: none;
+  background: none;
+  outline: none;
+  font-size: 14px;
+  color: var(--text);
+  font-family: inherit;
+}
+.switch-search-input::placeholder { color: var(--text-secondary); opacity: 0.6; }
 
 .switch-panel-grid {
   display: grid;
