@@ -427,15 +427,12 @@ macros:
         on_fail: skip
         message: "Re-enabling BMATEM webcam in OBS"
 
-  # --- Child: Turn on projectors (shared video → power outlets → staggered Epson) ---
+  # --- Child: Turn on projectors (power outlets → staggered Epson) ---
   main_projectors_on:
     label: "Projectors On"
     icon: "tv"
-    description: "Shared video components, power outlets, then each projector with stagger delays"
+    description: "Power outlets on, then each projector with stagger delays"
     steps:
-      - type: macro
-        macro: "shared_video_on"
-        message: "Starting shared video components"
       # Projector power switches (Kasa plugs)
       - type: ha_service
         domain: "switch"
@@ -473,7 +470,7 @@ macros:
         data: { entity_id: "switch.vs_epsonprojector1" }
         on_fail: skip
       - type: delay
-        seconds: 1
+        seconds: 0.5
       - type: epson_power
         projector: "epson2"
         state: "on"
@@ -485,7 +482,7 @@ macros:
         data: { entity_id: "switch.vs_epsonprojector2" }
         on_fail: skip
       - type: delay
-        seconds: 1
+        seconds: 0.5
       - type: epson_power
         projector: "epson3"
         state: "on"
@@ -497,7 +494,7 @@ macros:
         data: { entity_id: "switch.vs_epsonprojector3" }
         on_fail: skip
       - type: delay
-        seconds: 1
+        seconds: 0.5
       - type: epson_power
         projector: "epson4"
         state: "on"
@@ -510,7 +507,7 @@ macros:
         on_fail: skip
       # Retry Projector 3 (known flaky per THR)
       - type: delay
-        seconds: 2
+        seconds: 1
         message: "Waiting before Projector 3 retry"
       - type: epson_power
         projector: "epson3"
@@ -591,20 +588,24 @@ macros:
         message: "Repeat power-off for portables"
 
   # --- Parent: Main Church Video On ---
+  # Order: screens first (instant, independent), projectors, cry room, shared video last
   main_video_on:
     label: "Video System On"
     icon: "tv"
-    description: "Power on shared video, projectors, lower screens, cry room"
+    description: "Lower screens, power on projectors, cry room, shared video"
     steps:
-      - type: macro
-        macro: "main_projectors_on"
-        message: "Turning on projectors"
       - type: macro
         macro: "main_screens_shelf_down"
         message: "Lowering screens and shelves"
       - type: macro
+        macro: "main_projectors_on"
+        message: "Turning on projectors"
+      - type: macro
         macro: "main_cryroom_on"
         message: "Turning on cry room"
+      - type: macro
+        macro: "shared_video_on"
+        message: "Starting shared video components"
       - type: notify
         message: "Main church video system turning on"
 
