@@ -167,6 +167,32 @@ macros:
     icon: "mic"
     description: "Turn on shared audio components, chapel mics, amp, and routing"
     steps:
+      # If X32 mixer is off, load default scene after boot
+      - type: condition
+        if:
+          type: ha_check
+          entity: "switch.sw_019_2spare"
+          expect: "off"
+        then:
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.sw_019_2spare" }
+            on_fail: skip
+            message: "Turning on X32 Mixer (was off)"
+          - type: delay
+            seconds: 40
+            message: "Waiting for X32 mixer to boot up"
+          - type: x32_scene
+            scene: 0
+            message: "Loading X32 default scene"
+        else:
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.sw_019_2spare" }
+            on_fail: skip
+            message: "Turning on X32 Mixer"
       # Chapel microphones
       - type: ha_service
         domain: "switch"
@@ -174,13 +200,6 @@ macros:
         data: { entity_id: "switch.sw_024_chapelmics" }
         on_fail: skip
         message: "Turning on Chapel microphones"
-      # Shared audio components (X32, PA amp, sub)
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_019_2spare" }
-        on_fail: skip
-        message: "Turning on X32 Mixer"
       - type: ha_service
         domain: "switch"
         service: "turn_on"
@@ -685,13 +704,32 @@ macros:
     icon: "mic"
     description: "Turn on shared audio, mics, amps, and routing"
     steps:
-      # Shared audio components
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_019_2spare" }
-        on_fail: skip
-        message: "Turning on X32 Mixer"
+      # If X32 mixer is off, load default scene after boot
+      - type: condition
+        if:
+          type: ha_check
+          entity: "switch.sw_019_2spare"
+          expect: "off"
+        then:
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.sw_019_2spare" }
+            on_fail: skip
+            message: "Turning on X32 Mixer (was off)"
+          - type: delay
+            seconds: 40
+            message: "Waiting for X32 mixer to boot up"
+          - type: x32_scene
+            scene: 0
+            message: "Loading X32 default scene"
+        else:
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.sw_019_2spare" }
+            on_fail: skip
+            message: "Turning on X32 Mixer"
       - type: ha_service
         domain: "switch"
         service: "turn_on"
@@ -1766,13 +1804,32 @@ macros:
     icon: "mic"
     description: "Turn on shared audio, mics, amps, and audio routing"
     steps:
-      # Shared audio components (X32 mixer, PA amp, sub)
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_019_2spare" }
-        on_fail: skip
-        message: "Turning on X32 Mixer"
+      # If X32 mixer is off, load default scene after boot
+      - type: condition
+        if:
+          type: ha_check
+          entity: "switch.sw_019_2spare"
+          expect: "off"
+        then:
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.sw_019_2spare" }
+            on_fail: skip
+            message: "Turning on X32 Mixer (was off)"
+          - type: delay
+            seconds: 40
+            message: "Waiting for X32 mixer to boot up"
+          - type: x32_scene
+            scene: 0
+            message: "Loading X32 default scene"
+        else:
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.sw_019_2spare" }
+            on_fail: skip
+            message: "Turning on X32 Mixer"
       - type: ha_service
         domain: "switch"
         service: "turn_on"
