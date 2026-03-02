@@ -2895,6 +2895,48 @@ macros:
       - type: notify
         message: "Main church fully shut down"
 
+  # ---------------------------------------------------------------------------
+  # SOCIAL HALL — Full System On / Off
+  # ---------------------------------------------------------------------------
+
+  social_full_setup:
+    label: "Social Hall Full Setup"
+    icon: "play_circle"
+    description: "Full AV startup: video, audio, live stream scene, and camera preset"
+    steps:
+      - type: macro
+        macro: "social_video_on"
+        message: "Turning on video system"
+      - type: macro
+        macro: "social_audio_on"
+        message: "Turning on audio system"
+      - type: obs_emit
+        action: "SetCurrentProgramScene"
+        data:
+          sceneName: "SocialHall_Rear"
+        on_fail: skip
+        message: "Setting live stream scene to Social Hall Rear"
+      - type: ptz_preset
+        camera: "SocialHall_Rear"
+        preset: 1
+        on_fail: skip
+        message: "Setting Social Hall Rear camera to Full View (Preset 1)"
+
+  social_full_teardown:
+    label: "Social Hall Teardown"
+    icon: "power_settings_new"
+    description: "Full AV shutdown: video off, audio off, A/C off"
+    steps:
+      - type: macro
+        macro: "social_video_off"
+        message: "Turning off video system"
+      - type: macro
+        macro: "social_audio_off"
+        message: "Turning off audio system"
+      - type: macro
+        macro: "social_ac_off"
+        message: "Turning off Social Hall A/C"
+
 
 # =============================================================================
 # BUTTON LAYOUT
@@ -2985,15 +3027,15 @@ macros:
 buttons:
 
   chapel:
-    - section: "System"
+    - section: ""
       items:
-        - label: "Full Setup"
+        - label: "All Systems On"
           icon: "play_circle"
           action: { type: macro, macro: chapel_full_setup }
           style: "large success"
           span: 2
           confirm_steps: true
-        - label: "Full Teardown"
+        - label: "All Systems Off"
           icon: "power_settings_new"
           action: { type: macro, macro: chapel_full_teardown }
           style: "large danger"
@@ -3127,16 +3169,15 @@ buttons:
           icon: "settings_input_hdmi"
 
   main:
-    - section: "System"
-      cols: 4
+    - section: ""
       items:
-        - label: "Full Setup"
+        - label: "All Systems On"
           icon: "play_circle"
           action: { type: macro, macro: main_full_setup }
           style: "large success"
           span: 2
           confirm_steps: true
-        - label: "Full Teardown"
+        - label: "All Systems Off"
           icon: "power_settings_new"
           action: { type: macro, macro: main_full_teardown }
           style: "large danger"
@@ -3379,6 +3420,21 @@ buttons:
               action: { type: macro, macro: main_baptism_camera }
 
   social:
+    - section: ""
+      items:
+        - label: "All Systems On"
+          icon: "play_circle"
+          action: { type: macro, macro: social_full_setup }
+          style: "large success"
+          span: 2
+          confirm_steps: true
+        - label: "All Systems Off"
+          icon: "power_settings_new"
+          action: { type: macro, macro: social_full_teardown }
+          style: "large danger"
+          span: 2
+          confirm_steps: true
+
     - section: "Video"
       cols: 4
       items:
