@@ -176,6 +176,13 @@ const SettingsPage = {
                   </div>
                 </div>
               </div>
+              <div id="sched-macro-details" class="hidden" style="margin-top:8px;background:#111;border:1px solid #333;border-radius:6px;padding:10px;font-size:12px;">
+                <div id="sched-macro-desc" style="color:#ccc;margin-bottom:6px;"></div>
+                <details>
+                  <summary style="cursor:pointer;color:#ff8c00;font-size:11px;user-select:none;">Show steps</summary>
+                  <div id="sched-macro-steps" style="margin-top:6px;color:#aaa;font-size:11px;line-height:1.6;"></div>
+                </details>
+              </div>
               <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end;">
                 <button class="btn" id="btn-sched-cancel" style="min-height:auto;padding:6px 12px;">Cancel</button>
                 <button class="btn btn-success" id="btn-sched-save" style="min-height:auto;padding:6px 12px;background:#00b050;border-color:#00b050;">Save</button>
@@ -1508,6 +1515,8 @@ const SettingsPage = {
     });
   },
 
+  _macroMeta: {},
+
   async loadMacroDropdown() {
     const select = document.getElementById('sched-macro');
     if (!select) return;
@@ -1517,12 +1526,82 @@ const SettingsPage = {
       });
       const data = await resp.json();
       const macros = data.macros || {};
+      this._macroMeta = macros;
       select.innerHTML = Object.entries(macros).map(([key, m]) =>
         `<option value="${key}">${m.label || key}</option>`
       ).join('');
     } catch (e) {
       select.innerHTML = '<option value="">Failed to load macros</option>';
     }
+
+    // Show macro details when selection changes
+    select.addEventListener('change', () => this._showMacroDetails(select.value));
+    // Show details for the initially selected macro
+    if (select.value) this._showMacroDetails(select.value);
+  },
+
+  async _showMacroDetails(macroKey) {
+    const panel = document.getElementById('sched-macro-details');
+    const descEl = document.getElementById('sched-macro-desc');
+    const stepsEl = document.getElementById('sched-macro-steps');
+    if (!panel || !macroKey) {
+      panel?.classList.add('hidden');
+      return;
+    }
+
+    const meta = this._macroMeta[macroKey];
+    const desc = meta?.description;
+    descEl.textContent = desc || '';
+    descEl.style.display = desc ? '' : 'none';
+    stepsEl.innerHTML = '<span style="opacity:0.5;">Loading...</span>';
+    panel.classList.remove('hidden');
+
+    try {
+      const resp = await fetch(`/api/macro/expand/${encodeURIComponent(macroKey)}`, {
+        headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+        signal: AbortSignal.timeout(5000),
+      });
+      const data = await resp.json();
+      stepsEl.innerHTML = this._renderStepTree(data.steps || [], 0);
+    } catch {
+      stepsEl.innerHTML = '<span style="color:#cc0000;">Failed to load steps</span>';
+    }
+  },
+
+  _renderStepTree(steps, depth) {
+    if (!steps.length) return '<em>No steps</em>';
+    const indent = depth * 16;
+    return steps.map(s => {
+      const icon = this._stepIcon(s.type);
+      let html = `<div style="padding-left:${indent}px;">${icon} ${this._escHtml(s.label || s.type)}</div>`;
+      if (s.children?.length) {
+        html += `<div style="padding-left:${indent + 16}px;border-left:1px solid #333;margin-left:${indent + 6}px;">`;
+        html += this._renderStepTree(s.children, depth + 1);
+        html += '</div>';
+      }
+      return html;
+    }).join('');
+  },
+
+  _stepIcon(type) {
+    const icons = {
+      ha_service: '<span class="material-icons" style="font-size:11px;vertical-align:middle;color:#4fc3f7;">smart_home</span>',
+      ha_check: '<span class="material-icons" style="font-size:11px;vertical-align:middle;color:#81c784;">check_circle</span>',
+      moip_switch: '<span class="material-icons" style="font-size:11px;vertical-align:middle;color:#ce93d8;">settings_input_hdmi</span>',
+      moip_ir: '<span class="material-icons" style="font-size:11px;vertical-align:middle;color:#ce93d8;">settings_remote</span>',
+      obs_emit: '<span class="material-icons" style="font-size:11px;vertical-align:middle;color:#ef5350;">videocam</span>',
+      x32_scene: '<span class="material-icons" style="font-size:11px;vertical-align:middle;color:#ffb74d;">equalizer</span>',
+      delay: '<span class="material-icons" style="font-size:11px;vertical-align:middle;color:#666;">hourglass_empty</span>',
+      macro: '<span class="material-icons" style="font-size:11px;vertical-align:middle;color:#ff8c00;">play_circle</span>',
+      condition: '<span class="material-icons" style="font-size:11px;vertical-align:middle;color:#aed581;">call_split</span>',
+    };
+    return icons[type] || '<span class="material-icons" style="font-size:11px;vertical-align:middle;color:#888;">circle</span>';
+  },
+
+  _escHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
   },
 
   async saveSchedule() {
