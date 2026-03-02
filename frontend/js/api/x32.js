@@ -6,6 +6,8 @@ const X32API = {
     currentSceneName: '',
     channels: [],
     auxChannels: [],
+    buses: [],
+    dcas: [],
     scenes: []
   },
 
@@ -64,6 +66,26 @@ const X32API = {
       });
     }
 
+    this.state.buses = [];
+    for (let b = 1; b <= 16; b++) {
+      this.state.buses.push({
+        id: b,
+        name: raw[`bus${b}_name`] || `Bus ${b}`,
+        muted: raw[`bus${b}_mutestatus`] || '',
+        volume: raw[`bus${b}vol`] !== undefined ? parseFloat(raw[`bus${b}vol`]) / 100 : 0
+      });
+    }
+
+    this.state.dcas = [];
+    for (let d = 1; d <= 8; d++) {
+      this.state.dcas.push({
+        id: d,
+        name: raw[`dca${d}_name`] || `DCA ${d}`,
+        muted: raw[`dca${d}_mutestatus`] || '',
+        volume: raw[`dca${d}vol`] !== undefined ? parseFloat(raw[`dca${d}vol`]) / 100 : 0
+      });
+    }
+
     this.state.scenes = [];
     for (let s = 0; s <= 25; s++) {
       this.state.scenes.push({ id: s, name: raw[`scene${s}name`] || '' });
@@ -77,6 +99,14 @@ const X32API = {
   async loadScene(sceneId) { await this.sendCommand(`scene/${sceneId}`); },
   async muteAux(aux) { await this.sendCommand(`aux/${aux}/mute/on`); },
   async unmuteAux(aux) { await this.sendCommand(`aux/${aux}/mute/off`); },
+  async muteBus(bus) { await this.sendCommand(`bus/${bus}/mute/on`); },
+  async unmuteBus(bus) { await this.sendCommand(`bus/${bus}/mute/off`); },
+  async busVolumeUp(bus) { await this.sendCommand(`bus/${bus}/volume/up`); },
+  async busVolumeDown(bus) { await this.sendCommand(`bus/${bus}/volume/down`); },
+  async muteDca(dca) { await this.sendCommand(`dca/${dca}/mute/on`); },
+  async unmuteDca(dca) { await this.sendCommand(`dca/${dca}/mute/off`); },
+  async dcaVolumeUp(dca) { await this.sendCommand(`dca/${dca}/volume/up`); },
+  async dcaVolumeDown(dca) { await this.sendCommand(`dca/${dca}/volume/down`); },
 
   // Called by Socket.IO state push
   onStateUpdate(data) {

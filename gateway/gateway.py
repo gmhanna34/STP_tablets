@@ -257,6 +257,12 @@ class MockBackend:
             **{f"aux{i}_name": f"Aux {i}" for i in range(1, 9)},
             **{f"aux{i}_mutestatus": "unmuted" for i in range(1, 9)},
             **{f"aux{i}vol": "80" for i in range(1, 9)},
+            **{f"bus{i}_name": f"Bus {i}" for i in range(1, 17)},
+            **{f"bus{i}_mutestatus": "unmuted" for i in range(1, 17)},
+            **{f"bus{i}vol": "75" for i in range(1, 17)},
+            **{f"dca{i}_name": f"DCA {i}" for i in range(1, 9)},
+            **{f"dca{i}_mutestatus": "unmuted" for i in range(1, 9)},
+            **{f"dca{i}vol": "100" for i in range(1, 9)},
             **{f"scene{i}name": f"Scene {i}" for i in range(26)},
         },
         "error": "",
@@ -951,6 +957,58 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return jsonify({"success": True, "channel": ch, "direction": direction, "mock": True}), 200
         result, status = _proxy_request("x32", f"/ch{ch}vol{direction}")
         socketio.emit("state:x32", {"event": "volume", "channel": ch, "direction": direction}, room="x32")
+        return jsonify(result), status
+
+    @app.route("/api/x32/bus/<int:ch>/mute/<state>")
+    def x32_bus_mute(ch: int, state: str):
+        perm_err = _check_permission(_tablet_id(), "main")
+        if perm_err:
+            return perm_err
+        if state not in ("on", "off"):
+            return jsonify({"error": "State must be 'on' or 'off'"}), 400
+        if mock_mode:
+            return jsonify({"success": True, "bus": ch, "muted": state == "on", "mock": True}), 200
+        result, status = _proxy_request("x32", f"/bus{ch}_mute_{state}")
+        socketio.emit("state:x32", {"event": "bus_mute", "bus": ch, "state": state}, room="x32")
+        return jsonify(result), status
+
+    @app.route("/api/x32/bus/<int:ch>/volume/<direction>")
+    def x32_bus_volume(ch: int, direction: str):
+        perm_err = _check_permission(_tablet_id(), "main")
+        if perm_err:
+            return perm_err
+        if direction not in ("up", "down"):
+            return jsonify({"error": "Direction must be 'up' or 'down'"}), 400
+        if mock_mode:
+            return jsonify({"success": True, "bus": ch, "direction": direction, "mock": True}), 200
+        result, status = _proxy_request("x32", f"/bus{ch}vol{direction}")
+        socketio.emit("state:x32", {"event": "bus_volume", "bus": ch, "direction": direction}, room="x32")
+        return jsonify(result), status
+
+    @app.route("/api/x32/dca/<int:ch>/mute/<state>")
+    def x32_dca_mute(ch: int, state: str):
+        perm_err = _check_permission(_tablet_id(), "main")
+        if perm_err:
+            return perm_err
+        if state not in ("on", "off"):
+            return jsonify({"error": "State must be 'on' or 'off'"}), 400
+        if mock_mode:
+            return jsonify({"success": True, "dca": ch, "muted": state == "on", "mock": True}), 200
+        result, status = _proxy_request("x32", f"/dca{ch}_mute_{state}")
+        socketio.emit("state:x32", {"event": "dca_mute", "dca": ch, "state": state}, room="x32")
+        return jsonify(result), status
+
+    @app.route("/api/x32/dca/<int:ch>/volume/<direction>")
+    def x32_dca_volume(ch: int, direction: str):
+        perm_err = _check_permission(_tablet_id(), "main")
+        if perm_err:
+            return perm_err
+        if direction not in ("up", "down"):
+            return jsonify({"error": "Direction must be 'up' or 'down'"}), 400
+        if mock_mode:
+            return jsonify({"success": True, "dca": ch, "direction": direction, "mock": True}), 200
+        result, status = _proxy_request("x32", f"/dca{ch}vol{direction}")
+        socketio.emit("state:x32", {"event": "dca_volume", "dca": ch, "direction": direction}, room="x32")
         return jsonify(result), status
 
     # -------------------------------------------------------------------------

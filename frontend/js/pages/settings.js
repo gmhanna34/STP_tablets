@@ -107,8 +107,16 @@ const SettingsPage = {
             </div>
           </div>
           <div class="control-section">
-            <div class="section-title">Bus / Aux Outputs</div>
+            <div class="section-title">Aux Inputs</div>
             <div id="aux-container" class="mixer-grid"></div>
+          </div>
+          <div class="control-section">
+            <div class="section-title">Mix Buses</div>
+            <div id="bus-container" class="mixer-grid"></div>
+          </div>
+          <div class="control-section">
+            <div class="section-title">DCA Groups</div>
+            <div id="dca-container" class="mixer-grid"></div>
           </div>
         </div>
       </div>
@@ -1290,8 +1298,8 @@ const SettingsPage = {
             <input type="range" class="channel-fader" min="0" max="100" value="${Math.round(ch.volume * 100)}"
               data-ch="${ch.id}" orient="vertical" />
             <div class="channel-volume">${Math.round(ch.volume * 100)}%</div>
-            <button class="channel-mute ${ch.muted === 'ON' || ch.muted === '1' ? 'muted' : 'unmuted'}" data-mute-ch="${ch.id}">
-              ${ch.muted === 'ON' || ch.muted === '1' ? 'MUTED' : 'ON'}
+            <button class="channel-mute ${ch.muted === 'muted' ? 'muted' : 'unmuted'}" data-mute-ch="${ch.id}">
+              ${ch.muted === 'muted' ? 'MUTED' : 'ON'}
             </button>
           </div>
         `).join('')}
@@ -1303,7 +1311,7 @@ const SettingsPage = {
       btn.addEventListener('click', async () => {
         const chId = parseInt(btn.dataset.muteCh);
         const ch = state.channels.find(c => c.id === chId);
-        if (ch && (ch.muted === 'ON' || ch.muted === '1')) {
+        if (ch && ch.muted === 'muted') {
           await X32API.unmuteChannel(chId);
         } else {
           await X32API.muteChannel(chId);
@@ -1347,8 +1355,8 @@ const SettingsPage = {
         <div class="mixer-channel">
           <div class="channel-name" title="${a.name}">${a.name}</div>
           <div class="channel-volume">${Math.round(a.volume * 100)}%</div>
-          <button class="channel-mute ${a.muted === 'ON' || a.muted === '1' ? 'muted' : 'unmuted'}" data-mute-aux="${a.id}">
-            ${a.muted === 'ON' || a.muted === '1' ? 'MUTED' : 'ON'}
+          <button class="channel-mute ${a.muted === 'muted' ? 'muted' : 'unmuted'}" data-mute-aux="${a.id}">
+            ${a.muted === 'muted' ? 'MUTED' : 'ON'}
           </button>
         </div>
       `).join('');
@@ -1357,10 +1365,66 @@ const SettingsPage = {
         btn.addEventListener('click', async () => {
           const auxId = parseInt(btn.dataset.muteAux);
           const aux = state.auxChannels.find(a => a.id === auxId);
-          if (aux && (aux.muted === 'ON' || aux.muted === '1')) {
+          if (aux && aux.muted === 'muted') {
             await X32API.unmuteAux(auxId);
           } else {
             await X32API.muteAux(auxId);
+          }
+          setTimeout(() => this.loadMixer(), 500);
+        });
+      });
+    }
+
+    // Mix Buses
+    const busContainer = document.getElementById('bus-container');
+    if (busContainer) {
+      const activeBuses = state.buses.filter(b => b.name && b.name.trim() !== '');
+      busContainer.innerHTML = activeBuses.map(b => `
+        <div class="mixer-channel">
+          <div class="channel-name" title="${b.name}">${b.name}</div>
+          <div class="channel-volume">${Math.round(b.volume * 100)}%</div>
+          <button class="channel-mute ${b.muted === 'muted' ? 'muted' : 'unmuted'}" data-mute-bus="${b.id}">
+            ${b.muted === 'muted' ? 'MUTED' : 'ON'}
+          </button>
+        </div>
+      `).join('');
+
+      busContainer.querySelectorAll('[data-mute-bus]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const busId = parseInt(btn.dataset.muteBus);
+          const bus = state.buses.find(b => b.id === busId);
+          if (bus && bus.muted === 'muted') {
+            await X32API.unmuteBus(busId);
+          } else {
+            await X32API.muteBus(busId);
+          }
+          setTimeout(() => this.loadMixer(), 500);
+        });
+      });
+    }
+
+    // DCA Groups
+    const dcaContainer = document.getElementById('dca-container');
+    if (dcaContainer) {
+      const activeDcas = state.dcas.filter(d => d.name && d.name.trim() !== '');
+      dcaContainer.innerHTML = activeDcas.map(d => `
+        <div class="mixer-channel">
+          <div class="channel-name" title="${d.name}">${d.name}</div>
+          <div class="channel-volume">${Math.round(d.volume * 100)}%</div>
+          <button class="channel-mute ${d.muted === 'muted' ? 'muted' : 'unmuted'}" data-mute-dca="${d.id}">
+            ${d.muted === 'muted' ? 'MUTED' : 'ON'}
+          </button>
+        </div>
+      `).join('');
+
+      dcaContainer.querySelectorAll('[data-mute-dca]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const dcaId = parseInt(btn.dataset.muteDca);
+          const dca = state.dcas.find(d => d.id === dcaId);
+          if (dca && dca.muted === 'muted') {
+            await X32API.unmuteDca(dcaId);
+          } else {
+            await X32API.muteDca(dcaId);
           }
           setTimeout(() => this.loadMixer(), 500);
         });
@@ -1373,7 +1437,7 @@ const SettingsPage = {
       if (!await App.showConfirm('Mute ALL input channels?')) return;
       const state = X32API.state;
       for (const ch of state.channels) {
-        if (ch.name && ch.name.trim() !== '' && ch.muted !== 'ON' && ch.muted !== '1') {
+        if (ch.name && ch.name.trim() !== '' && ch.muted !== 'muted') {
           await X32API.muteChannel(ch.id);
         }
       }
@@ -1385,7 +1449,7 @@ const SettingsPage = {
       if (!await App.showConfirm('Unmute ALL input channels?')) return;
       const state = X32API.state;
       for (const ch of state.channels) {
-        if (ch.name && ch.name.trim() !== '' && (ch.muted === 'ON' || ch.muted === '1')) {
+        if (ch.name && ch.name.trim() !== '' && ch.muted === 'muted') {
           await X32API.unmuteChannel(ch.id);
         }
       }
@@ -1413,7 +1477,7 @@ const SettingsPage = {
         App.showToast('No music/band channels found');
         return;
       }
-      const anyUnmuted = musicChs.some(ch => ch.muted !== 'ON' && ch.muted !== '1');
+      const anyUnmuted = musicChs.some(ch => ch.muted !== 'muted');
       for (const ch of musicChs) {
         if (anyUnmuted) {
           await X32API.muteChannel(ch.id);
