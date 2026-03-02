@@ -1321,7 +1321,7 @@ macros:
   social_video_on:
     label: "Social Hall Video On"
     icon: "tv"
-    description: "Power on all 8 video wall panels via IR"
+    description: "Power on all 8 video wall panels via IR + Samsung API, set HDMI1, shared video"
     steps:
       # Round 1: IR PowerOn to all 8 panels
       - type: moip_ir
@@ -1348,10 +1348,51 @@ macros:
       - type: moip_ir
         receiver: 8
         code: "IRPowerOn"
+      # Round 1: Roku API PowerOn to all 8 TVs
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp1" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp2" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp3" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp4" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp5" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp6" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp7" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp8" }
+        on_fail: skip
       - type: delay
-        seconds: 3
+        seconds: 1
         message: "Waiting for panels to respond"
-      # Round 2: Repeat PowerOn
+      # Round 2: IR + Roku API PowerOn
       - type: moip_ir
         receiver: 1
         code: "IRPowerOn"
@@ -1376,10 +1417,114 @@ macros:
       - type: moip_ir
         receiver: 8
         code: "IRPowerOn"
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp1" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp2" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp3" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp4" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp5" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp6" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp7" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_hall_videowallp8" }
+        on_fail: skip
+      - type: delay
+        seconds: 2
+      # Round 3: IR PowerOn (third round to match THR)
+      - type: moip_ir
+        receiver: 1
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 2
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 3
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 4
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 5
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 6
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 7
+        code: "IRPowerOn"
+      - type: moip_ir
+        receiver: 8
+        code: "IRPowerOn"
+      # Set all panels to HDMI1 - Round 1
+      - type: moip_ir
+        receiver: 1
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 2
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 3
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 4
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 5
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 6
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 7
+        code: "IRSourceHDMI1"
+      - type: moip_ir
+        receiver: 8
+        code: "IRSourceHDMI1"
+      - type: delay
+        seconds: 4
+      # Extra attention for panel 4 (known problematic in THR)
+      - type: moip_ir
+        receiver: 4
+        code: "IRPowerOn"
+        message: "Extra power-on for panel 4"
+      - type: delay
+        seconds: 1
+      - type: moip_ir
+        receiver: 4
+        code: "IRSourceHDMI1"
+        message: "Extra HDMI1 for panel 4"
       - type: delay
         seconds: 5
-        message: "Waiting for panels to initialize"
-      # Set all panels to HDMI1
+      # Set all panels to HDMI1 - Round 2
       - type: moip_ir
         receiver: 1
         code: "IRSourceHDMI1"
@@ -1404,6 +1549,17 @@ macros:
       - type: moip_ir
         receiver: 8
         code: "IRSourceHDMI1"
+      # Extra IR PowerOn to RX 8 (THR includes after 10s delay)
+      - type: moip_ir
+        receiver: 8
+        code: "IRPowerOn"
+        message: "Extra power-on for panel 8"
+      # Social Hall AppleTV Home
+      - type: moip_ir
+        receiver: 06
+        code: "AppleTVHome"
+        on_fail: skip
+        message: "Sending AppleTV Home to Social Hall"
       # Turn on shared video infrastructure
       - type: ha_service
         domain: "switch"
@@ -1417,6 +1573,18 @@ macros:
         data: { entity_id: "switch.sw_003_hall_leftspeaker2" }
         on_fail: skip
         message: "Turning on Blackmagic ATEM"
+      - type: delay
+        seconds: 5
+        message: "Waiting for ATEM to initialize"
+      - type: obs_emit
+        action: "CallVendorRequest"
+        data:
+          vendorName: "AdvancedSceneSwitcher"
+          requestType: "AdvancedSceneSwitcherMessage"
+          requestData:
+            message: "reEnableBMATEMWebcam"
+        on_fail: skip
+        message: "Re-enabling BMATEM webcam in OBS"
       - type: notify
         message: "Social Hall video wall powering on"
 
@@ -1425,8 +1593,16 @@ macros:
     icon: "tv_off"
     confirm: "Turn off Social Hall video wall?"
     steps:
+      # Extra standalone power-off for panel 8 first (THR singles this out)
+      - type: moip_ir
+        receiver: 8
+        code: "IRPowerOff"
+        message: "Extra power-off for panel 8"
       # Round 1: IR PowerOff to all 8 panels
       - type: moip_ir
+        receiver: 8
+        code: "IRPowerOff"
+      - type: moip_ir
         receiver: 1
         code: "IRPowerOff"
       - type: moip_ir
@@ -1447,12 +1623,53 @@ macros:
       - type: moip_ir
         receiver: 7
         code: "IRPowerOff"
-      - type: moip_ir
-        receiver: 8
-        code: "IRPowerOff"
+      # Round 1: Roku API PowerOff to all 8 TVs
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp1" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp2" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp3" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp4" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp5" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp6" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp7" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp8" }
+        on_fail: skip
       - type: delay
-        seconds: 3
-      # Round 2: Repeat PowerOff
+        seconds: 1
+      # Round 2: IR + Roku API PowerOff
+      - type: moip_ir
+        receiver: 8
+        code: "IRPowerOff"
       - type: moip_ir
         receiver: 1
         code: "IRPowerOff"
@@ -1474,8 +1691,72 @@ macros:
       - type: moip_ir
         receiver: 7
         code: "IRPowerOff"
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp1" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp2" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp3" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp4" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp5" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp6" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp7" }
+        on_fail: skip
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_hall_videowallp8" }
+        on_fail: skip
+      - type: delay
+        seconds: 5
+      # Round 3: IR PowerOff (third round to match THR)
       - type: moip_ir
         receiver: 8
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 1
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 2
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 3
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 4
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 5
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 6
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 7
         code: "IRPowerOff"
       - type: notify
         message: "Social Hall video wall powered off"
