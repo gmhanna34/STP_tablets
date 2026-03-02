@@ -389,11 +389,14 @@ const SourcePage = {
           signal: AbortSignal.timeout(15000),
         });
       }
+      const body = await resp.json().catch(() => null);
       if (resp.ok) {
         App.showToast('Announcement sent!', 3000);
         if (isCustom) textArea.value = '';
       } else {
-        App.showToast('Announcement failed — check HA logs', 4000);
+        const detail = body?.error || body?.message || `HTTP ${resp.status}`;
+        console.error('Announcement HA error:', resp.status, body);
+        App.showToast(`Announcement failed: ${detail}`, 5000);
       }
     } catch (e) {
       console.error('Announcement error:', e);
