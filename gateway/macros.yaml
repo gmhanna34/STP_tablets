@@ -1321,7 +1321,7 @@ macros:
   social_video_on:
     label: "Social Hall Video On"
     icon: "tv"
-    description: "Power on all 8 video wall panels via IR + Roku API, set HDMI1, shared video"
+    description: "Power on all 8 video wall panels via IR + Samsung API, set HDMI1, shared video"
     steps:
       # Round 1: IR PowerOn to all 8 panels
       - type: moip_ir
@@ -1352,42 +1352,42 @@ macros:
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_001_hall_videowallleftp1" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp1" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_002_hall_videowallleftp2" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp2" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_003_hall_videowallleftp3" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp3" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_004_hall_videowallleftp4" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp4" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_005_hall_videowallrightp1" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp5" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_006_hall_videowallrightp2" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp6" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_007_hall_videowallrightp3" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp7" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_008_hall_videowallrightp4" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp8" }
         on_fail: skip
       - type: delay
         seconds: 1
@@ -1420,42 +1420,42 @@ macros:
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_001_hall_videowallleftp1" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp1" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_002_hall_videowallleftp2" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp2" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_003_hall_videowallleftp3" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp3" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_004_hall_videowallleftp4" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp4" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_005_hall_videowallrightp1" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp5" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_006_hall_videowallrightp2" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp6" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_007_hall_videowallrightp3" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp7" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_on"
-        data: { entity_id: "media_player.tv_008_hall_videowallrightp4" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp8" }
         on_fail: skip
       - type: delay
         seconds: 2
@@ -1627,42 +1627,42 @@ macros:
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_001_hall_videowallleftp1" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp1" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_002_hall_videowallleftp2" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp2" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_003_hall_videowallleftp3" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp3" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_004_hall_videowallleftp4" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp4" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_005_hall_videowallrightp1" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp5" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_006_hall_videowallrightp2" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp6" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_007_hall_videowallrightp3" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp7" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_008_hall_videowallrightp4" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp8" }
         on_fail: skip
       - type: delay
         seconds: 1
@@ -1694,42 +1694,42 @@ macros:
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_001_hall_videowallleftp1" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp1" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_002_hall_videowallleftp2" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp2" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_003_hall_videowallleftp3" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp3" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_004_hall_videowallleftp4" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp4" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_005_hall_videowallrightp1" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp5" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_006_hall_videowallrightp2" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp6" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_007_hall_videowallrightp3" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp7" }
         on_fail: skip
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
-        data: { entity_id: "media_player.tv_008_hall_videowallrightp4" }
+        data: { entity_id: "media_player.tv_099_hall_videowallp8" }
         on_fail: skip
       - type: delay
         seconds: 5
