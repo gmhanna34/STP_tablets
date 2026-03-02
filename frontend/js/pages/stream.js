@@ -2,6 +2,22 @@ const StreamPage = {
   pollTimer: null,
   _resetTimer: null,
 
+  // OBS scene name → macro key for MoIP routing + X32 scene
+  _sceneMacroMap: {
+    'MainChurch_Rear': 'stream_scene_main_church',
+    'MainChurch_Altar': 'stream_scene_main_church',
+    'MainChurch_Right': 'stream_scene_main_church',
+    'MainChurch_Side_Right': 'stream_scene_main_church',
+    'MainChurch_Left': 'stream_scene_main_church',
+    'MainChurch_Side_Left': 'stream_scene_main_church',
+    'Chapel_Rear': 'stream_scene_chapel',
+    'Chapel_Side': 'stream_scene_chapel',
+    'BaptismRoom': 'stream_scene_other',
+    'SocialHall_Rear': 'stream_scene_social_hall',
+    'SocialHall_Side': 'stream_scene_social_hall',
+    'Gym': 'stream_scene_other',
+  },
+
   render(container) {
     container.innerHTML = `
       <div class="page-grid">
@@ -399,6 +415,12 @@ const StreamPage = {
           btn.addEventListener('click', async () => {
             const num = parseInt(btn.dataset.sceneNum);
             await ObsAPI.setScene(num);
+            // Fire MoIP audio routing + X32 scene macro based on scene name
+            const scene = ObsAPI.state.scenes.find(s => s.index === num);
+            if (scene) {
+              const macroKey = this._sceneMacroMap[scene.name];
+              if (macroKey) MacroAPI.execute(macroKey);
+            }
             this.updateStatus();
           });
         });

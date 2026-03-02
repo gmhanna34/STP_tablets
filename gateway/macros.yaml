@@ -2701,6 +2701,78 @@ macros:
         data: { entity_id: "switch.sw_023_conferenceroom_appletv" }
         on_fail: skip
 
+  # ---------------------------------------------------------------------------
+  # STREAM PAGE — OBS Scene side-effects (MoIP audio routing + X32 scene)
+  # ---------------------------------------------------------------------------
+
+  # Main Church cameras → X32 scene 1
+  stream_scene_main_church:
+    label: "Stream: Main Church Scene"
+    icon: "videocam"
+    description: "Audio routing + X32 scene 1 for Main Church OBS scenes"
+    steps:
+      - type: moip_switch
+        tx: 13
+        rx: 24
+        message: "Setting audio routing (TX 13 → RX 24)"
+      - type: x32_scene
+        scene: 1
+        message: "Loading X32 scene 1 (Main Church)"
+
+  # Chapel cameras → X32 scene 2
+  stream_scene_chapel:
+    label: "Stream: Chapel Scene"
+    icon: "videocam"
+    description: "Audio routing + X32 scene 2 for Chapel OBS scenes"
+    steps:
+      - type: moip_switch
+        tx: 13
+        rx: 24
+        message: "Setting audio routing (TX 13 → RX 24)"
+      - type: x32_scene
+        scene: 2
+        message: "Loading X32 scene 2 (Chapel)"
+
+  # Social Hall cameras → X32 scene 5
+  stream_scene_social_hall:
+    label: "Stream: Social Hall Scene"
+    icon: "videocam"
+    description: "Audio routing + X32 scene 5 for Social Hall OBS scenes"
+    steps:
+      - type: moip_switch
+        tx: 13
+        rx: 24
+        message: "Setting audio routing (TX 13 → RX 24)"
+      - type: x32_scene
+        scene: 5
+        message: "Loading X32 scene 5 (Social Hall)"
+
+  # Baptism Room / Gym — audio routing only, no X32 scene
+  stream_scene_other:
+    label: "Stream: Other Scene"
+    icon: "videocam"
+    description: "Audio routing only (no X32 scene change) for Baptism/Gym OBS scenes"
+    steps:
+      - type: moip_switch
+        tx: 13
+        rx: 24
+        message: "Setting audio routing (TX 13 → RX 24)"
+
+  # Standalone reset for scheduling
+  stream_reset:
+    label: "Reset Live Stream"
+    icon: "refresh"
+    description: "Send resetLiveStream to OBS via Advanced Scene Switcher"
+    steps:
+      - type: obs_emit
+        action: "CallVendorRequest"
+        data:
+          vendorName: "AdvancedSceneSwitcher"
+          requestType: "AdvancedSceneSwitcherMessage"
+          requestData:
+            message: "resetLiveStream"
+        message: "Resetting YouTube live stream"
+
 
 # =============================================================================
 # BUTTON LAYOUT
