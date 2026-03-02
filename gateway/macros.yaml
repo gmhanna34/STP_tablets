@@ -2773,6 +2773,92 @@ macros:
             message: "resetLiveStream"
         message: "Resetting YouTube live stream"
 
+  # ---------------------------------------------------------------------------
+  # MAIN CHURCH — Full System On / Off
+  # ---------------------------------------------------------------------------
+
+  main_full_setup:
+    label: "Main Church Full Setup"
+    icon: "play_circle"
+    description: "Full AV startup: video, audio, Apple TV source, live stream scene, camera preset, and unlock exterior doors for 5 hours"
+    confirm: "Run full Main Church AV setup?"
+    steps:
+      - type: macro
+        macro: "main_video_on"
+        message: "Turning on video system (projectors + screens)"
+      - type: macro
+        macro: "main_audio_on"
+        message: "Turning on audio system"
+      - type: macro
+        macro: "main_source_appletv_no_pages"
+        message: "Setting video source to Apple TV (No Page #s)"
+      - type: obs_emit
+        action: "SetCurrentProgramScene"
+        data:
+          sceneName: "MainChurch_Rear"
+        on_fail: skip
+        message: "Setting live stream scene to Main Church Rear"
+      - type: ptz_preset
+        camera: "MainChurch_Rear"
+        preset: 1
+        on_fail: skip
+        message: "Setting Main Church Rear camera to Full View (Preset 1)"
+      # --- Unlock exterior doors for 5 hours (300 minutes) ---
+      # Edit the entity_id values below to match your HA lock entities.
+      # Pattern: set the duration, then select the "Custom" rule option.
+      - type: ha_service
+        domain: "number"
+        service: "set_value"
+        data:
+          entity_id: "number.exterior_lobby_door_auto_lock_time"
+          value: 300
+        on_fail: skip
+        message: "Setting lobby door unlock duration to 5 hours"
+      - type: ha_service
+        domain: "select"
+        service: "select_option"
+        data:
+          entity_id: "select.exterior_lobby_door_locking_rule"
+          option: "Custom"
+        on_fail: skip
+        message: "Unlocking exterior lobby door"
+      - type: ha_service
+        domain: "number"
+        service: "set_value"
+        data:
+          entity_id: "number.exterior_main_door_auto_lock_time"
+          value: 300
+        on_fail: skip
+        message: "Setting main door unlock duration to 5 hours"
+      - type: ha_service
+        domain: "select"
+        service: "select_option"
+        data:
+          entity_id: "select.exterior_main_door_locking_rule"
+          option: "Custom"
+        on_fail: skip
+        message: "Unlocking exterior main door"
+      - type: notify
+        message: "Main church full setup complete"
+
+  main_full_teardown:
+    label: "Main Church Teardown"
+    icon: "power_settings_new"
+    description: "Full AV shutdown: video off, audio off, A/C off"
+    confirm: "Shut down all Main Church AV systems?"
+    steps:
+      - type: macro
+        macro: "main_video_off"
+        message: "Turning off video system (projectors + screens)"
+      - type: macro
+        macro: "main_audio_off"
+        message: "Turning off audio system"
+      - type: macro
+        macro: "main_ac_off"
+        message: "Turning off Main Church A/C"
+      - type: notify
+        message: "Main church fully shut down"
+
 
 # =============================================================================
 # BUTTON LAYOUT
@@ -3005,6 +3091,22 @@ buttons:
           icon: "settings_input_hdmi"
 
   main:
+    - section: "System"
+      cols: 4
+      items:
+        - label: "Full Setup"
+          icon: "play_circle"
+          action: { type: macro, macro: main_full_setup }
+          style: "large success"
+          span: 2
+          confirm_steps: true
+        - label: "Full Teardown"
+          icon: "power_settings_new"
+          action: { type: macro, macro: main_full_teardown }
+          style: "large danger"
+          span: 2
+          confirm_steps: true
+
     - section: "Video"
       cols: 4
       items:
