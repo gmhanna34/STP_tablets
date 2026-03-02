@@ -72,9 +72,21 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
+        data: { entity_id: "switch.bat_chapeltv_1_dc12v_enabled" }
+        on_fail: skip
+        message: "Enabling Chapel TV 1 DC 12V power"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
         data: { entity_id: "switch.bat_chapeltv_2_ac_enabled" }
         on_fail: skip
         message: "Enabling Chapel TV 2 AC power"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.bat_chapeltv_2_dc12v_enabled" }
+        on_fail: skip
+        message: "Enabling Chapel TV 2 DC 12V power"
       # IR Power On - Round 1
       - type: moip_ir
         receiver: 09
@@ -134,6 +146,19 @@ macros:
         receiver: 09
         code: "IRPowerOffRCA"
         message: "Repeat power-off Chapel Floating TV"
+      - type: delay
+        seconds: 3
+      # Third and fourth Vizio power-off to match THR reliability
+      - type: moip_ir
+        receiver: 09
+        code: "IRPowerOffVizio"
+        message: "Third power-off Chapel Vizio TV"
+      - type: delay
+        seconds: 3
+      - type: moip_ir
+        receiver: 09
+        code: "IRPowerOffVizio"
+        message: "Fourth power-off Chapel Vizio TV"
       - type: notify
         message: "Chapel TVs powered off"
 
