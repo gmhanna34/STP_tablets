@@ -448,36 +448,77 @@ macros:
   chapel_full_setup:
     label: "Chapel Full Setup"
     icon: "play_circle"
-    confirm: "Run full Chapel AV setup (TVs, audio, A/C)?"
+    description: "Full AV startup: TVs, audio, Apple TV source, live stream scene, camera preset, and unlock exterior doors for 3 hours"
     steps:
       - type: macro
         macro: "chapel_tv_on"
-        message: "Setting up Chapel TVs"
+        message: "Turning on Chapel TVs"
       - type: macro
         macro: "chapel_audio_on"
-        message: "Setting up Chapel audio"
+        message: "Turning on Chapel audio"
       - type: macro
-        macro: "chapel_ac_on"
-        message: "Setting up Chapel A/C"
-      - type: macro
-        macro: "chapel_source_logo"
-        message: "Setting Chapel source to LOGO"
-      - type: notify
-        message: "Chapel full setup complete"
+        macro: "chapel_source_appletv"
+        message: "Setting Chapel source to Apple TV"
+      - type: obs_emit
+        action: "SetCurrentProgramScene"
+        data:
+          sceneName: "Chapel_Rear"
+        on_fail: skip
+        message: "Setting live stream scene to Chapel Rear"
+      - type: ptz_preset
+        camera: "Chapel_Rear"
+        preset: 1
+        on_fail: skip
+        message: "Setting Chapel Rear camera to Full View (Preset 1)"
+      # --- Unlock main church door for 3 hours (180 minutes) ---
+      - type: ha_service
+        domain: "number"
+        service: "set_value"
+        data:
+          entity_id: "number.ext_main_church_door_rule_interval_min"
+          value: 180
+        on_fail: skip
+        message: "Setting main church door unlock duration to 3 hours"
+      - type: ha_service
+        domain: "select"
+        service: "select_option"
+        data:
+          entity_id: "select.main_church_door_door_lock_rule"
+          option: "Custom"
+        on_fail: skip
+        message: "Unlocking main church door"
+      # --- Unlock lobby door for 3 hours (180 minutes) ---
+      - type: ha_service
+        domain: "number"
+        service: "set_value"
+        data:
+          entity_id: "number.main_lobby_rule_interval_min"
+          value: 180
+        on_fail: skip
+        message: "Setting lobby door unlock duration to 3 hours"
+      - type: ha_service
+        domain: "select"
+        service: "select_option"
+        data:
+          entity_id: "select.main_lobby_door_lock_rule"
+          option: "Custom"
+        on_fail: skip
+        message: "Unlocking lobby door"
 
   chapel_full_teardown:
     label: "Chapel Teardown"
     icon: "power_settings_new"
-    confirm: "Shut down all Chapel AV systems?"
+    description: "Full AV shutdown: TVs off, audio off, A/C off"
     steps:
       - type: macro
         macro: "chapel_tv_off"
+        message: "Turning off Chapel TVs"
       - type: macro
         macro: "chapel_audio_off"
+        message: "Turning off Chapel audio"
       - type: macro
         macro: "chapel_ac_off"
-      - type: notify
-        message: "Chapel fully shut down"
+        message: "Turning off Chapel A/C"
 
   # ---------------------------------------------------------------------------
   # MAIN CHURCH (examples — expand as needed)
@@ -2781,7 +2822,6 @@ macros:
     label: "Main Church Full Setup"
     icon: "play_circle"
     description: "Full AV startup: video, audio, Apple TV source, live stream scene, camera preset, and unlock exterior doors for 5 hours"
-    confirm: "Run full Main Church AV setup?"
     steps:
       - type: macro
         macro: "main_video_on"
@@ -2803,14 +2843,29 @@ macros:
         preset: 1
         on_fail: skip
         message: "Setting Main Church Rear camera to Full View (Preset 1)"
-      # --- Unlock exterior doors for 5 hours (300 minutes) ---
-      # Edit the entity_id values below to match your HA lock entities.
-      # Pattern: set the duration, then select the "Custom" rule option.
+      # --- Unlock main church door for 5 hours (300 minutes) ---
       - type: ha_service
         domain: "number"
         service: "set_value"
         data:
-          entity_id: "number.exterior_lobby_door_auto_lock_time"
+          entity_id: "number.ext_main_church_door_rule_interval_min"
+          value: 300
+        on_fail: skip
+        message: "Setting main church door unlock duration to 5 hours"
+      - type: ha_service
+        domain: "select"
+        service: "select_option"
+        data:
+          entity_id: "select.main_church_door_door_lock_rule"
+          option: "Custom"
+        on_fail: skip
+        message: "Unlocking main church door"
+      # --- Unlock lobby door for 5 hours (300 minutes) ---
+      - type: ha_service
+        domain: "number"
+        service: "set_value"
+        data:
+          entity_id: "number.main_lobby_rule_interval_min"
           value: 300
         on_fail: skip
         message: "Setting lobby door unlock duration to 5 hours"
@@ -2818,34 +2873,15 @@ macros:
         domain: "select"
         service: "select_option"
         data:
-          entity_id: "select.exterior_lobby_door_locking_rule"
+          entity_id: "select.main_lobby_door_lock_rule"
           option: "Custom"
         on_fail: skip
-        message: "Unlocking exterior lobby door"
-      - type: ha_service
-        domain: "number"
-        service: "set_value"
-        data:
-          entity_id: "number.exterior_main_door_auto_lock_time"
-          value: 300
-        on_fail: skip
-        message: "Setting main door unlock duration to 5 hours"
-      - type: ha_service
-        domain: "select"
-        service: "select_option"
-        data:
-          entity_id: "select.exterior_main_door_locking_rule"
-          option: "Custom"
-        on_fail: skip
-        message: "Unlocking exterior main door"
-      - type: notify
-        message: "Main church full setup complete"
+        message: "Unlocking lobby door"
 
   main_full_teardown:
     label: "Main Church Teardown"
     icon: "power_settings_new"
     description: "Full AV shutdown: video off, audio off, A/C off"
-    confirm: "Shut down all Main Church AV systems?"
     steps:
       - type: macro
         macro: "main_video_off"
