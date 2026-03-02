@@ -2227,6 +2227,13 @@ macros:
         receiver: 28
         code: "IRPowerOn"
         message: "Sending power-on to Conference Room Left TV"
+      # Samsung API power-on
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_confroom_left" }
+        on_fail: skip
+        message: "Samsung API power-on Left TV"
       - type: delay
         seconds: 4
         message: "Waiting for TV to initialize"
@@ -2242,12 +2249,26 @@ macros:
         receiver: 28
         code: "IRSourceHDMI1"
         message: "Setting Left TV to HDMI 1"
+      - type: delay
+        seconds: 4
+      # Third IR power-on to match THR
+      - type: moip_ir
+        receiver: 28
+        code: "IRPowerOn"
+        message: "Third power-on to Left TV"
 
   confroom_left_tv_off:
     label: "Left TV Off"
     icon: "tv_off"
     confirm: "Turn off Conference Room Left TV?"
     steps:
+      # Samsung API power-off
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_confroom_left" }
+        on_fail: skip
+        message: "Samsung API power-off Left TV"
       - type: moip_ir
         receiver: 28
         code: "IRPowerOff"
@@ -2258,6 +2279,20 @@ macros:
         receiver: 28
         code: "IRPowerOff"
         message: "Sending repeat power-off to Left TV"
+      - type: delay
+        seconds: 5
+      # Third IR power-off
+      - type: moip_ir
+        receiver: 28
+        code: "IRPowerOff"
+        message: "Third power-off to Left TV"
+      - type: delay
+        seconds: 6
+      # Fourth IR power-off to match THR
+      - type: moip_ir
+        receiver: 28
+        code: "IRPowerOff"
+        message: "Fourth power-off to Left TV"
 
   confroom_left_source_laptop:
     label: "Left TV Laptop"
@@ -2341,6 +2376,13 @@ macros:
         receiver: 29
         code: "IRPowerOn"
         message: "Sending power-on to Conference Room Right TV"
+      # Samsung API power-on
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_on"
+        data: { entity_id: "media_player.tv_099_confroom_right" }
+        on_fail: skip
+        message: "Samsung API power-on Right TV"
       - type: delay
         seconds: 4
         message: "Waiting for TV to initialize"
@@ -2356,12 +2398,26 @@ macros:
         receiver: 29
         code: "IRSourceHDMI1"
         message: "Setting Right TV to HDMI 1"
+      - type: delay
+        seconds: 4
+      # Third IR power-on to match THR
+      - type: moip_ir
+        receiver: 29
+        code: "IRPowerOn"
+        message: "Third power-on to Right TV"
 
   confroom_right_tv_off:
     label: "Right TV Off"
     icon: "tv_off"
     confirm: "Turn off Conference Room Right TV?"
     steps:
+      # Samsung API power-off
+      - type: ha_service
+        domain: "media_player"
+        service: "turn_off"
+        data: { entity_id: "media_player.tv_099_confroom_right" }
+        on_fail: skip
+        message: "Samsung API power-off Right TV"
       - type: moip_ir
         receiver: 29
         code: "IRPowerOff"
@@ -2372,6 +2428,13 @@ macros:
         receiver: 29
         code: "IRPowerOff"
         message: "Sending repeat power-off to Right TV"
+      - type: delay
+        seconds: 4
+      # Third IR power-off to match THR
+      - type: moip_ir
+        receiver: 29
+        code: "IRPowerOff"
+        message: "Third power-off to Right TV"
 
   confroom_right_source_laptop:
     label: "Right TV Laptop"
@@ -2491,6 +2554,13 @@ macros:
       - type: moip_ir
         receiver: 29
         code: "IRSourceHDMI1"
+      # Repeat MoIP mappings for reliability (THR sends twice)
+      - type: moip_switch
+        tx: 5
+        rx: 29
+      - type: moip_switch
+        tx: 5
+        rx: 28
 
   confroom_vidconf_off:
     label: "Video Conference Off"
