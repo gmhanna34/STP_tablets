@@ -4,6 +4,8 @@ const SourcePage = {
   transmitters: [],
   receivers: [],
   _activeTab: 'video',
+  _announcementsLoaded: false,
+  _announcements: [],
 
   render(container) {
     container.innerHTML = `
@@ -24,6 +26,10 @@ const SourcePage = {
           <button class="cam-tab" data-source-tab="audio">
             <span class="material-icons">equalizer</span>
             <span>Audio</span>
+          </button>
+          <button class="cam-tab" data-source-tab="announcements">
+            <span class="material-icons">campaign</span>
+            <span>Announcements</span>
           </button>
         </div>
 
@@ -74,6 +80,16 @@ const SourcePage = {
             <div id="dca-container" class="mixer-grid"></div>
           </div>
         </div>
+
+        <!-- ANNOUNCEMENTS TAB -->
+        <div id="source-tab-announcements" style="display:none;">
+          <div class="control-section">
+            <div class="section-title">Alexa Announcements</div>
+            <div id="announce-container">
+              <div class="text-center" style="opacity:0.5;">Loading announcements...</div>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   },
@@ -96,9 +112,13 @@ const SourcePage = {
         document.querySelectorAll('[data-source-tab]').forEach(t => t.classList.toggle('active', t.dataset.sourceTab === target));
         document.getElementById('source-tab-video').style.display = target === 'video' ? '' : 'none';
         document.getElementById('source-tab-audio').style.display = target === 'audio' ? '' : 'none';
+        document.getElementById('source-tab-announcements').style.display = target === 'announcements' ? '' : 'none';
 
         if (target === 'audio' && !this.mixerTimer) {
           this._initAudio();
+        }
+        if (target === 'announcements' && !this._announcementsLoaded) {
+          this._initAnnouncements();
         }
       });
     });
@@ -320,6 +340,131 @@ const SourcePage = {
     });
   },
 
+  async _initAnnouncements() {
+    this._announcementsLoaded = true;
+    const container = document.getElementById('announce-container');
+    if (!container) return;
+
+    try {
+      const resp = await fetch('/api/ha/entities?domain=automation&q=alexaannounce', {
+        headers: { 'X-Tablet-ID': MacroAPI.tabletId },
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await resp.json();
+      const entities = data.domains?.automation?.entities || [];
+      // Filter to only automation.automation_alexaannounce_* entity IDs
+      this._announcements = entities.filter(e =>
+        e.entity_id.startsWith('automation.automation_alexaannounce_')
+      );
+    } catch (e) {
+      console.error('Failed to load Alexa announcements:', e);
+      this._announcements = [];
+    }
+
+    const options = this._announcements.map(a => {
+      const label = a.friendly_name || a.entity_id.replace('automation.automation_alexaannounce_', '').replace(/_/g, ' ');
+      return `<option value="${a.entity_id}">${label}</option>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="announce-form">
+        <label class="announce-label">Select an announcement</label>
+        <select id="announce-select" class="routing-select" style="width:100%;margin-bottom:10px;">
+          <option value="">-- Choose --</option>
+          ${options}
+          <option value="__custom__">Custom Announcement</option>
+        </select>
+        <div id="announce-description" class="announce-description" style="display:none;"></div>
+        <textarea id="announce-custom-text" class="announce-textarea" style="display:none;"
+          placeholder="Type your announcement message..." rows="3"></textarea>
+        <button class="btn" id="btn-announce" style="margin-top:10px;max-width:220px;">
+          <span class="material-icons">campaign</span>
+          <span class="btn-label">Announce</span>
+        </button>
+      </div>
+    `;
+
+    // Dropdown change handler
+    document.getElementById('announce-select')?.addEventListener('change', (e) => {
+      const val = e.target.value;
+      const descEl = document.getElementById('announce-description');
+      const textEl = document.getElementById('announce-custom-text');
+
+      if (val === '__custom__') {
+        descEl.style.display = 'none';
+        textEl.style.display = '';
+        textEl.focus();
+      } else if (val) {
+        textEl.style.display = 'none';
+        const ann = this._announcements.find(a => a.entity_id === val);
+        const desc = ann?.attributes?.description;
+        if (desc) {
+          descEl.textContent = desc;
+          descEl.style.display = '';
+        } else {
+          descEl.style.display = 'none';
+        }
+      } else {
+        descEl.style.display = 'none';
+        textEl.style.display = 'none';
+      }
+    });
+
+    // Announce button
+    document.getElementById('btn-announce')?.addEventListener('click', () => this._sendAnnouncement());
+  },
+
+  async _sendAnnouncement() {
+    const select = document.getElementById('announce-select');
+    const textArea = document.getElementById('announce-custom-text');
+    const val = select?.value;
+    if (!val) {
+      App.showToast('Please select an announcement first', 2000);
+      return;
+    }
+
+    const isCustom = val === '__custom__';
+    const customMsg = textArea?.value?.trim();
+    if (isCustom && !customMsg) {
+      App.showToast('Please type a message first', 2000);
+      return;
+    }
+
+    const label = isCustom ? `"${customMsg}"` : select.options[select.selectedIndex].text;
+    if (!await App.showConfirm(`Broadcast this announcement?\n\n${label}`)) return;
+
+    try {
+      let resp;
+      if (isCustom) {
+        resp = await fetch('/api/ha/service/notify/send_message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': MacroAPI.tabletId },
+          body: JSON.stringify({
+            entity_id: 'notify.av_room_echo_dot_announce',
+            message: customMsg,
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
+      } else {
+        resp = await fetch('/api/ha/service/automation/trigger', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': MacroAPI.tabletId },
+          body: JSON.stringify({ entity_id: val }),
+          signal: AbortSignal.timeout(15000),
+        });
+      }
+      if (resp.ok) {
+        App.showToast('Announcement sent!', 3000);
+        if (isCustom) textArea.value = '';
+      } else {
+        App.showToast('Announcement failed — check HA logs', 4000);
+      }
+    } catch (e) {
+      console.error('Announcement error:', e);
+      App.showToast('Announcement failed — network error', 4000);
+    }
+  },
+
   async loadRouting() {
     const state = await MoIPAPI.poll();
     const container = document.getElementById('routing-container');
@@ -418,6 +563,19 @@ const SourcePage = {
             <h3>Audio Tab - Input Channels, Buses & DCAs</h3>
             <p class="help-note">Shows individual channel faders with volume sliders and mute buttons. Aux inputs, mix buses, and DCA groups each show mute state and volume levels. Only channels with names assigned on the X32 are shown.</p>
           </div>
+
+          <div class="help-section">
+            <h3>Announcements Tab</h3>
+            <p class="help-note">Broadcasts voice announcements through the church Alexa system.</p>
+            <dl class="help-list">
+              <dt>Preset Announcements</dt>
+              <dd>Select a pre-configured announcement from the dropdown. These are defined as Home Assistant automations and may include specific wording, timing, or multi-step sequences.</dd>
+              <dt>Custom Announcement</dt>
+              <dd>Choose "Custom Announcement" from the dropdown to type a free-form message. The text will be spoken by Alexa exactly as typed.</dd>
+              <dt><span class="material-icons">campaign</span> Announce</dt>
+              <dd>Sends the selected or custom announcement. A confirmation dialog will appear before broadcasting.</dd>
+            </dl>
+          </div>
         </div>
       `;
     });
@@ -426,5 +584,7 @@ const SourcePage = {
   destroy() {
     if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
     if (this.mixerTimer) { clearInterval(this.mixerTimer); this.mixerTimer = null; }
+    this._announcementsLoaded = false;
+    this._announcements = [];
   }
 };
