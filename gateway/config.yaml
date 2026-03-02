@@ -32,8 +32,10 @@ middleware:
 ptz_cameras:
   MainChurch_Rear:    { ip: "192.168.1.201", name: "Cam1921681201" }
   MainChurch_Altar:   { ip: "192.168.1.202", name: "Cam1921681202" }
-  MainChurch_Right:   { ip: "192.168.1.203", name: "Cam1921681203" }
-  MainChurch_Left:    { ip: "192.168.1.204", name: "Cam1921681204" }
+  MainChurch_Right:      { ip: "192.168.1.203", name: "Cam1921681203" }
+  MainChurch_Side_Right: { ip: "192.168.1.203", name: "Cam1921681203" }
+  MainChurch_Left:       { ip: "192.168.1.204", name: "Cam1921681204" }
+  MainChurch_Side_Left:  { ip: "192.168.1.204", name: "Cam1921681204" }
   Chapel_Rear:        { ip: "192.168.1.205", name: "Cam1921681205" }
   Chapel_Side:        { ip: "192.168.1.206", name: "Cam1921681206" }
   BaptismRoom:        { ip: "192.168.1.207", name: "Cam1921681207" }
