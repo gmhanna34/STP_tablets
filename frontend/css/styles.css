@@ -946,6 +946,70 @@ body {
   box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
 }
 
+/* ── Announcements Form ────────────────────────────────── */
+
+.announce-form {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.announce-form select {
+  width: 100%;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+}
+
+.announce-form select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
+}
+
+.announce-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+}
+
+.announce-description {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+
+.announce-textarea {
+  width: 100%;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  resize: vertical;
+  min-height: 60px;
+  box-sizing: border-box;
+}
+
+.announce-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
+}
+
 /* ── Camera Tab Bar ──────────────────────────────────────── */
 
 .cam-tab-bar {
