@@ -1996,6 +1996,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 return _step_x32_scene(step, tablet)
             elif step_type == "x32_mute":
                 return _step_x32_mute(step, tablet)
+            elif step_type == "x32_aux_mute":
+                return _step_x32_aux_mute(step, tablet)
             elif step_type == "obs_emit":
                 return _step_obs_emit(step, tablet)
             elif step_type == "ptz_preset":
@@ -2195,6 +2197,24 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             socketio.emit("state:x32", {"event": "mute", "channel": ch, "state": state}, room="x32")
             return {"success": True}
         return {"success": False, "error": error_detail or f"X32 mute ch{ch} failed (HTTP {status})"}
+
+    def _step_x32_aux_mute(step: dict, tablet: str) -> dict:
+        ch = step.get("channel", 1)
+        state = step.get("state", "on")
+        if mock_mode:
+            return {"success": True}
+        start = time.time()
+        result, status = _proxy_request("x32", f"/aux{ch}_mute_{state}", tablet=tablet)
+        latency = (time.time() - start) * 1000
+        ok = status < 400
+        error_detail = "" if ok else (result.get("error", "") if isinstance(result, dict) else f"HTTP {status}")
+        db.log_action(tablet, "macro:x32_aux_mute", f"aux{ch}_{state}",
+                      json.dumps({"channel": ch, "state": state}),
+                      "OK" if ok else f"FAILED: {error_detail}" if error_detail else "FAILED", latency)
+        if ok:
+            socketio.emit("state:x32", {"event": "aux_mute", "aux": ch, "state": state}, room="x32")
+            return {"success": True}
+        return {"success": False, "error": error_detail or f"X32 aux{ch} mute failed (HTTP {status})"}
 
     def _step_obs_emit(step: dict, tablet: str) -> dict:
         action = step.get("action", "")
@@ -2425,6 +2445,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 return f"X32 scene {step.get('scene', '')}"
             elif t == "x32_mute":
                 return f"X32 mute ch{step.get('channel', '')} {step.get('state', '')}"
+            elif t == "x32_aux_mute":
+                return f"X32 aux{step.get('channel', '')} mute {step.get('state', '')}"
             elif t == "obs_emit":
                 return f"OBS {step.get('request_type', '')}"
             elif t == "ptz_preset":
