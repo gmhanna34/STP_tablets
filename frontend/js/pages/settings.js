@@ -79,6 +79,18 @@ const SettingsPage = {
               <span class="btn-label">Open EcoFlow Panel</span>
             </button>
           </div>
+          <div class="control-section" style="grid-column:1/-1;">
+            <div class="section-title" style="color:var(--danger);">
+              <span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">emergency</span>
+              Break-Glass: Direct Power Control
+            </div>
+            <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+              Emergency device restart <strong>bypassing Home Assistant</strong>. Use only when HA is down or unresponsive.
+            </div>
+            <div id="breakglass-devices" class="control-grid" style="grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));">
+              <div style="opacity:0.5;padding:12px;">Loading devices…</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -361,6 +373,7 @@ const SettingsPage = {
     document.getElementById('btn-open-smartthings')?.addEventListener('click', () => this._openSwitchPanel('SmartThings', 'SW_'));
     document.getElementById('btn-open-wattbox')?.addEventListener('click', () => this._openSwitchPanel('WattBox', 'WB_'));
     document.getElementById('btn-open-ecoflow')?.addEventListener('click', () => this._openEcoFlowPanel());
+    this._loadBreakGlassDevices();
 
     // ── Thermostats tab ─────────────────────────────────────────────
     this._loadThermostats();
@@ -732,6 +745,95 @@ const SettingsPage = {
         renderBatteries();
       }, 5000);
     });
+  },
+
+  // =====================================================================
+  // Power Tab — Break-Glass Direct WattBox Control
+  // =====================================================================
+
+  async _loadBreakGlassDevices() {
+    const grid = document.getElementById('breakglass-devices');
+    if (!grid) return;
+    const tabletId = localStorage.getItem('tabletId') || 'WebApp';
+
+    try {
+      const resp = await fetch('/api/wattbox/devices', {
+        headers: { 'X-Tablet-ID': tabletId },
+      });
+      const devices = await resp.json();
+      if (devices.error) {
+        grid.innerHTML = `<div style="opacity:0.5;font-size:13px;">${devices.error}</div>`;
+        return;
+      }
+
+      grid.innerHTML = Object.entries(devices).map(([key, dev]) => {
+        const stateClass = dev.state === 'on' ? 'idle' : dev.state === 'off' ? 'offline' : '';
+        return `<div class="control-section" style="margin:0;padding:12px;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <span class="status-dot ${stateClass}"></span>
+            <strong style="font-size:14px;">${dev.label}</strong>
+            <span style="font-size:11px;opacity:0.5;">${dev.ip}:${dev.outlet}</span>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-sm" data-bg-key="${key}" data-bg-action="cycle" style="flex:1;">
+              <span class="material-icons" style="font-size:16px;">restart_alt</span>
+              <span class="btn-label">Reboot</span>
+            </button>
+            <button class="btn btn-sm" data-bg-key="${key}" data-bg-action="off" style="flex:1;">
+              <span class="material-icons" style="font-size:16px;">power_off</span>
+              <span class="btn-label">Off</span>
+            </button>
+            <button class="btn btn-sm" data-bg-key="${key}" data-bg-action="on" style="flex:1;">
+              <span class="material-icons" style="font-size:16px;">power</span>
+              <span class="btn-label">On</span>
+            </button>
+          </div>
+        </div>`;
+      }).join('');
+
+      // Wire handlers
+      grid.querySelectorAll('[data-bg-key]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const key = btn.dataset.bgKey;
+          const action = btn.dataset.bgAction;
+          const label = devices[key]?.label || key;
+
+          const confirmed = await App.showConfirm(
+            `<strong style="color:var(--danger);">Break-Glass Action</strong><br><br>` +
+            `${action === 'cycle' ? 'Reboot' : action === 'off' ? 'Power OFF' : 'Power ON'} ` +
+            `<strong>${label}</strong>?<br><br>` +
+            `<span style="font-size:13px;opacity:0.7;">This bypasses Home Assistant and controls the WattBox outlet directly.</span>`
+          );
+          if (!confirmed) return;
+
+          btn.disabled = true;
+          btn.classList.add('loading');
+          try {
+            const resp = await fetch(`/api/wattbox/${key}/power`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': tabletId },
+              body: JSON.stringify({ action }),
+            });
+            const result = await resp.json();
+            if (result.success) {
+              App.showToast(`${label}: ${action === 'cycle' ? 'Rebooting' : action === 'off' ? 'Powered off' : 'Powered on'}`);
+              // Refresh device states after a short delay
+              setTimeout(() => this._loadBreakGlassDevices(), 2000);
+            } else {
+              App.showToast(result.error || 'Command failed', 3000, 'error');
+            }
+          } catch (err) {
+            App.showToast('Failed to reach WattBox', 3000, 'error');
+          } finally {
+            btn.disabled = false;
+            btn.classList.remove('loading');
+          }
+        });
+      });
+
+    } catch (err) {
+      grid.innerHTML = '<div style="color:var(--danger);font-size:13px;">Failed to load WattBox devices.</div>';
+    }
   },
 
   // =====================================================================
