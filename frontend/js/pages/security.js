@@ -52,6 +52,12 @@ const SecurityPage = {
         </div>
 
         <div id="cam-access-content" style="display:none;">
+          <div class="text-center" style="margin-bottom:10px;">
+            <button class="btn" id="btn-unlock-exterior" style="display:inline-flex;max-width:360px;">
+              <span class="material-icons">lock_open</span>
+              <span class="btn-label">Unlock Exterior Doors (Main, Lobby, Rear) — 4 hrs</span>
+            </button>
+          </div>
           <div class="batch-bar" id="batch-bar" style="display:none;">
             <button class="btn btn-sm" id="btn-select-all">
               <span class="material-icons" style="font-size:16px;">select_all</span>
@@ -103,6 +109,26 @@ const SecurityPage = {
     document.getElementById('btn-select-all')?.addEventListener('click', () => this._toggleSelectAll());
     document.getElementById('btn-batch-lock')?.addEventListener('click', () => this._batchAction('lock'));
     document.getElementById('btn-batch-unlock')?.addEventListener('click', () => this._batchAction('unlock'));
+
+    // Unlock exterior doors macro button
+    document.getElementById('btn-unlock-exterior')?.addEventListener('click', async () => {
+      if (!await App.showConfirm('Unlock all 3 exterior doors (Main, Lobby, Rear) for 4 hours?')) return;
+      const btn = document.getElementById('btn-unlock-exterior');
+      btn.disabled = true;
+      try {
+        const result = await MacroAPI.execute('unlock_exterior_doors');
+        if (result && result.success) {
+          App.showToast('Exterior doors unlocking for 4 hours', 3000);
+        } else {
+          App.showToast(`Unlock failed: ${result?.error || 'unknown error'}`, 4000, 'error');
+        }
+      } catch (e) {
+        App.showToast('Unlock failed: network error', 4000, 'error');
+      } finally {
+        btn.disabled = false;
+        setTimeout(() => this._refreshLocks(), 1000);
+      }
+    });
 
     // Start PTZ feeds (default tab)
     const cameraEntries = App.settings?.ptzCameras ? Object.entries(App.settings.ptzCameras) : [];
