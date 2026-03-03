@@ -2815,6 +2815,56 @@ macros:
         message: "Resetting YouTube live stream"
 
   # ---------------------------------------------------------------------------
+  # MAIN CHURCH — End of Liturgy
+  # ---------------------------------------------------------------------------
+
+  end_of_liturgy:
+    label: "End of Liturgy"
+    icon: "church"
+    description: "Post-liturgy sequence: switch Main Church & Social Hall to Announcements, turn on Social Hall TVs, load mixer scene 5, unmute aux 3 & 4, and trigger Sunday School announcement"
+    confirm: "Run end-of-liturgy sequence? This will change video sources, turn on Social Hall TVs, switch the mixer, and send the announcement."
+    confirm_steps: true
+    steps:
+      # Step 1: Switch Main Church to Announcements (includes Lounge RX 26)
+      - type: macro
+        macro: "main_source_announcements"
+        message: "Switching Main Church to Announcements"
+
+      # Step 2: Turn on Social Hall TVs
+      - type: macro
+        macro: "social_video_on"
+        message: "Turning on Social Hall TVs"
+        on_fail: skip
+
+      # Step 3: Switch Social Hall to Announcements
+      - type: macro
+        macro: "social_source_announcements"
+        message: "Switching Social Hall to Announcements"
+
+      # Step 4: Load mixer scene 5
+      - type: x32_scene
+        scene: 5
+        message: "Loading mixer scene 5"
+
+      # Step 5: Unmute aux channels 3 and 4
+      - type: x32_aux_mute
+        channel: 3
+        state: "off"
+        message: "Unmuting aux channel 3"
+      - type: x32_aux_mute
+        channel: 4
+        state: "off"
+        message: "Unmuting aux channel 4"
+
+      # Step 6: Trigger Alexa announcement via HA
+      - type: ha_service
+        domain: "automation"
+        service: "trigger"
+        data:
+          entity_id: "automation.automation_alexaannounce_sundayschool20minute"
+        message: "Triggering Sunday School announcement"
+
+  # ---------------------------------------------------------------------------
   # MAIN CHURCH — Full System On / Off
   # ---------------------------------------------------------------------------
 
@@ -3418,6 +3468,16 @@ buttons:
             - label: "Baptism Camera View"
               icon: "videocam"
               action: { type: macro, macro: main_baptism_camera }
+        - key: "macros"
+          label: "Macros"
+          icon: "play_circle"
+          items:
+            - label: "End of Liturgy"
+              icon: "church"
+              style: "large success"
+              span: 2
+              action: { type: macro, macro: end_of_liturgy }
+              confirm_steps: true
 
   social:
     - section: ""
