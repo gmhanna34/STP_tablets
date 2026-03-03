@@ -59,7 +59,8 @@ fully_kiosk:
 
 # --- Home Assistant proxy -----------------------------------------------------
 home_assistant:
-  url: "https://kvakvzhbshejxozsdlo6yyl2l7ugbibc.ui.nabu.casa"
+  #url: "https://kvakvzhbshejxozsdlo6yyl2l7ugbibc.ui.nabu.casa"
+  url: "http://192.168.1.245:8123"
   token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2YmI4NDEwNTBmN2I0M2RjOGVhYmI1MTM0NmVhY2RlNyIsImlhdCI6MTc2ODg0MDY3NCwiZXhwIjoyMDg0MjAwNjc0fQ.Nl3drftaCITH1bSpaH9gPp9vckYoRGW22HNAhox20d8"
   timeout: 10
 
