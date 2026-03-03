@@ -33,6 +33,9 @@ from typing import Any, Dict, List, Optional
 
 import requests as http_requests
 import yaml
+from dotenv import load_dotenv
+
+load_dotenv()
 from flask import Flask, Response, jsonify, redirect, request, send_file, send_from_directory, session, url_for
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
@@ -2606,7 +2609,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if not message:
             return jsonify({"error": "message required"}), 400
 
-        api_key = cfg.get("anthropic", {}).get("api_key", "")
+        api_key = cfg.get("anthropic", {}).get("api_key", "") or os.environ.get("ANTHROPIC_API_KEY", "")
         if not api_key:
             return jsonify({"error": "Chatbot not configured. Ask an admin to add the API key."}), 503
 
