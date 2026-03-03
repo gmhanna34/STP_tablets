@@ -121,6 +121,7 @@ const SocialPage = {
         App.closePanel();
         App.openChat('social');
       });
+    });
   },
 
   destroy() {

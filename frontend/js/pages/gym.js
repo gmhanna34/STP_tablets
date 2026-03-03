@@ -101,6 +101,7 @@ const GymPage = {
         App.closePanel();
         App.openChat('gym');
       });
+    });
   },
 
   destroy() {

@@ -119,6 +119,7 @@ const ConfRoomPage = {
         App.closePanel();
         App.openChat('confroom');
       });
+    });
   },
 
   destroy() {

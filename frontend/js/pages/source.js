@@ -592,6 +592,7 @@ const SourcePage = {
         App.closePanel();
         App.openChat('source');
       });
+    });
   },
 
   destroy() {

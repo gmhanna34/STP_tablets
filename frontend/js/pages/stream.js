@@ -513,6 +513,7 @@ const StreamPage = {
         App.closePanel();
         App.openChat('stream');
       });
+    });
   },
 
   destroy() {

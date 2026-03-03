@@ -1097,6 +1097,7 @@ const SecurityPage = {
         App.closePanel();
         App.openChat('security');
       });
+    });
   },
 
   destroy() {
