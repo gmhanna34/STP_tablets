@@ -298,20 +298,27 @@ const App = {
     }
   },
 
+  _deviceInfoFailCount: 0,
+
   startDeviceInfoPolling() {
     const update = async () => {
       try {
         const resp = await fetch('http://127.0.0.1:2323/?password=admin&cmd=deviceInfo&type=json',
           { signal: AbortSignal.timeout(3000) });
         const info = await resp.json();
+        this._deviceInfoFailCount = 0;
         this._updateBattery(info.batteryLevel, info.isPlugged);
         this._updateWifi(info.wifiSignalLevel);
       } catch {
-        // Not running in Fully Kiosk — hide device info indicators
-        const bat = document.getElementById('status-battery');
-        const wifi = document.getElementById('status-wifi');
-        if (bat) bat.style.display = 'none';
-        if (wifi) wifi.style.display = 'none';
+        this._deviceInfoFailCount++;
+        // Only hide after 3 consecutive failures (not a one-off glitch)
+        if (this._deviceInfoFailCount >= 3) {
+          const bat = document.getElementById('status-battery');
+          const wifi = document.getElementById('status-wifi');
+          if (bat) bat.style.display = 'none';
+          if (wifi) wifi.style.display = 'none';
+        }
+        // Keep polling — Fully Kiosk may come back online
       }
     };
     update();
@@ -712,6 +719,54 @@ const App = {
           overlay.remove();
           resolve(false);
         }
+      });
+
+      document.body.appendChild(overlay);
+    });
+  },
+
+  // -----------------------------------------------------------------------
+  // Multi-option choice dialog
+  // -----------------------------------------------------------------------
+
+  /**
+   * Show a dialog with multiple option buttons plus a Cancel.
+   * @param {string} message - Prompt text (HTML allowed)
+   * @param {Array<{label:string, value:any, icon?:string, danger?:boolean}>} options
+   * @returns {Promise<any|null>} The chosen option's value, or null if cancelled
+   */
+  showChoices(message, options) {
+    return new Promise((resolve) => {
+      document.getElementById('choices-overlay')?.remove();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'choices-overlay';
+      overlay.className = 'confirm-overlay';
+      overlay.innerHTML = `
+        <div class="confirm-modal choices-modal">
+          <div class="confirm-message">${message}</div>
+          <div class="choices-list">
+            ${options.map((opt, i) => `
+              <button class="btn choices-option ${opt.danger ? 'btn-danger' : ''}" data-choice-idx="${i}">
+                ${opt.icon ? `<span class="material-icons" style="font-size:18px;">${opt.icon}</span>` : ''}
+                <span>${opt.label}</span>
+              </button>
+            `).join('')}
+          </div>
+          <div class="choices-cancel-row">
+            <button class="btn choices-cancel">Cancel</button>
+          </div>
+        </div>
+      `;
+
+      const close = (val) => { overlay.remove(); resolve(val); };
+
+      overlay.querySelector('.choices-cancel').addEventListener('click', () => close(null));
+      overlay.querySelectorAll('.choices-option').forEach(btn => {
+        btn.addEventListener('click', () => close(options[parseInt(btn.dataset.choiceIdx)].value));
+      });
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close(null);
       });
 
       document.body.appendChild(overlay);

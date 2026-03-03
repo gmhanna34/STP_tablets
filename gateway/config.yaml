@@ -64,6 +64,31 @@ home_assistant:
   token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2YmI4NDEwNTBmN2I0M2RjOGVhYmI1MTM0NmVhY2RlNyIsImlhdCI6MTc2ODg0MDY3NCwiZXhwIjoyMDg0MjAwNjc0fQ.Nl3drftaCITH1bSpaH9gPp9vckYoRGW22HNAhox20d8"
   timeout: 10
 
+# --- WattBox direct control (break-glass fallback, bypasses Home Assistant) ---
+wattbox:
+  username: "admin"
+  password: "WBAdmin1"          # Change per-PDU if needed
+  timeout: 5
+  # Map friendly device names → WattBox PDU IP + outlet number
+  # These are placeholders — update with actual outlet assignments
+  devices:
+    ha_server:
+      label: "Home Assistant Server"
+      ip: "192.168.1.61"
+      outlet: 1
+    livestream_pc:
+      label: "Live Stream PC"
+      ip: "192.168.1.61"
+      outlet: 2
+    moip_controller:
+      label: "MoIP Controller"
+      ip: "192.168.1.62"
+      outlet: 1
+    x32_mixer:
+      label: "X32 Mixer"
+      ip: "192.168.1.62"
+      outlet: 2
+
 # --- Security -----------------------------------------------------------------
 security:
   # IP prefix allowlist (same as existing middleware)

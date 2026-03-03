@@ -1334,6 +1334,88 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return jsonify({"error": "Fully Kiosk unreachable"}), 503
 
     # -------------------------------------------------------------------------
+    # WATTBOX DIRECT CONTROL (break-glass, bypasses Home Assistant)
+    # -------------------------------------------------------------------------
+
+    @app.route("/api/wattbox/devices")
+    def wattbox_devices():
+        """List configured break-glass WattBox devices and their live outlet state."""
+        wb_cfg = cfg.get("wattbox", {})
+        devices = wb_cfg.get("devices", {})
+        if not devices:
+            return jsonify({"error": "No WattBox devices configured"}), 404
+
+        result = {}
+        for key, dev in devices.items():
+            entry = {"label": dev["label"], "ip": dev["ip"], "outlet": dev["outlet"], "state": None}
+            if not mock_mode:
+                try:
+                    resp = http_requests.get(
+                        f"http://{dev['ip']}/control.cgi?outlet={dev['outlet']}&command=status",
+                        auth=(wb_cfg.get("username", "admin"), wb_cfg.get("password", "")),
+                        timeout=wb_cfg.get("timeout", 5),
+                    )
+                    # WattBox returns outlet state in the response body
+                    body = resp.text.strip().lower()
+                    entry["state"] = "on" if "1" in body or "on" in body else "off"
+                except Exception:
+                    entry["state"] = "unknown"
+            else:
+                entry["state"] = "on"
+            result[key] = entry
+        return jsonify(result), 200
+
+    @app.route("/api/wattbox/<device_key>/power", methods=["POST"])
+    def wattbox_power(device_key: str):
+        """Turn a WattBox outlet on, off, or power-cycle it.
+
+        POST JSON: { "action": "on" | "off" | "cycle" }
+        """
+        wb_cfg = cfg.get("wattbox", {})
+        devices = wb_cfg.get("devices", {})
+        dev = devices.get(device_key)
+        if not dev:
+            return jsonify({"error": f"Unknown device: {device_key}"}), 404
+
+        data = request.get_json(silent=True) or {}
+        action = data.get("action", "cycle")
+        if action not in ("on", "off", "cycle"):
+            return jsonify({"error": f"Invalid action: {action}"}), 400
+
+        tablet = _tablet_id()
+        # Map action → WattBox command codes (3=on, 4=off, 1=cycle/reboot)
+        cmd_map = {"on": 3, "off": 4, "cycle": 1}
+        command = cmd_map[action]
+
+        if mock_mode:
+            return jsonify({"success": True, "device": device_key, "action": action, "mock": True}), 200
+
+        start = time.time()
+        try:
+            resp = http_requests.get(
+                f"http://{dev['ip']}/control.cgi?outlet={dev['outlet']}&command={command}",
+                auth=(wb_cfg.get("username", "admin"), wb_cfg.get("password", "")),
+                timeout=wb_cfg.get("timeout", 5),
+            )
+            latency = (time.time() - start) * 1000
+            db.log_action(tablet, f"wattbox:{action}", dev["ip"],
+                          f"outlet={dev['outlet']} ({dev['label']})",
+                          f"status={resp.status_code}", latency)
+            logger.info(f"WattBox {action} → {dev['label']} (outlet {dev['outlet']} @ {dev['ip']}) [{tablet}]")
+            return jsonify({
+                "success": resp.status_code == 200,
+                "device": device_key,
+                "action": action,
+                "latency_ms": round(latency, 1),
+            }), 200
+        except http_requests.Timeout:
+            logger.warning(f"WattBox timeout: {dev['ip']} [{tablet}]")
+            return jsonify({"error": f"WattBox at {dev['ip']} timed out"}), 504
+        except http_requests.ConnectionError:
+            logger.warning(f"WattBox unreachable: {dev['ip']} [{tablet}]")
+            return jsonify({"error": f"WattBox at {dev['ip']} unreachable"}), 503
+
+    # -------------------------------------------------------------------------
     # HOME ASSISTANT PROXY
     # -------------------------------------------------------------------------
 
