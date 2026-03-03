@@ -2903,6 +2903,11 @@ macros:
         minutes: 300
         on_fail: skip
         message: "Unlocking lobby door for 5 hours"
+      - type: door_timed_unlock
+        entity: "lock.rear_entry"
+        minutes: 300
+        on_fail: skip
+        message: "Unlocking rear door for 5 hours"
 
   main_full_teardown:
     label: "Main Church Teardown"
