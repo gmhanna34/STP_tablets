@@ -134,7 +134,7 @@ database:
 
 # --- AI Chatbot (volunteer help) -----------------------------------------------
 anthropic:
-  api_key: ""                             # Set your Anthropic API key here
+  api_key: ""                # Leave blank; set ANTHROPIC_API_KEY in .env instead
   model: "claude-haiku-4-5-20251001"
   max_tokens: 1024
 
