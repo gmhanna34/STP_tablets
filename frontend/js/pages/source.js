@@ -434,6 +434,9 @@ const SourcePage = {
     if (!await App.showConfirm(`Broadcast this announcement?\n\n${label}`)) return;
 
     try {
+      // Ensure aux channels 3 and 4 are unmuted before announcing
+      await Promise.all([X32API.unmuteAux(3), X32API.unmuteAux(4)]);
+
       let resp;
       if (isCustom) {
         resp = await fetch('/api/ha/service/notify/send_message', {
