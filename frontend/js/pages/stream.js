@@ -500,9 +500,19 @@ const StreamPage = {
               <dd>Re-enables the Blackmagic ATEM webcam input in OBS.</dd>
             </dl>
           </div>
+
+          <div class="help-section" style="border-bottom:none;text-align:center;padding-top:16px;">
+            <button class="btn" id="help-ask-chat" style="display:inline-flex;max-width:320px;">
+              <span class="material-icons">support_agent</span>
+              <span class="btn-label">Ask a Question</span>
+            </button>
+          </div>
         </div>
       `;
-    });
+      body.querySelector('#help-ask-chat')?.addEventListener('click', () => {
+        App.closePanel();
+        App.openChat('stream');
+      });
   },
 
   destroy() {

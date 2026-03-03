@@ -2450,6 +2450,161 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         return jsonify({"success": True}), 200
 
     # -------------------------------------------------------------------------
+    # CHATBOT API (Claude-powered volunteer help)
+    # -------------------------------------------------------------------------
+
+    def _build_chat_system_prompt() -> str:
+        """Assemble the chatbot system prompt from macros, devices, and static knowledge."""
+        parts = []
+        parts.append(
+            "You are the AV Help Assistant for St. Paul Coptic Orthodox Church. "
+            "Volunteers use tablet-based controls to manage audio, video, streaming, "
+            "projectors, cameras, and climate across several rooms. Answer questions "
+            "clearly and concisely. Use simple, non-technical language. "
+            "If you don't know the answer, say so and suggest asking the AV team lead."
+        )
+
+        # Page descriptions
+        parts.append("\n## Pages\n"
+            "- HOME: Dashboard with quick-access buttons for each room.\n"
+            "- MAIN (Main Church): Video on/off (projectors + motorized screens + TVs), "
+            "Audio on/off (X32 mixer + amplifiers), A/C thermostat, video source routing "
+            "(podium laptops, announcements PC, Apple TV, Google Streamer, live stream), "
+            "people counting (occupancy + communion). 'All Systems On' turns everything on. "
+            "'All Systems Off' turns everything off.\n"
+            "- CHAPEL: TVs on/off, Audio on/off, A/C thermostat, video source routing "
+            "(podium laptop, Apple TV, Google Streamer). 'All Systems On' / 'All Systems Off'.\n"
+            "- SOCIAL (Social Hall): Similar to Chapel — TVs, audio, A/C, source routing. "
+            "'All Systems On' / 'All Systems Off'.\n"
+            "- GYM: TV on/off, video source routing.\n"
+            "- CONF RM (Conference Room): TV, video source routing.\n"
+            "- STREAM (Live Stream): OBS scene switching (camera views), start/stop recording "
+            "and streaming, PTZ camera presets and joystick control.\n"
+            "- SOURCE: Advanced video matrix routing (MoIP), audio routing, and Alexa announcements.\n"
+            "- SECURITY: Camera feeds, door lock/unlock controls.\n"
+            "- SETTINGS: Power switches (SmartThings, WattBox), audio mixer (X32 scenes, "
+            "channel mutes/faders), thermostats, TV controls, scheduled automations, "
+            "audit logs, admin functions."
+        )
+
+        # Macros summary (labels + descriptions)
+        macro_lines = []
+        for key, m in macro_defs.items():
+            label = m.get("label", key)
+            desc = m.get("description", "")
+            if desc:
+                macro_lines.append(f"- {label}: {desc}")
+        if macro_lines:
+            parts.append("\n## Available Macros (buttons volunteers can press)\n"
+                         + "\n".join(macro_lines[:80]))
+
+        # Device summary
+        moip = devices_data.get("moip", {})
+        tx_list = moip.get("transmitters", {})
+        rx_list = moip.get("receivers", {})
+        if tx_list:
+            tx_names = [f"{v.get('name', k)}" for k, v in list(tx_list.items())[:20]]
+            parts.append(f"\n## Video Sources (Transmitters)\n{', '.join(tx_names)}")
+        if rx_list:
+            rx_names = [f"{v.get('name', k)}" for k, v in list(rx_list.items())[:25]]
+            parts.append(f"\n## Displays (Receivers)\n{', '.join(rx_names)}")
+
+        # Troubleshooting guide
+        parts.append(
+            "\n## Troubleshooting\n"
+            "- **Projector not turning on**: Try the Video On button again. Check that "
+            "the projector power outlet is on (Settings > Power > WattBox). Allow 60 seconds "
+            "for warm-up.\n"
+            "- **No audio / no sound**: Check that Audio is turned on. Go to Settings > Audio "
+            "and check that the correct mixer scene is loaded and channels are not muted.\n"
+            "- **Video not showing on screen**: Ensure the TV/projector is on, then check the "
+            "video source buttons — the active source is highlighted in orange. Try re-selecting "
+            "the source.\n"
+            "- **Live stream offline**: Go to the STREAM page and check if OBS shows 'Connected'. "
+            "If not, the streaming PC may need to be restarted.\n"
+            "- **Thermostat not responding**: The HVAC system may take a few minutes to respond. "
+            "Check Settings > Thermostats for the current status.\n"
+            "- **Door won't unlock**: Ensure you are on the SECURITY page. Tap the door, "
+            "then select a lock rule and duration.\n"
+            "- **Button not working / stuck**: Try refreshing the app (Settings > Admin > Reload App). "
+            "If still broken, check the health badges in the top status bar for offline services.\n"
+            "- **Tablet screen is dark**: Tap the screen to wake it. The screensaver activates "
+            "after a period of inactivity."
+        )
+
+        return "\n".join(parts)
+
+    _chat_system_prompt = _build_chat_system_prompt()
+
+    @app.route("/api/chat", methods=["POST"])
+    def api_chat():
+        data = request.get_json(silent=True) or {}
+        message = data.get("message", "").strip()
+        page = data.get("page", "")
+        history = data.get("history", [])
+
+        if not message:
+            return jsonify({"error": "message required"}), 400
+
+        api_key = cfg.get("anthropic", {}).get("api_key", "")
+        if not api_key:
+            return jsonify({"error": "Chatbot not configured. Ask an admin to add the API key."}), 503
+
+        # Build conversation messages (keep last 10 exchanges)
+        messages = []
+        for h in history[-10:]:
+            role = h.get("role", "")
+            content = h.get("content", "")
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content})
+        messages.append({"role": "user", "content": message})
+
+        # Add page context
+        page_context = f"\nThe volunteer is currently on the '{page}' page." if page else ""
+
+        tablet = _tablet_id()
+        start = time.time()
+        try:
+            resp = http_requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": cfg.get("anthropic", {}).get("model", "claude-haiku-4-5-20251001"),
+                    "max_tokens": cfg.get("anthropic", {}).get("max_tokens", 1024),
+                    "system": _chat_system_prompt + page_context,
+                    "messages": messages,
+                },
+                timeout=30,
+            )
+            latency = (time.time() - start) * 1000
+            result = resp.json()
+
+            if resp.status_code >= 400:
+                error_msg = result.get("error", {}).get("message", "API error")
+                logger.warning(f"Chat API error: {resp.status_code} {error_msg}")
+                db.log_action(tablet, "chat:message", page, message[:200],
+                              f"FAILED: {error_msg}", latency)
+                return jsonify({"error": "Chat service error. Please try again."}), 502
+
+            reply = result.get("content", [{}])[0].get("text",
+                    "Sorry, I couldn't generate a response.")
+            db.log_action(tablet, "chat:message", page, message[:200], "OK", latency)
+            return jsonify({"response": reply}), 200
+
+        except http_requests.Timeout:
+            logger.warning("Chat API timeout")
+            db.log_action(tablet, "chat:message", page, message[:200], "TIMEOUT", 30000)
+            return jsonify({"error": "Chat service timed out. Please try again."}), 504
+        except Exception as e:
+            logger.warning(f"Chat API error: {e}")
+            db.log_action(tablet, "chat:message", page, message[:200], f"ERROR: {e}", 0)
+            return jsonify({"error": "Chat service unavailable. Please try again."}), 503
+
+    # -------------------------------------------------------------------------
     # SOCKET.IO EVENTS
     # -------------------------------------------------------------------------
 
