@@ -1461,11 +1461,17 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             variants = [base_name]
             if base_name.endswith("_door"):
                 variants.append(base_name[:-5])
-            best_eid, best_len = None, 0
+            best_eid, best_len, best_cname_len = None, 0, float('inf')
             for eid, cname in candidates.items():
                 for v in variants:
-                    if v in cname and len(v) > best_len:
-                        best_eid, best_len = eid, len(v)
+                    if v in cname:
+                        # Prefer longest variant match; break ties by shortest
+                        # candidate name (more specific match). This prevents
+                        # e.g. "main_church_door" from matching
+                        # "north_side_of_main_church_door_lock_rule" when a
+                        # shorter, more specific candidate exists.
+                        if len(v) > best_len or (len(v) == best_len and len(cname) < best_cname_len):
+                            best_eid, best_len, best_cname_len = eid, len(v), len(cname)
             return best_eid
 
         locks = []
