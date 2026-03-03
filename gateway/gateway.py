@@ -1984,6 +1984,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 return _step_ha_check(step)
             elif step_type == "ha_service":
                 return _step_ha_service(step, tablet)
+            elif step_type == "door_timed_unlock":
+                return _step_door_timed_unlock(step, tablet)
             elif step_type == "moip_switch":
                 return _step_moip_switch(step, tablet)
             elif step_type == "moip_ir":
@@ -2067,9 +2069,87 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             if ok:
                 db.log_action(tablet, f"macro:ha:{domain}/{service}", "home_assistant",
                               json.dumps(data)[:500], f"status={resp.status_code}", 0)
-            return {"success": ok, "error": "" if ok else f"HA service returned {resp.status_code}"}
+            else:
+                resp_body = ""
+                try:
+                    resp_body = resp.text[:300]
+                except Exception:
+                    pass
+                logger.warning(f"ha_service FAILED: {domain}/{service} status={resp.status_code} "
+                               f"data={json.dumps(data)[:200]} response={resp_body}")
+                db.log_action(tablet, f"macro:ha:{domain}/{service}", "home_assistant",
+                              json.dumps(data)[:500], f"FAILED status={resp.status_code}: {resp_body[:200]}", 0)
+            return {"success": ok, "error": "" if ok else f"HA {domain}/{service} returned {resp.status_code}"}
         except Exception as e:
             return {"success": False, "error": f"HA service failed: {e}"}
+
+    def _step_door_timed_unlock(step: dict, tablet: str) -> dict:
+        """Unlock a door for a given duration using the HA lock cache to resolve entities and options."""
+        lock_entity = step.get("entity", "")
+        minutes = step.get("minutes", 60)
+        ha_cfg = cfg.get("home_assistant", {})
+
+        if mock_mode:
+            return {"success": True}
+
+        # Find the lock in the HA device cache
+        locks = _ha_device_cache.get("locks", [])
+        lock = next((l for l in locks if l["entity_id"] == lock_entity), None)
+        if not lock:
+            return {"success": False, "error": f"Lock entity {lock_entity} not found in HA cache"}
+
+        dur_entity = lock.get("duration_entity")
+        rule_entity = lock.get("lock_rule_entity")
+        rule_options = lock.get("lock_rule_options") or []
+
+        if not dur_entity or not rule_entity:
+            return {"success": False, "error": f"Lock {lock_entity} missing duration or rule entity"}
+
+        # Resolve the "custom" option string dynamically (case-insensitive substring match)
+        custom_option = next((opt for opt in rule_options if "custom" in opt.lower()), None)
+        if not custom_option:
+            return {"success": False, "error": f"No 'custom' option found in {rule_entity} options: {rule_options}"}
+
+        dur_domain = dur_entity.split(".")[0]
+        rule_domain = rule_entity.split(".")[0]
+        errors = []
+
+        # Step 1: Set the duration
+        try:
+            resp = http_requests.post(
+                f"{ha_cfg['url']}/api/services/{dur_domain}/set_value",
+                headers={"Authorization": f"Bearer {ha_cfg['token']}", "Content-Type": "application/json"},
+                json={"entity_id": dur_entity, "value": minutes},
+                timeout=ha_cfg.get("timeout", 10),
+            )
+            if resp.status_code >= 400:
+                errors.append(f"set_value {dur_entity}={minutes} returned {resp.status_code}")
+        except Exception as e:
+            errors.append(f"set_value {dur_entity}: {e}")
+
+        # Step 2: Trigger the custom rule option
+        try:
+            resp = http_requests.post(
+                f"{ha_cfg['url']}/api/services/{rule_domain}/select_option",
+                headers={"Authorization": f"Bearer {ha_cfg['token']}", "Content-Type": "application/json"},
+                json={"entity_id": rule_entity, "option": custom_option},
+                timeout=ha_cfg.get("timeout", 10),
+            )
+            if resp.status_code >= 400:
+                errors.append(f"select_option {rule_entity}='{custom_option}' returned {resp.status_code}")
+        except Exception as e:
+            errors.append(f"select_option {rule_entity}: {e}")
+
+        ok = len(errors) == 0
+        friendly = lock.get("friendly_name", lock_entity)
+        db.log_action(tablet, "macro:door_timed_unlock", friendly,
+                      json.dumps({"entity": lock_entity, "minutes": minutes, "option": custom_option}),
+                      "OK" if ok else f"FAILED: {'; '.join(errors)}", 0)
+
+        if ok:
+            logger.info(f"Door unlocked: {friendly} for {minutes}min (option='{custom_option}')")
+            return {"success": True}
+        return {"success": False, "error": "; ".join(errors)}
 
     def _step_moip_switch(step: dict, tablet: str) -> dict:
         tx = str(step.get("tx", ""))
@@ -2433,6 +2513,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 return f"Check {step.get('entity', '')} == {step.get('expect', '')}"
             elif t == "ha_service":
                 return f"HA {step.get('domain', '')}.{step.get('service', '')} ({step.get('data', {}).get('entity_id', '')})"
+            elif t == "door_timed_unlock":
+                return f"Unlock {step.get('entity', '')} for {step.get('minutes', 60)} min"
             elif t == "moip_switch":
                 return f"Switch TX {step.get('tx', '')} → RX {step.get('rx', '')}"
             elif t == "moip_ir":

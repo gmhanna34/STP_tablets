@@ -470,40 +470,17 @@ macros:
         preset: 1
         on_fail: skip
         message: "Setting Chapel Rear camera to Full View (Preset 1)"
-      # --- Unlock main church door for 3 hours (180 minutes) ---
-      - type: ha_service
-        domain: "number"
-        service: "set_value"
-        data:
-          entity_id: "number.ext_main_church_door_rule_interval_min"
-          value: 180
+      # --- Unlock exterior doors for 3 hours ---
+      - type: door_timed_unlock
+        entity: "lock.main_church_door_lock"
+        minutes: 180
         on_fail: skip
-        message: "Setting main church door unlock duration to 3 hours"
-      - type: ha_service
-        domain: "select"
-        service: "select_option"
-        data:
-          entity_id: "select.main_church_door_door_lock_rule"
-          option: "Custom"
+        message: "Unlocking main church door for 3 hours"
+      - type: door_timed_unlock
+        entity: "lock.main_lobby_door_lock"
+        minutes: 180
         on_fail: skip
-        message: "Unlocking main church door"
-      # --- Unlock lobby door for 3 hours (180 minutes) ---
-      - type: ha_service
-        domain: "number"
-        service: "set_value"
-        data:
-          entity_id: "number.main_lobby_rule_interval_min"
-          value: 180
-        on_fail: skip
-        message: "Setting lobby door unlock duration to 3 hours"
-      - type: ha_service
-        domain: "select"
-        service: "select_option"
-        data:
-          entity_id: "select.main_lobby_door_lock_rule"
-          option: "Custom"
-        on_fail: skip
-        message: "Unlocking lobby door"
+        message: "Unlocking lobby door for 3 hours"
 
   chapel_full_teardown:
     label: "Chapel Teardown"
@@ -2893,40 +2870,17 @@ macros:
         preset: 1
         on_fail: skip
         message: "Setting Main Church Rear camera to Full View (Preset 1)"
-      # --- Unlock main church door for 5 hours (300 minutes) ---
-      - type: ha_service
-        domain: "number"
-        service: "set_value"
-        data:
-          entity_id: "number.ext_main_church_door_rule_interval_min"
-          value: 300
+      # --- Unlock exterior doors for 5 hours ---
+      - type: door_timed_unlock
+        entity: "lock.main_church_door_lock"
+        minutes: 300
         on_fail: skip
-        message: "Setting main church door unlock duration to 5 hours"
-      - type: ha_service
-        domain: "select"
-        service: "select_option"
-        data:
-          entity_id: "select.main_church_door_door_lock_rule"
-          option: "Custom"
+        message: "Unlocking main church door for 5 hours"
+      - type: door_timed_unlock
+        entity: "lock.main_lobby_door_lock"
+        minutes: 300
         on_fail: skip
-        message: "Unlocking main church door"
-      # --- Unlock lobby door for 5 hours (300 minutes) ---
-      - type: ha_service
-        domain: "number"
-        service: "set_value"
-        data:
-          entity_id: "number.main_lobby_rule_interval_min"
-          value: 300
-        on_fail: skip
-        message: "Setting lobby door unlock duration to 5 hours"
-      - type: ha_service
-        domain: "select"
-        service: "select_option"
-        data:
-          entity_id: "select.main_lobby_door_lock_rule"
-          option: "Custom"
-        on_fail: skip
-        message: "Unlocking lobby door"
+        message: "Unlocking lobby door for 5 hours"
 
   main_full_teardown:
     label: "Main Church Teardown"
