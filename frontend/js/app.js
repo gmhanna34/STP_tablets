@@ -560,6 +560,124 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
+  // AV Help Chatbot
+  // -----------------------------------------------------------------------
+
+  _chatHistory: null,
+
+  _loadChatHistory() {
+    if (this._chatHistory) return;
+    try {
+      const stored = sessionStorage.getItem('chatHistory');
+      this._chatHistory = stored ? JSON.parse(stored) : [];
+    } catch { this._chatHistory = []; }
+  },
+
+  _saveChatHistory() {
+    try {
+      sessionStorage.setItem('chatHistory', JSON.stringify(this._chatHistory || []));
+    } catch { /* quota exceeded — ignore */ }
+  },
+
+  openChat(page) {
+    this._loadChatHistory();
+    const currentPage = page || (typeof Router !== 'undefined' ? Router.currentPage : '') || '';
+
+    this.showPanel('AV Help Assistant', (body) => {
+      body.style.display = 'flex';
+      body.style.flexDirection = 'column';
+      body.style.padding = '0';
+      body.style.height = '100%';
+
+      body.innerHTML = `
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input-bar">
+          <input type="text" id="chat-input" placeholder="Ask a question..." autocomplete="off">
+          <button id="chat-send">
+            <span class="material-icons" style="font-size:20px;">send</span>
+          </button>
+        </div>
+      `;
+
+      const messagesEl = document.getElementById('chat-messages');
+      const inputEl = document.getElementById('chat-input');
+      const sendBtn = document.getElementById('chat-send');
+
+      // Render existing history or welcome message
+      if (this._chatHistory.length === 0) {
+        this._chatAddBubble(messagesEl, 'bot',
+          "Hi! I'm the AV Help Assistant. Ask me anything about operating the church AV system \u2014 how to use buttons, troubleshooting, or what a feature does.");
+      } else {
+        for (const msg of this._chatHistory) {
+          this._chatAddBubble(messagesEl, msg.role === 'user' ? 'user' : 'bot', msg.content);
+        }
+      }
+
+      const doSend = async () => {
+        const text = inputEl.value.trim();
+        if (!text) return;
+        inputEl.value = '';
+
+        // Add user bubble
+        this._chatAddBubble(messagesEl, 'user', text);
+        this._chatHistory.push({ role: 'user', content: text });
+        this._saveChatHistory();
+
+        // Show typing indicator
+        const typing = document.createElement('div');
+        typing.className = 'chat-typing';
+        typing.textContent = 'Thinking\u2026';
+        messagesEl.appendChild(typing);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+
+        try {
+          const tabletId = localStorage.getItem('tabletId') || 'WebApp';
+          const resp = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': tabletId },
+            body: JSON.stringify({
+              message: text,
+              page: currentPage,
+              history: this._chatHistory.slice(0, -1), // exclude current message (already in body)
+            }),
+          });
+          const data = await resp.json();
+          typing.remove();
+
+          if (data.response) {
+            this._chatAddBubble(messagesEl, 'bot', data.response);
+            this._chatHistory.push({ role: 'assistant', content: data.response });
+            this._saveChatHistory();
+          } else {
+            this._chatAddBubble(messagesEl, 'bot',
+              data.error || 'Sorry, something went wrong. Please try again.');
+          }
+        } catch {
+          typing.remove();
+          this._chatAddBubble(messagesEl, 'bot',
+            'Unable to reach the help assistant. Please check your connection and try again.');
+        }
+      };
+
+      sendBtn.addEventListener('click', doSend);
+      inputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doSend();
+      });
+
+      // Auto-focus input
+      setTimeout(() => inputEl.focus(), 300);
+    });
+  },
+
+  _chatAddBubble(container, type, text) {
+    const bubble = document.createElement('div');
+    bubble.className = `chat-bubble ${type}`;
+    bubble.textContent = text;
+    container.appendChild(bubble);
+    container.scrollTop = container.scrollHeight;
+  },
+
+  // -----------------------------------------------------------------------
   // Confirmation dialog for destructive operations
   // -----------------------------------------------------------------------
 

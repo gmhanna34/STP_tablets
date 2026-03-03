@@ -132,6 +132,12 @@ healthdash:
 database:
   path: "stp_gateway.db"
 
+# --- AI Chatbot (volunteer help) -----------------------------------------------
+anthropic:
+  api_key: ""                             # Set your Anthropic API key here
+  model: "claude-haiku-4-5-20251001"
+  max_tokens: 1024
+
 # --- Logging ------------------------------------------------------------------
 logging:
   path: "logs/stp-gateway.log"
