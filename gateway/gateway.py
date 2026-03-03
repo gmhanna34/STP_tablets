@@ -2558,13 +2558,15 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
 
         # Device summary
         moip = devices_data.get("moip", {})
-        tx_list = moip.get("transmitters", {})
-        rx_list = moip.get("receivers", {})
+        tx_list = moip.get("transmitters", [])
+        rx_list = moip.get("receivers", [])
         if tx_list:
-            tx_names = [f"{v.get('name', k)}" for k, v in list(tx_list.items())[:20]]
+            tx_names = [d.get("name", f"TX{d.get('id','')}") for d in tx_list[:20]
+                        if isinstance(d, dict)]
             parts.append(f"\n## Video Sources (Transmitters)\n{', '.join(tx_names)}")
         if rx_list:
-            rx_names = [f"{v.get('name', k)}" for k, v in list(rx_list.items())[:25]]
+            rx_names = [d.get("name", f"RX{d.get('id','')}") for d in rx_list[:25]
+                        if isinstance(d, dict)]
             parts.append(f"\n## Displays (Receivers)\n{', '.join(rx_names)}")
 
         # Troubleshooting guide
