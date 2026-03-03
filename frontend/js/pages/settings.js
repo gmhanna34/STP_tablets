@@ -185,7 +185,7 @@ const SettingsPage = {
               </div>
               <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end;">
                 <button class="btn" id="btn-sched-cancel" style="min-height:auto;padding:6px 12px;">Cancel</button>
-                <button class="btn btn-success" id="btn-sched-save" style="min-height:auto;padding:6px 12px;background:#00b050;border-color:#00b050;">Save</button>
+                <button class="btn btn-success" id="btn-sched-save" style="min-height:auto;padding:6px 12px;background:#00b050;border-color:#00b050;"><span class="btn-label">Save</span></button>
               </div>
             </div>
           </div>
@@ -370,9 +370,11 @@ const SettingsPage = {
     this.loadMacroDropdown();
 
     document.getElementById('btn-add-schedule')?.addEventListener('click', () => {
+      this._resetScheduleForm();
       document.getElementById('schedule-form')?.classList.remove('hidden');
     });
     document.getElementById('btn-sched-cancel')?.addEventListener('click', () => {
+      this._resetScheduleForm();
       document.getElementById('schedule-form')?.classList.add('hidden');
     });
     document.getElementById('btn-sched-save')?.addEventListener('click', () => this.saveSchedule());
@@ -1514,6 +1516,10 @@ const SettingsPage = {
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
           <span class="${enabledClass}" style="font-size:12px;font-weight:bold;">${enabledLabel}</span>
+          <button class="btn" data-edit-sched="${s.id}" data-sched-name="${s.name}" data-sched-macro="${s.macro_key}" data-sched-time="${s.time_of_day}" data-sched-days="${s.days}"
+            style="min-height:auto;padding:6px 10px;font-size:11px;" title="Edit">
+            <span class="material-icons" style="font-size:16px;">edit</span>
+          </button>
           <button class="btn" data-toggle-sched="${s.id}" data-enabled="${s.enabled}"
             style="min-height:auto;padding:6px 10px;font-size:11px;">
             <span class="material-icons" style="font-size:16px;">${s.enabled ? 'pause' : 'play_arrow'}</span>
@@ -1550,6 +1556,26 @@ const SettingsPage = {
           headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
         });
         this.loadSchedules();
+      });
+    });
+
+    // Edit
+    container.querySelectorAll('[data-edit-sched]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._editScheduleId = btn.dataset.editSched;
+        document.getElementById('sched-name').value = btn.dataset.schedName || '';
+        const macroSelect = document.getElementById('sched-macro');
+        if (macroSelect) {
+          macroSelect.value = btn.dataset.schedMacro || '';
+          this._showMacroDetails(macroSelect.value);
+        }
+        document.getElementById('sched-time').value = btn.dataset.schedTime || '08:00';
+        const activeDays = (btn.dataset.schedDays || '').split(',');
+        document.querySelectorAll('#sched-days input[type="checkbox"]').forEach(cb => {
+          cb.checked = activeDays.includes(cb.value);
+        });
+        document.getElementById('schedule-form')?.classList.remove('hidden');
+        document.getElementById('btn-sched-save').querySelector('.btn-label').textContent = 'Update';
       });
     });
   },
@@ -1655,19 +1681,45 @@ const SettingsPage = {
       return;
     }
 
+    const editId = this._editScheduleId;
+
     try {
-      await fetch('/api/schedule', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
-        body: JSON.stringify({ name, macro, time, days }),
-      });
+      if (editId) {
+        await fetch(`/api/schedule/${editId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          body: JSON.stringify({ name, macro, time, days }),
+        });
+        App.showToast('Schedule updated');
+      } else {
+        await fetch('/api/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          body: JSON.stringify({ name, macro, time, days }),
+        });
+        App.showToast('Schedule created');
+      }
+      this._resetScheduleForm();
       document.getElementById('schedule-form')?.classList.add('hidden');
-      document.getElementById('sched-name').value = '';
-      App.showToast('Schedule created');
       this.loadSchedules();
     } catch (e) {
-      App.showToast('Failed to create schedule', 3000, 'error');
+      App.showToast(editId ? 'Failed to update schedule' : 'Failed to create schedule', 3000, 'error');
     }
+  },
+
+  _resetScheduleForm() {
+    this._editScheduleId = null;
+    const nameInput = document.getElementById('sched-name');
+    if (nameInput) nameInput.value = '';
+    const timeInput = document.getElementById('sched-time');
+    if (timeInput) timeInput.value = '08:00';
+    document.querySelectorAll('#sched-days input[type="checkbox"]').forEach(cb => { cb.checked = true; });
+    const saveBtn = document.getElementById('btn-sched-save');
+    if (saveBtn) {
+      const label = saveBtn.querySelector('.btn-label');
+      if (label) label.textContent = 'Save';
+    }
+    document.getElementById('sched-macro-details')?.classList.add('hidden');
   },
 
   // -----------------------------------------------------------------------
