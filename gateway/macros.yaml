@@ -2841,6 +2841,28 @@ macros:
           entity_id: "automation.automation_alexaannounce_sundayschool20minute"
         message: "Triggering Sunday School announcement"
 
+  unlock_exterior_doors:
+    label: "Unlock Exterior Doors"
+    icon: "lock_open"
+    description: "Unlock Main Church, Lobby, and Rear doors for 4 hours"
+    confirm: "Unlock all 3 exterior doors (Main, Lobby, Rear) for 4 hours?"
+    steps:
+      - type: door_timed_unlock
+        entity: "lock.main_church_door_lock"
+        minutes: 240
+        on_fail: skip
+        message: "Unlocking Main Church door for 4 hours"
+      - type: door_timed_unlock
+        entity: "lock.main_lobby_door_lock"
+        minutes: 240
+        on_fail: skip
+        message: "Unlocking Lobby door for 4 hours"
+      - type: door_timed_unlock
+        entity: "lock.rear_entry"
+        minutes: 240
+        on_fail: skip
+        message: "Unlocking Rear door for 4 hours"
+
   # ---------------------------------------------------------------------------
   # MAIN CHURCH — Full System On / Off
   # ---------------------------------------------------------------------------
@@ -3432,6 +3454,11 @@ buttons:
               span: 2
               action: { type: macro, macro: end_of_liturgy }
               confirm_steps: true
+            - label: "Unlock Exterior Doors"
+              icon: "lock_open"
+              style: "large"
+              span: 2
+              action: { type: macro, macro: unlock_exterior_doors }
 
   social:
     - section: ""
