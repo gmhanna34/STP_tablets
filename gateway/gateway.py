@@ -400,7 +400,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     _verbose_logging = False
 
     def _proxy_request(service: str, path: str, method: str = "GET",
-                       json_data: dict = None, timeout: float = 5) -> tuple:
+                       json_data: dict = None, timeout: float = 5,
+                       tablet: str = None) -> tuple:
         """Proxy a request to a middleware service. Returns (response_dict, status_code)."""
         svc = mw_cfg.get(service, {})
         base_url = svc.get("url", "")
@@ -415,7 +416,11 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if api_key:
             headers["X-API-Key"] = api_key
 
-        tablet = _tablet_id()
+        if not tablet:
+            try:
+                tablet = _tablet_id()
+            except RuntimeError:
+                tablet = "System"
         headers["X-Tablet-ID"] = tablet
 
         nonlocal _verbose_logging
@@ -2073,7 +2078,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return {"success": True}
         start = time.time()
         result, status = _proxy_request("moip", "/switch", "POST",
-                                         {"transmitter": tx, "receiver": rx}, timeout=3)
+                                         {"transmitter": tx, "receiver": rx}, timeout=3,
+                                         tablet=tablet)
         latency = (time.time() - start) * 1000
         ok = status < 400
         if _verbose_logging:
@@ -2099,7 +2105,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return {"success": True}
         start = time.time()
         result, status = _proxy_request("moip", "/ir", "POST",
-                                         {"tx": "0", "rx": rx, "code": code}, timeout=3)
+                                         {"tx": "0", "rx": rx, "code": code}, timeout=3,
+                                         tablet=tablet)
         latency = (time.time() - start) * 1000
         ok = status < 400
         if _verbose_logging:
@@ -2159,7 +2166,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if mock_mode:
             return {"success": True}
         start = time.time()
-        result, status = _proxy_request("x32", f"/scene{num}")
+        result, status = _proxy_request("x32", f"/scene{num}", tablet=tablet)
         latency = (time.time() - start) * 1000
         ok = status < 400
         error_detail = "" if ok else (result.get("error", "") if isinstance(result, dict) else f"HTTP {status}")
@@ -2177,7 +2184,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if mock_mode:
             return {"success": True}
         start = time.time()
-        result, status = _proxy_request("x32", f"/mute{ch}{state}")
+        result, status = _proxy_request("x32", f"/mute{ch}{state}", tablet=tablet)
         latency = (time.time() - start) * 1000
         ok = status < 400
         error_detail = "" if ok else (result.get("error", "") if isinstance(result, dict) else f"HTTP {status}")
@@ -2195,7 +2202,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if mock_mode:
             return {"success": True}
         start = time.time()
-        result, status = _proxy_request("obs", f"/emit/{action}", "POST", payload)
+        result, status = _proxy_request("obs", f"/emit/{action}", "POST", payload,
+                                         tablet=tablet)
         latency = (time.time() - start) * 1000
         ok = status < 400
         error_detail = "" if ok else (result.get("error", "") if isinstance(result, dict) else f"HTTP {status}")
