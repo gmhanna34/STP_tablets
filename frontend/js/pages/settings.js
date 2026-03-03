@@ -1580,6 +1580,10 @@ const SettingsPage = {
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
           <span class="${enabledClass}" style="font-size:12px;font-weight:bold;">${enabledLabel}</span>
+          <button class="btn" data-run-sched="${s.id}" data-run-macro="${s.macro_key}" data-run-name="${s.name}"
+            style="min-height:auto;padding:6px 10px;font-size:11px;background:#1565c0;border-color:#1565c0;" title="Run Now">
+            <span class="material-icons" style="font-size:16px;">play_circle</span>
+          </button>
           <button class="btn" data-edit-sched="${s.id}" data-sched-name="${s.name}" data-sched-macro="${s.macro_key}" data-sched-time="${s.time_of_day}" data-sched-days="${s.days}"
             style="min-height:auto;padding:6px 10px;font-size:11px;" title="Edit">
             <span class="material-icons" style="font-size:16px;">edit</span>
@@ -1607,6 +1611,34 @@ const SettingsPage = {
           body: JSON.stringify({ enabled: !currentlyEnabled }),
         });
         this.loadSchedules();
+      });
+    });
+
+    // Run Now
+    container.querySelectorAll('[data-run-sched]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const macroKey = btn.dataset.runMacro;
+        const name = btn.dataset.runName;
+        btn.disabled = true;
+        btn.querySelector('.material-icons').textContent = 'hourglass_empty';
+        try {
+          const resp = await fetch('/api/macro/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+            body: JSON.stringify({ macro: macroKey }),
+          });
+          const result = await resp.json();
+          if (result.success) {
+            App.showToast(`${name}: started`, 3000);
+          } else {
+            App.showToast(`${name}: ${result.error || 'failed'}`, 4000, 'error');
+          }
+        } catch (e) {
+          App.showToast(`${name}: network error`, 4000, 'error');
+        } finally {
+          btn.disabled = false;
+          btn.querySelector('.material-icons').textContent = 'play_circle';
+        }
       });
     });
 

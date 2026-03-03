@@ -1904,7 +1904,9 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
 
                 # Abort
                 overall_ms = (time.time() - overall_start) * 1000
-                error_msg = step_msg or result.get("error", f"Step {i+1} ({step_type}) failed")
+                step_error = result.get("error", "")
+                error_msg = (f"{step_msg}: {step_error}" if step_msg and step_error
+                             else step_error or step_msg or f"Step {i+1} ({step_type}) failed")
 
                 socketio.emit("macro:progress", {
                     "macro": macro_key,
@@ -2129,7 +2131,9 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             db.log_action(tablet, "macro:epson_power", key,
                           json.dumps({"projector": key, "state": state}),
                           "OK" if ok else f"FAILED status={resp.status_code}", latency)
-            return {"success": ok}
+            if ok:
+                return {"success": True}
+            return {"success": False, "error": f"Projector {key} returned HTTP {resp.status_code}"}
         except Exception as e:
             db.log_action(tablet, "macro:epson_power", key,
                           json.dumps({"projector": key, "state": state}),
@@ -2158,12 +2162,14 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         result, status = _proxy_request("x32", f"/scene{num}")
         latency = (time.time() - start) * 1000
         ok = status < 400
+        error_detail = "" if ok else (result.get("error", "") if isinstance(result, dict) else f"HTTP {status}")
         db.log_action(tablet, "macro:x32_scene", f"scene_{num}",
                       json.dumps({"scene": num}),
-                      "OK" if ok else "FAILED", latency)
+                      "OK" if ok else f"FAILED: {error_detail}" if error_detail else "FAILED", latency)
         if ok:
             socketio.emit("state:x32", {"event": "scene", "scene": num}, room="x32")
-        return {"success": ok, "error": "" if ok else f"X32 scene failed"}
+            return {"success": True}
+        return {"success": False, "error": error_detail or f"X32 scene {num} failed (HTTP {status})"}
 
     def _step_x32_mute(step: dict, tablet: str) -> dict:
         ch = step.get("channel", 1)
@@ -2174,12 +2180,14 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         result, status = _proxy_request("x32", f"/mute{ch}{state}")
         latency = (time.time() - start) * 1000
         ok = status < 400
+        error_detail = "" if ok else (result.get("error", "") if isinstance(result, dict) else f"HTTP {status}")
         db.log_action(tablet, "macro:x32_mute", f"ch{ch}_{state}",
                       json.dumps({"channel": ch, "state": state}),
-                      "OK" if ok else "FAILED", latency)
+                      "OK" if ok else f"FAILED: {error_detail}" if error_detail else "FAILED", latency)
         if ok:
             socketio.emit("state:x32", {"event": "mute", "channel": ch, "state": state}, room="x32")
-        return {"success": ok}
+            return {"success": True}
+        return {"success": False, "error": error_detail or f"X32 mute ch{ch} failed (HTTP {status})"}
 
     def _step_obs_emit(step: dict, tablet: str) -> dict:
         action = step.get("action", "")
@@ -2190,12 +2198,14 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         result, status = _proxy_request("obs", f"/emit/{action}", "POST", payload)
         latency = (time.time() - start) * 1000
         ok = status < 400
+        error_detail = "" if ok else (result.get("error", "") if isinstance(result, dict) else f"HTTP {status}")
         db.log_action(tablet, "macro:obs_emit", action,
                       json.dumps(payload)[:500] if payload else "",
-                      "OK" if ok else "FAILED", latency)
+                      "OK" if ok else f"FAILED: {error_detail}" if error_detail else "FAILED", latency)
         if ok:
             socketio.emit("state:obs", {"event": action, "data": payload}, room="obs")
-        return {"success": ok}
+            return {"success": True}
+        return {"success": False, "error": error_detail or f"OBS {action} failed (HTTP {status})"}
 
     def _step_ptz_preset(step: dict, tablet: str) -> dict:
         cam_key = step.get("camera", "")
@@ -2215,7 +2225,9 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             db.log_action(tablet, "macro:ptz_preset", f"{cam_key}:preset_{preset}",
                           json.dumps({"camera": cam_key, "preset": preset}),
                           "OK" if ok else f"FAILED status={resp.status_code}", latency)
-            return {"success": ok}
+            if ok:
+                return {"success": True}
+            return {"success": False, "error": f"Camera {cam_key} preset {preset} failed (HTTP {resp.status_code})"}
         except Exception as e:
             db.log_action(tablet, "macro:ptz_preset", f"{cam_key}:preset_{preset}",
                           json.dumps({"camera": cam_key, "preset": preset}),
