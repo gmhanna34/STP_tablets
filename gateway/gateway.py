@@ -444,12 +444,21 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
 
         except http_requests.Timeout:
             logger.warning(f"proxy {service}{path} TIMEOUT after {svc_timeout}s")
+            db.log_action(tablet, f"{service}:{path}", service,
+                          json.dumps(json_data) if json_data else "",
+                          f"TIMEOUT after {svc_timeout}s", svc_timeout * 1000)
             return {"error": f"{service} timeout after {svc_timeout}s"}, 504
         except http_requests.ConnectionError:
             logger.warning(f"proxy {service}{path} CONNECTION ERROR")
+            db.log_action(tablet, f"{service}:{path}", service,
+                          json.dumps(json_data) if json_data else "",
+                          "CONNECTION_ERROR: unreachable", 0)
             return {"error": f"{service} unreachable"}, 503
         except Exception as e:
             logger.warning(f"proxy {service}{path} ERROR: {e}")
+            db.log_action(tablet, f"{service}:{path}", service,
+                          json.dumps(json_data) if json_data else "",
+                          f"ERROR: {e}", 0)
             return {"error": str(e)}, 500
 
     # -------------------------------------------------------------------------
@@ -2057,11 +2066,16 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             logger.debug(f"[VERBOSE] moip_switch: tx={tx}, rx={rx}, tablet={tablet}")
         if mock_mode:
             return {"success": True}
+        start = time.time()
         result, status = _proxy_request("moip", "/switch", "POST",
                                          {"transmitter": tx, "receiver": rx}, timeout=3)
+        latency = (time.time() - start) * 1000
         ok = status < 400
         if _verbose_logging:
             logger.debug(f"[VERBOSE] moip_switch result: tx={tx}->rx={rx} status={status}")
+        db.log_action(tablet, "macro:moip_switch", f"TX{tx}->RX{rx}",
+                      json.dumps({"tx": tx, "rx": rx}),
+                      "OK" if ok else f"FAILED status={status}", latency)
         if ok:
             socketio.emit("state:moip", {"event": "switch", "data": {"transmitter": tx, "receiver": rx}}, room="moip")
         return {"success": ok, "error": "" if ok else f"MoIP switch failed: tx={tx}, rx={rx}, status={status}"}
@@ -2078,12 +2092,17 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             logger.debug(f"[VERBOSE] moip_ir: receiver={rx}, code_name={code_name}, tablet={tablet}")
         if mock_mode:
             return {"success": True}
+        start = time.time()
         result, status = _proxy_request("moip", "/ir", "POST",
                                          {"tx": "0", "rx": rx, "code": code}, timeout=3)
+        latency = (time.time() - start) * 1000
         ok = status < 400
         if _verbose_logging:
             logger.debug(f"[VERBOSE] moip_ir result: receiver={rx}, code={code}, "
                          f"status={status}, response={json.dumps(result)[:200]}")
+        db.log_action(tablet, "macro:moip_ir", f"RX{rx}:{code_name}",
+                      json.dumps({"rx": rx, "code_name": code_name}),
+                      "OK" if ok else f"FAILED status={status}", latency)
         if not ok:
             logger.warning(f"moip_ir FAILED: receiver={rx}, code={code}, status={status}")
         return {"success": ok, "error": "" if ok else f"IR failed: receiver={rx}, code={code}, status={status}"}
@@ -2098,11 +2117,20 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if mock_mode:
             return {"success": True}
         try:
+            start = time.time()
             resp = http_requests.get(
                 f"http://{proj['ip']}/api/v01/contentmgr/remote/power/{state}", timeout=5)
+            latency = (time.time() - start) * 1000
+            ok = resp.status_code == 200
             socketio.emit("state:projectors", {"event": "power", "projector": key, "state": state}, room="projectors")
-            return {"success": resp.status_code == 200}
+            db.log_action(tablet, "macro:epson_power", key,
+                          json.dumps({"projector": key, "state": state}),
+                          "OK" if ok else f"FAILED status={resp.status_code}", latency)
+            return {"success": ok}
         except Exception as e:
+            db.log_action(tablet, "macro:epson_power", key,
+                          json.dumps({"projector": key, "state": state}),
+                          f"FAILED: {e}", 0)
             return {"success": False, "error": str(e)}
 
     def _step_epson_all(step: dict, tablet: str) -> dict:
@@ -2123,30 +2151,48 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         num = step.get("scene", 0)
         if mock_mode:
             return {"success": True}
+        start = time.time()
         result, status = _proxy_request("x32", f"/scene{num}")
-        if status < 400:
+        latency = (time.time() - start) * 1000
+        ok = status < 400
+        db.log_action(tablet, "macro:x32_scene", f"scene_{num}",
+                      json.dumps({"scene": num}),
+                      "OK" if ok else "FAILED", latency)
+        if ok:
             socketio.emit("state:x32", {"event": "scene", "scene": num}, room="x32")
-        return {"success": status < 400, "error": "" if status < 400 else f"X32 scene failed"}
+        return {"success": ok, "error": "" if ok else f"X32 scene failed"}
 
     def _step_x32_mute(step: dict, tablet: str) -> dict:
         ch = step.get("channel", 1)
         state = step.get("state", "on")
         if mock_mode:
             return {"success": True}
+        start = time.time()
         result, status = _proxy_request("x32", f"/mute{ch}{state}")
-        if status < 400:
+        latency = (time.time() - start) * 1000
+        ok = status < 400
+        db.log_action(tablet, "macro:x32_mute", f"ch{ch}_{state}",
+                      json.dumps({"channel": ch, "state": state}),
+                      "OK" if ok else "FAILED", latency)
+        if ok:
             socketio.emit("state:x32", {"event": "mute", "channel": ch, "state": state}, room="x32")
-        return {"success": status < 400}
+        return {"success": ok}
 
     def _step_obs_emit(step: dict, tablet: str) -> dict:
         action = step.get("action", "")
         payload = step.get("data")
         if mock_mode:
             return {"success": True}
+        start = time.time()
         result, status = _proxy_request("obs", f"/emit/{action}", "POST", payload)
-        if status < 400:
+        latency = (time.time() - start) * 1000
+        ok = status < 400
+        db.log_action(tablet, "macro:obs_emit", action,
+                      json.dumps(payload)[:500] if payload else "",
+                      "OK" if ok else "FAILED", latency)
+        if ok:
             socketio.emit("state:obs", {"event": action, "data": payload}, room="obs")
-        return {"success": status < 400}
+        return {"success": ok}
 
     def _step_ptz_preset(step: dict, tablet: str) -> dict:
         cam_key = step.get("camera", "")
@@ -2158,10 +2204,19 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if mock_mode:
             return {"success": True}
         try:
+            start = time.time()
             resp = http_requests.get(
                 f"http://{cam['ip']}/cgi-bin/ptzctrl.cgi?ptzcmd&poscall&{preset}", timeout=3)
-            return {"success": resp.status_code == 200}
+            latency = (time.time() - start) * 1000
+            ok = resp.status_code == 200
+            db.log_action(tablet, "macro:ptz_preset", f"{cam_key}:preset_{preset}",
+                          json.dumps({"camera": cam_key, "preset": preset}),
+                          "OK" if ok else f"FAILED status={resp.status_code}", latency)
+            return {"success": ok}
         except Exception as e:
+            db.log_action(tablet, "macro:ptz_preset", f"{cam_key}:preset_{preset}",
+                          json.dumps({"camera": cam_key, "preset": preset}),
+                          f"FAILED: {e}", 0)
             return {"success": False, "error": str(e)}
 
     def _step_condition(step: dict, tablet: str, depth: int) -> dict:
@@ -2766,6 +2821,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                         sched_name = sched.get("name", "")
                         logger.info(f"Schedule firing: {sched_name} -> {macro_key}")
                         db.update_schedule(sched["id"], last_run=run_key)
+                        db.log_action(f"Schedule:{sched_name}", "schedule:fire", macro_key,
+                                      json.dumps({"schedule_id": sched["id"], "name": sched_name,
+                                                  "time": sched_time, "day": current_day}),
+                                      "triggered", 0)
 
                         # Run macro in a separate thread to not block scheduler
                         threading.Thread(

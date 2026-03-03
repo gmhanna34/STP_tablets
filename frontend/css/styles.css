@@ -2216,6 +2216,16 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.audit-row[data-audit-detail] { cursor: pointer; }
+.audit-row[data-audit-detail]:hover { background: rgba(255,255,255,0.03); }
+.audit-row-error { background: rgba(255,60,60,0.08); }
+.audit-row-error:hover { background: rgba(255,60,60,0.14) !important; }
+.audit-result-error { color: #ff5252 !important; opacity: 1 !important; font-weight: 600; }
+.audit-details {
+  padding: 4px 8px 8px 26px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(0,0,0,0.15);
+}
 
 /* ── Switch Panel (SmartThings / WattBox) ────────────────── */
 

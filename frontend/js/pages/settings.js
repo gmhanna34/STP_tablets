@@ -218,6 +218,7 @@ const SettingsPage = {
                 <select id="audit-filter" style="padding:6px;border-radius:4px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;">
                   <option value="">All Actions</option>
                   <option value="macro:">Macros</option>
+                  <option value="schedule:">Schedules</option>
                   <option value="moip:">MoIP</option>
                   <option value="obs:">OBS</option>
                   <option value="ptz:">PTZ</option>
@@ -226,6 +227,7 @@ const SettingsPage = {
                   <option value="x32:">X32 Mixer</option>
                   <option value="fully:">Fully Kiosk</option>
                   <option value="settings:">Settings</option>
+                  <option value="__errors__">Errors Only</option>
                 </select>
                 <div class="switch-search-bar" style="flex:1;min-width:150px;margin:0;">
                   <span class="material-icons" style="opacity:0.5;font-size:16px;">search</span>
@@ -1222,20 +1224,55 @@ const SettingsPage = {
       return;
     }
 
-    container.innerHTML = logs.map(log => {
+    container.innerHTML = logs.map((log, idx) => {
       const ts = log.timestamp ? log.timestamp.replace('T', ' ').substring(5, 19) : '--';
       const tablet = (log.tablet_id || '').replace('Tablet_', '');
       const latency = log.latency_ms ? `${Math.round(log.latency_ms)}ms` : '';
-      const resultShort = (log.result || '').substring(0, 60);
-      return `<div class="audit-row">
+      const resultFull = log.result || '';
+      const resultShort = resultFull.substring(0, 60);
+      const isError = /FAIL|ERROR|TIMEOUT|CONNECTION_ERROR/i.test(resultFull);
+      const rowClass = isError ? 'audit-row audit-row-error' : 'audit-row';
+      const hasDetails = log.request_data || resultFull.length > 60;
+      const expandIcon = hasDetails ? '<span class="material-icons audit-expand-icon" style="font-size:14px;cursor:pointer;opacity:0.4;margin-right:4px;">expand_more</span>' : '<span style="width:18px;display:inline-block;margin-right:4px;"></span>';
+
+      let detailsHtml = '';
+      if (hasDetails) {
+        let reqDisplay = '';
+        if (log.request_data) {
+          try {
+            reqDisplay = JSON.stringify(JSON.parse(log.request_data), null, 2);
+          } catch { reqDisplay = log.request_data; }
+        }
+        detailsHtml = `<div class="audit-details" id="audit-detail-${idx}" style="display:none;">
+          ${reqDisplay ? `<div><span style="color:#ff8c00;">Request:</span><pre style="margin:2px 0 4px 0;white-space:pre-wrap;word-break:break-all;color:#aaa;font-size:11px;">${this._escHtml(reqDisplay)}</pre></div>` : ''}
+          ${resultFull.length > 60 ? `<div><span style="color:#ff8c00;">Full Result:</span><pre style="margin:2px 0 0 0;white-space:pre-wrap;word-break:break-all;color:#aaa;font-size:11px;">${this._escHtml(resultFull)}</pre></div>` : ''}
+        </div>`;
+      }
+
+      return `<div class="${rowClass}" ${hasDetails ? `data-audit-detail="${idx}"` : ''}>
+        ${expandIcon}
         <span class="audit-ts">${ts}</span>
         <span class="audit-tablet">${tablet}</span>
         <span class="audit-action">${log.action || ''}</span>
         <span class="audit-target">${log.target || ''}</span>
         <span class="audit-latency">${latency}</span>
-        <span class="audit-result">${resultShort}</span>
-      </div>`;
+        <span class="audit-result ${isError ? 'audit-result-error' : ''}">${resultShort}</span>
+      </div>${detailsHtml}`;
     }).join('');
+
+    // Wire up expandable row click handlers
+    container.querySelectorAll('[data-audit-detail]').forEach(row => {
+      row.addEventListener('click', () => {
+        const idx = row.dataset.auditDetail;
+        const detail = document.getElementById(`audit-detail-${idx}`);
+        const icon = row.querySelector('.audit-expand-icon');
+        if (detail) {
+          const show = detail.style.display === 'none';
+          detail.style.display = show ? 'block' : 'none';
+          if (icon) icon.textContent = show ? 'expand_less' : 'expand_more';
+        }
+      });
+    });
   },
 
   filterAuditLog() {
@@ -1244,12 +1281,14 @@ const SettingsPage = {
 
     let filtered = this._auditData;
 
-    if (typeFilter) {
+    if (typeFilter === '__errors__') {
+      filtered = filtered.filter(log => /FAIL|ERROR|TIMEOUT|CONNECTION_ERROR/i.test(log.result || ''));
+    } else if (typeFilter) {
       filtered = filtered.filter(log => (log.action || '').startsWith(typeFilter));
     }
     if (searchTerm) {
       filtered = filtered.filter(log => {
-        const searchable = `${log.action || ''} ${log.target || ''} ${log.tablet_id || ''} ${log.result || ''}`.toLowerCase();
+        const searchable = `${log.action || ''} ${log.target || ''} ${log.tablet_id || ''} ${log.result || ''} ${log.request_data || ''}`.toLowerCase();
         return searchable.includes(searchTerm);
       });
     }
