@@ -138,12 +138,8 @@ const App = {
     this.socket.io.on('reconnect', () => {
       this._reconnectAttempt = 0;
       this.showToast('Reconnected to gateway', 2000);
-      // Refresh state that may have changed during outage
-      const page = Router.currentPage;
-      const handler = Router.pages[page];
-      if (handler && handler.init) {
-        try { handler.init(); } catch (e) { /* ignore */ }
-      }
+      // Re-navigate to current page so destroy() runs first, avoiding stacked listeners
+      Router.navigate(Router.currentPage, false);
     });
 
     this.socket.io.on('reconnect_failed', () => {
