@@ -183,7 +183,11 @@ class MoIPConnection:
             self.tn = None
 
     def send_command(self, command: str) -> Optional[str]:
-        """Send command and return response. Auto-reconnects on failure."""
+        """Send command and return response. Single attempt — no internal retry.
+
+        Reconnection/retry logic lives in MoIPModule._send() so the failure
+        streak counter stays accurate (one call = one attempt = one count).
+        """
         if not self.connected:
             if not self.connect():
                 return None
@@ -202,18 +206,6 @@ class MoIPConnection:
         except Exception as e:
             self._logger.error(f"MoIP: Command failed: {e}")
             self.disconnect()
-
-            # One reconnect + retry attempt
-            if self.connect():
-                try:
-                    self.tn.write(command.encode("ascii"))
-                    time.sleep(0.05)
-                    if command.strip().startswith("?"):
-                        return self._read_response()
-                    return "OK"
-                except Exception:
-                    self.disconnect()
-
             return None
 
     def _read_response(self) -> str:
@@ -291,9 +283,18 @@ class MoIPModule:
     # --- Thread-safe command send ---
 
     def _send(self, command: str) -> Optional[str]:
-        """Thread-safe command send. Returns response or None on failure."""
+        """Thread-safe command send with one retry on failure.
+
+        First attempt fails → reconnect → second attempt.
+        Each call to _send increments the failure streak by at most 1.
+        """
         with self._connection_lock:
             result = self._conn.send_command(command)
+
+            # One retry: reconnect and try again
+            if result is None:
+                if self._conn.connect():
+                    result = self._conn.send_command(command)
 
         if result is not None:
             with self._state_lock:
