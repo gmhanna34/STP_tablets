@@ -320,8 +320,22 @@ class MoIPModule:
 
     # --- Public API ---
 
-    def get_receivers(self) -> Tuple[dict, int]:
-        """Get receiver-to-transmitter mappings. Returns (data, status)."""
+    def get_receivers(self, force: bool = False) -> Tuple[dict, int]:
+        """Get receiver-to-transmitter mappings. Returns (data, status).
+
+        When the module is offline and force=False (default), returns cached
+        data immediately instead of hammering the controller with reconnect
+        attempts.  The keepalive thread is solely responsible for reconnection.
+        """
+        # If offline, return cached data — don't pile on reconnect attempts
+        if not force:
+            with self._state_lock:
+                if not self._healthy:
+                    cached = self._last_receivers
+                    if cached:
+                        return cached, 200
+                    return {"error": "No data available"}, 503
+
         response = self._send("?Receivers")
         if response:
             receivers = parse_receivers(response)
@@ -419,7 +433,11 @@ class MoIPModule:
     # --- Keepalive ---
 
     def _keepalive_loop(self) -> None:
-        """Periodically check connection health with exponential backoff."""
+        """Periodically check connection health with exponential backoff.
+
+        This is the ONLY thread that should attempt reconnection when offline.
+        The poller and route handlers return cached data instead of piling on.
+        """
         self._logger.info("MoIP keepalive thread started")
         interval = self._keepalive_normal
         consecutive_failures = 0
