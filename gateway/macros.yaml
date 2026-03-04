@@ -197,7 +197,7 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.sw_024_chapelmics" }
+        data: { entity_id: "switch.sw_024_spare" }
         on_fail: skip
         message: "Turning on Chapel microphones"
       - type: ha_service
@@ -263,7 +263,7 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_off"
-        data: { entity_id: "switch.sw_024_chapelmics" }
+        data: { entity_id: "switch.sw_024_spare" }
         on_fail: skip
         message: "Turning off Chapel microphones"
 
