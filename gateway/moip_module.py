@@ -262,7 +262,7 @@ class MoIPModule:
         self._last_receivers: dict = {}
 
         # Thresholds
-        self._failure_threshold = cfg.get("failure_threshold", 50)
+        self._failure_threshold = cfg.get("failure_threshold", 5)
         self._reboot_cooldown_minutes = cfg.get("reboot_cooldown_minutes", 15)
         self._keepalive_normal = cfg.get("keepalive_interval_normal", 30)
         self._keepalive_max = cfg.get("keepalive_interval_max", 300)
