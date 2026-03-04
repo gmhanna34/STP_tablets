@@ -15,6 +15,7 @@ const PtzAPI = {
         body: JSON.stringify({ command }),
         signal: AbortSignal.timeout(3000),
       });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return await resp.json();
     } catch (e) {
       console.error('PTZ:', e);
@@ -29,6 +30,7 @@ const PtzAPI = {
         headers: { 'X-Tablet-ID': this.tabletId },
         signal: AbortSignal.timeout(3000),
       });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return await resp.json();
     } catch (e) {
       console.error('PTZ preset:', e);

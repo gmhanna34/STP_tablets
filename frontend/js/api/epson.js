@@ -15,6 +15,7 @@ const EpsonAPI = {
         body: JSON.stringify({ state: 'on' }),
         signal: AbortSignal.timeout(5000),
       });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return await resp.json();
     } catch (e) {
       console.error('Epson:', e);
@@ -33,6 +34,7 @@ const EpsonAPI = {
         body: JSON.stringify({ state: 'off' }),
         signal: AbortSignal.timeout(5000),
       });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return await resp.json();
     } catch (e) {
       console.error('Epson:', e);
@@ -51,6 +53,7 @@ const EpsonAPI = {
         body: JSON.stringify({ state: 'on' }),
         signal: AbortSignal.timeout(10000),
       });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return await resp.json();
     } catch (e) {
       console.error('Epson allOn:', e);
@@ -69,6 +72,7 @@ const EpsonAPI = {
         body: JSON.stringify({ state: 'off' }),
         signal: AbortSignal.timeout(10000),
       });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return await resp.json();
     } catch (e) {
       console.error('Epson allOff:', e);
@@ -82,6 +86,7 @@ const EpsonAPI = {
         headers: { 'X-Tablet-ID': this.tabletId },
         signal: AbortSignal.timeout(5000),
       });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return await resp.json();
     } catch (e) {
       console.error('Epson status:', e);

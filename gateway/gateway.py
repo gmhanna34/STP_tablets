@@ -45,7 +45,39 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 
 def load_config(path: str = "config.yaml") -> dict:
     with open(path, "r") as f:
-        return yaml.safe_load(f)
+        cfg = yaml.safe_load(f)
+    _apply_env_overrides(cfg)
+    return cfg
+
+
+def _apply_env_overrides(cfg: dict):
+    """Override config secrets from environment variables when set.
+
+    Env vars take precedence over config.yaml so that secrets don't need
+    to live in the committed config file."""
+    def _env(key: str, fallback: str = "") -> str:
+        return os.environ.get(key) or fallback
+
+    mw = cfg.setdefault("middleware", {})
+    mw.setdefault("moip", {})["api_key"] = _env("MOIP_API_KEY", mw.get("moip", {}).get("api_key", ""))
+    mw.setdefault("x32", {})["api_key"] = _env("X32_API_KEY", mw.get("x32", {}).get("api_key", ""))
+
+    ha = cfg.setdefault("home_assistant", {})
+    ha["url"] = _env("HA_URL", ha.get("url", ""))
+    ha["token"] = _env("HA_TOKEN", ha.get("token", ""))
+
+    wb = cfg.setdefault("wattbox", {})
+    wb["password"] = _env("WATTBOX_PASSWORD", wb.get("password", ""))
+
+    sec = cfg.setdefault("security", {})
+    sec["secret_key"] = _env("FLASK_SECRET_KEY", sec.get("secret_key", ""))
+    sec["settings_pin"] = _env("SETTINGS_PIN", sec.get("settings_pin", ""))
+    ra = sec.setdefault("remote_auth", {})
+    ra["username"] = _env("REMOTE_AUTH_USER", ra.get("username", ""))
+    ra["password"] = _env("REMOTE_AUTH_PASS", ra.get("password", ""))
+
+    fk = cfg.setdefault("fully_kiosk", {})
+    fk["password"] = _env("FULLY_KIOSK_PASSWORD", fk.get("password", ""))
 
 
 # =============================================================================
@@ -143,13 +175,28 @@ class Database:
 
     def log_action(self, tablet_id: str, action: str, target: str,
                    request_data: str = "", result: str = "", latency_ms: float = 0):
-        conn = self._get_conn()
-        conn.execute(
-            "INSERT INTO audit_log (tablet_id, action, target, request_data, result, latency_ms) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (tablet_id, action, target, request_data, result, latency_ms),
-        )
-        conn.commit()
+        try:
+            conn = self._get_conn()
+            conn.execute(
+                "INSERT INTO audit_log (tablet_id, action, target, request_data, result, latency_ms) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (tablet_id, action, target, request_data, result, latency_ms),
+            )
+            conn.commit()
+        except Exception:
+            pass  # Never let audit logging crash a request
+
+    def cleanup_old_logs(self, retention_days: int = 30):
+        """Delete audit log entries older than retention_days."""
+        try:
+            conn = self._get_conn()
+            conn.execute(
+                "DELETE FROM audit_log WHERE timestamp < datetime('now', ?)",
+                (f"-{retention_days} days",),
+            )
+            conn.commit()
+        except Exception:
+            pass
 
     def upsert_session(self, tablet_id: str, display_name: str = "",
                        socket_id: str = "", current_page: str = ""):
@@ -235,6 +282,98 @@ class StateCache:
     def get_all(self) -> dict:
         with self._lock:
             return dict(self._state)
+
+
+# =============================================================================
+# CIRCUIT BREAKER (per-service failure tracking with backoff)
+# =============================================================================
+
+class CircuitBreaker:
+    """Simple circuit breaker: after `threshold` consecutive failures,
+    open the circuit for `recovery_timeout` seconds before allowing a
+    single half-open probe."""
+
+    def __init__(self, threshold: int = 5, recovery_timeout: int = 30):
+        self._threshold = threshold
+        self._recovery_timeout = recovery_timeout
+        self._fail_count = 0
+        self._last_failure: float = 0
+        self._state = "closed"           # closed | open | half-open
+        self._lock = threading.Lock()
+
+    @property
+    def state(self) -> str:
+        with self._lock:
+            if self._state == "open":
+                if time.time() - self._last_failure >= self._recovery_timeout:
+                    self._state = "half-open"
+            return self._state
+
+    def record_success(self):
+        with self._lock:
+            self._fail_count = 0
+            self._state = "closed"
+
+    def record_failure(self):
+        with self._lock:
+            self._fail_count += 1
+            self._last_failure = time.time()
+            if self._fail_count >= self._threshold:
+                self._state = "open"
+
+    def allow_request(self) -> bool:
+        s = self.state
+        return s in ("closed", "half-open")
+
+    def status(self) -> dict:
+        with self._lock:
+            return {
+                "state": self._state,
+                "fail_count": self._fail_count,
+                "threshold": self._threshold,
+            }
+
+
+# =============================================================================
+# POLLER WATCHDOG (tracks last heartbeat per poller thread)
+# =============================================================================
+
+class PollerWatchdog:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._heartbeats: Dict[str, float] = {}
+        self._intervals: Dict[str, float] = {}
+        self._breakers: Dict[str, CircuitBreaker] = {}
+
+    def register(self, name: str, interval: float):
+        with self._lock:
+            self._heartbeats[name] = time.time()
+            self._intervals[name] = interval
+            self._breakers[name] = CircuitBreaker(threshold=5, recovery_timeout=interval * 6)
+
+    def heartbeat(self, name: str):
+        with self._lock:
+            self._heartbeats[name] = time.time()
+
+    def breaker(self, name: str) -> Optional[CircuitBreaker]:
+        with self._lock:
+            return self._breakers.get(name)
+
+    def status(self) -> dict:
+        now = time.time()
+        result = {}
+        with self._lock:
+            for name, last in self._heartbeats.items():
+                interval = self._intervals.get(name, 10)
+                age = now - last
+                stale = age > interval * 3
+                cb = self._breakers.get(name)
+                result[name] = {
+                    "last_heartbeat_age_s": round(age, 1),
+                    "stale": stale,
+                    "circuit": cb.status() if cb else None,
+                }
+        return result
 
 
 # =============================================================================
@@ -767,12 +906,31 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
 
     @app.route("/api/health")
     def api_health():
+        poller_status = watchdog.status()
+        any_stale = any(p.get("stale") for p in poller_status.values())
+        any_open = any(
+            p.get("circuit", {}).get("state") == "open"
+            for p in poller_status.values()
+        )
+
+        # Test DB connectivity
+        db_ok = True
+        try:
+            db._get_conn().execute("SELECT 1")
+        except Exception:
+            db_ok = False
+
+        healthy = db_ok and not any_open
+        status_code = 200 if healthy else 503
         return jsonify({
-            "healthy": True,
+            "healthy": healthy,
+            "degraded": any_stale and not any_open,
             "service": "stp-gateway",
             "version": settings_data.get("app", {}).get("version", "1.0.0"),
             "mock_mode": mock_mode,
-        }), 200
+            "db_ok": db_ok,
+            "pollers": poller_status,
+        }), status_code
 
     @app.route("/api/healthdash/summary")
     def api_healthdash_summary():
@@ -2946,18 +3104,34 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     # BACKGROUND STATE POLLERS
     # -------------------------------------------------------------------------
 
+    watchdog = PollerWatchdog()
+
     def _start_pollers():
         poll_cfg = cfg.get("polling", {})
 
         def poll_loop(name, interval, poll_fn):
             logger.info(f"Poller started: {name} (every {interval}s)")
+            watchdog.register(name, interval)
             while True:
+                cb = watchdog.breaker(name)
+                if cb and not cb.allow_request():
+                    logger.debug(f"Poller {name}: circuit open, skipping poll")
+                    time.sleep(interval)
+                    continue
                 try:
                     data = poll_fn()
+                    watchdog.heartbeat(name)
+                    if cb:
+                        if data is not None:
+                            cb.record_success()
+                        else:
+                            cb.record_failure()
                     if data is not None and state_cache.set(name, data):
                         socketio.emit(f"state:{name}", data, room=name)
                 except Exception as e:
                     logger.warning(f"Poller {name} error: {e}")
+                    if cb:
+                        cb.record_failure()
                 time.sleep(interval)
 
         def _poll_headers(service: str) -> dict:
@@ -3166,13 +3340,23 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             t.start()
 
         # --- Schedule runner ---
+        _last_cleanup_date = ""
+
         def schedule_loop():
+            nonlocal _last_cleanup_date
             logger.info("Schedule runner started (checks every 30s)")
             while True:
                 try:
                     now = datetime.now()
                     current_day = str(now.weekday())  # 0=Mon, 6=Sun
                     current_hm = now.strftime("%H:%M")
+
+                    # Daily audit log cleanup (run once at 03:00)
+                    today_str = now.strftime("%Y-%m-%d")
+                    if current_hm == "03:00" and _last_cleanup_date != today_str:
+                        _last_cleanup_date = today_str
+                        db.cleanup_old_logs(30)
+                        logger.info("Audit log cleanup complete (>30 days deleted)")
 
                     for sched in db.get_schedules():
                         if not sched.get("enabled"):
@@ -3217,6 +3401,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     app._start_pollers = _start_pollers
     app._db = db
     app._state_cache = state_cache
+    app._watchdog = watchdog
 
     return app, socketio
 

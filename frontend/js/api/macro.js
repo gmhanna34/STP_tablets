@@ -457,6 +457,8 @@ const MacroAPI = {
           App.showToast(`${displayLabel || action.macro}: Done`, 2000);
         } else if (execResult && execResult.error) {
           App.showToast(`${displayLabel}: ${execResult.error}`, 4000, 'error');
+        } else if (!execResult || (!execResult.success && !execResult.error)) {
+          App.showToast(`${displayLabel || action.macro}: No response (timeout?)`, 4000, 'error');
         }
       } finally {
         btn.classList.remove('loading');
@@ -480,6 +482,8 @@ const MacroAPI = {
           App.showToast(`${displayLabel || action.macro}: Done`, 2000);
         } else if (result && result.error) {
           App.showToast(`${displayLabel}: ${result.error}`, 4000, 'error');
+        } else if (!result || (!result.success && !result.error)) {
+          App.showToast(`${displayLabel || action.macro}: No response (timeout?)`, 4000, 'error');
         }
 
       } else if (action.type === 'moip_switch') {

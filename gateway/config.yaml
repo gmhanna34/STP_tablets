@@ -17,11 +17,11 @@ gateway:
 middleware:
   moip:
     url: "http://127.0.0.1:5002"
-    api_key: "moip-key-234lkj234lkj2345;lkj234@53"
+    api_key: ""                    # Set MOIP_API_KEY in .env
     timeout: 5
   x32:
     url: "http://127.0.0.1:3400"
-    api_key: "x32-key-your-secret-key-here"
+    api_key: ""                    # Set X32_API_KEY in .env
     timeout: 5
   obs:
     url: "http://127.0.0.1:4456"
@@ -53,21 +53,20 @@ projectors:
 # --- Fully Kiosk Browser (screensaver control) -------------------------------
 fully_kiosk:
   port: 2323
-  password: "admin"
+  password: ""                     # Set FULLY_KIOSK_PASSWORD in .env
   screensaver_default: 20         # Normal screensaver timeout (seconds)
   screensaver_extended: 10800     # Extended timeout when panel is open (seconds)
 
 # --- Home Assistant proxy -----------------------------------------------------
 home_assistant:
-  #url: "https://kvakvzhbshejxozsdlo6yyl2l7ugbibc.ui.nabu.casa"
-  url: "http://192.168.1.245:8123"
-  token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2YmI4NDEwNTBmN2I0M2RjOGVhYmI1MTM0NmVhY2RlNyIsImlhdCI6MTc2ODg0MDY3NCwiZXhwIjoyMDg0MjAwNjc0fQ.Nl3drftaCITH1bSpaH9gPp9vckYoRGW22HNAhox20d8"
+  url: ""                          # Set HA_URL in .env
+  token: ""                        # Set HA_TOKEN in .env
   timeout: 10
 
 # --- WattBox direct control (break-glass fallback, bypasses Home Assistant) ---
 wattbox:
   username: "admin"
-  password: "WBAdmin1"          # Change per-PDU if needed
+  password: ""                     # Set WATTBOX_PASSWORD in .env
   timeout: 5
   # Map friendly device names → WattBox PDU IP + outlet number
   # These are placeholders — update with actual outlet assignments
@@ -99,13 +98,13 @@ security:
     - "172.16."
     - "127.0.0.1"
     - "47.150."
-  settings_pin: "1234"
-  secret_key: "change-me-to-a-long-random-string"
+  settings_pin: ""                 # Set SETTINGS_PIN in .env
+  secret_key: ""                   # Set FLASK_SECRET_KEY in .env
   session_timeout_minutes: 480
   # Login credentials for access from outside the allowed IP ranges
   remote_auth:
-    username: "admin"
-    password: "stpaul"
+    username: ""                   # Set REMOTE_AUTH_USER in .env
+    password: ""                   # Set REMOTE_AUTH_PASS in .env
 
 # --- Camlytics people counting ------------------------------------------------
 camlytics:
