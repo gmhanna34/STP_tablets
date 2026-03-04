@@ -31,6 +31,7 @@ const ObsAPI = {
 
     try {
       const resp = await fetch(url, options);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return await resp.json();
     } catch (e) {
       console.error('OBS:', e);

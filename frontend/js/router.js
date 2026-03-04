@@ -48,11 +48,12 @@ const Router = {
       return;
     }
 
-    // Stop any polling on current page
+    // Stop any polling on current page + clear registered timers
     const currentHandler = this.pages[this.currentPage];
     if (currentHandler && currentHandler.destroy) {
       currentHandler.destroy();
     }
+    App.clearPageTimers();
 
     this.currentPage = page;
 

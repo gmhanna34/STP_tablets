@@ -17,6 +17,7 @@ const HealthAPI = {
     try {
       // Fetch via gateway proxy to avoid CORS issues
       const resp = await fetch('/api/healthdash/summary', { signal: AbortSignal.timeout(5000) });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const data = await resp.json();
       if (data && data.counts) {
         this.state.downCount = data.counts.down || 0;
@@ -24,9 +25,14 @@ const HealthAPI = {
         this.state.healthyCount = data.counts.healthy || 0;
         this.state.totalCount = data.total || 0;
         this.state.lastGenerated = data.generated_at || '';
+        this.state.lastUpdated = Date.now();
+        this.state.stale = false;
       }
     } catch (e) {
-      // Health dashboard unavailable — keep last known values
+      // Mark data as stale if last success was >60s ago
+      if (this.state.lastUpdated && Date.now() - this.state.lastUpdated > 60000) {
+        this.state.stale = true;
+      }
     }
     return this.state;
   },

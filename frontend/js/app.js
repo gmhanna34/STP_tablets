@@ -5,6 +5,7 @@ const App = {
   healthTimer: null,
   clockTimer: null,
   socket: null,
+  _timers: [],     // centralized timer registry for leak prevention
 
   async init() {
     console.log('St. Paul Control Panel - Initializing...');
@@ -100,7 +101,7 @@ const App = {
     this.socket = io({
       query: { tablet: tabletId },
       reconnection: true,
-      reconnectionDelay: 1000,
+      reconnectionDelay: 1000 + Math.floor(Math.random() * 2000),  // jitter to avoid thundering herd
       reconnectionDelayMax: 30000,
       reconnectionAttempts: Infinity,
       timeout: 10000,
@@ -137,6 +138,12 @@ const App = {
     this.socket.io.on('reconnect', () => {
       this._reconnectAttempt = 0;
       this.showToast('Reconnected to gateway', 2000);
+      // Refresh state that may have changed during outage
+      const page = Router.currentPage;
+      const handler = Router.pages[page];
+      if (handler && handler.init) {
+        try { handler.init(); } catch (e) { /* ignore */ }
+      }
     });
 
     this.socket.io.on('reconnect_failed', () => {
@@ -273,6 +280,7 @@ const App = {
       const downEl = document.getElementById('health-down-count');
       const warnEl = document.getElementById('health-warning-count');
       const healthyEl = document.getElementById('health-healthy-count');
+      const healthSection = document.getElementById('status-health');
 
       if (downEl) {
         downEl.textContent = state.downCount;
@@ -285,6 +293,17 @@ const App = {
       if (healthyEl) {
         healthyEl.textContent = state.healthyCount;
         healthyEl.style.display = state.healthyCount > 0 ? 'inline-flex' : 'none';
+      }
+
+      // Stale data indicator
+      if (healthSection) {
+        if (state.stale) {
+          healthSection.style.opacity = '0.4';
+          healthSection.title = 'Health data is stale — dashboard may be unreachable';
+        } else {
+          healthSection.style.opacity = '';
+          healthSection.title = '';
+        }
       }
     };
     update();
@@ -469,8 +488,30 @@ const App = {
   },
 
   // -----------------------------------------------------------------------
-  // Confirmation dialog for destructive operations
+  // Timer registry — prevents interval/timeout leaks on page navigation
   // -----------------------------------------------------------------------
+
+  /**
+   * Register a setInterval that will be auto-cleared on page switch.
+   * @param {Function} fn - Callback
+   * @param {number} ms - Interval in milliseconds
+   * @returns {number} The interval ID
+   */
+  registerTimer(fn, ms) {
+    const id = setInterval(fn, ms);
+    this._timers.push(id);
+    return id;
+  },
+
+  /**
+   * Clear all page-scoped timers. Called automatically on page navigation.
+   */
+  clearPageTimers() {
+    for (const id of this._timers) {
+      clearInterval(id);
+    }
+    this._timers = [];
+  },
 
   // -----------------------------------------------------------------------
   // Theme toggle (light / dark)
