@@ -59,8 +59,16 @@ def _apply_env_overrides(cfg: dict):
         return os.environ.get(key) or fallback
 
     mw = cfg.setdefault("middleware", {})
-    mw.setdefault("moip", {})["api_key"] = _env("MOIP_API_KEY", mw.get("moip", {}).get("api_key", ""))
     # X32 no longer uses middleware proxy — handled directly by X32Module
+    # MoIP no longer uses middleware proxy — handled directly by MoIPModule
+
+    # MoIP direct connection overrides
+    moip_sec = cfg.setdefault("moip", {})
+    moip_sec["username"] = _env("MOIP_USERNAME", moip_sec.get("username", ""))
+    moip_sec["password"] = _env("MOIP_PASSWORD", moip_sec.get("password", ""))
+    moip_sec["host_internal"] = _env("MOIP_HOST_INTERNAL", moip_sec.get("host_internal", "10.100.20.11"))
+    moip_sec["host_external"] = _env("MOIP_HOST_EXTERNAL", moip_sec.get("host_external", "external.stpauloc.org"))
+    moip_sec["ha_webhook_id"] = _env("MOIP_HA_WEBHOOK_ID", moip_sec.get("ha_webhook_id", ""))
 
     ha = cfg.setdefault("home_assistant", {})
     ha["url"] = _env("HA_URL", ha.get("url", ""))
@@ -472,6 +480,12 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     # X32 mixer — direct OSC/UDP via absorbed module (Phase 1 consolidation)
     from x32_module import X32Module
     x32 = None if mock_mode else X32Module(cfg.get("x32", {}), logger)
+
+    # MoIP controller — direct Telnet via absorbed module (Phase 2 consolidation)
+    from moip_module import MoIPModule
+    moip = None if mock_mode else MoIPModule(
+        cfg.get("moip", {}), logger, ha_cfg=cfg.get("home_assistant", {})
+    )
 
     allowed_ips = sec_cfg.get("allowed_ips", ["127.0.0.1"])
     settings_pin = sec_cfg.get("settings_pin", "1234")
@@ -1014,15 +1028,25 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     # (see on_heartbeat event handler below)
 
     # -------------------------------------------------------------------------
-    # MOIP PROXY
+    # MOIP (direct Telnet — Phase 2 consolidation)
     # -------------------------------------------------------------------------
 
     @app.route("/api/moip/receivers")
     def moip_receivers():
         if mock_mode:
             return jsonify(MockBackend.MOIP_RECEIVERS), 200
-        result, status = _proxy_request("moip", "/receivers")
+        result, status = moip.get_receivers()
         return jsonify(result), status
+
+    @app.route("/api/moip/health")
+    def moip_health():
+        if mock_mode:
+            return jsonify({"healthy": True, "connected": True, "mode": "mock",
+                            "last_command_seconds_ago": 0, "failure_streak": 0,
+                            "failure_threshold": 50, "last_reboot_seconds_ago": None,
+                            "reboot_cooldown_minutes": 15}), 200
+        health = moip.get_status()
+        return jsonify(health), (200 if health.get("healthy") else 503)
 
     @app.route("/api/moip/switch", methods=["POST"])
     def moip_switch():
@@ -1032,15 +1056,18 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         data = request.get_json(silent=True) or {}
         if mock_mode:
             return jsonify({"success": True, "mock": True}), 200
-        result, status = _proxy_request("moip", "/switch", "POST", data)
+        tx = data.get("transmitter", "")
+        rx = data.get("receiver", "")
+        result, status = moip.switch(str(tx), str(rx))
         # Broadcast full receiver state so button highlights update immediately
-        try:
-            fresh, fresh_status = _proxy_request("moip", "/receivers", "GET", timeout=3)
-            if fresh_status < 400 and fresh:
-                state_cache.set("moip", fresh)
-                socketio.emit("state:moip", fresh, room="moip")
-        except Exception:
-            pass
+        if status < 400:
+            try:
+                fresh, fresh_status = moip.get_receivers()
+                if fresh_status < 400 and fresh:
+                    state_cache.set("moip", fresh)
+                    socketio.emit("state:moip", fresh, room="moip")
+            except Exception:
+                pass
         return jsonify(result), status
 
     @app.route("/api/moip/ir", methods=["POST"])
@@ -1052,10 +1079,12 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         code = data.get("code", "")
         ir_codes = devices_data.get("moip", {}).get("irCodes", {})
         if code in ir_codes:
-            data = dict(data, code=ir_codes[code])
+            code = ir_codes[code]
         else:
             logger.warning(f"IR code name '{code}' not found in devices.json irCodes")
-        result, status = _proxy_request("moip", "/ir", "POST", data)
+        tx = data.get("tx", "")
+        rx = data.get("rx", "")
+        result, status = moip.send_ir(str(tx), str(rx), code)
         return jsonify(result), status
 
     @app.route("/api/moip/scene", methods=["POST"])
@@ -1066,8 +1095,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         data = request.get_json(silent=True) or {}
         if mock_mode:
             return jsonify({"success": True, "mock": True}), 200
-        result, status = _proxy_request("moip", "/scene", "POST", data)
-        socketio.emit("state:moip", {"event": "scene", "data": data}, room="moip")
+        scene = data.get("scene", "")
+        result, status = moip.activate_scene(str(scene))
+        if status < 400:
+            socketio.emit("state:moip", {"event": "scene", "data": data}, room="moip")
         return jsonify(result), status
 
     @app.route("/api/moip/osd", methods=["POST"])
@@ -1075,7 +1106,9 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         data = request.get_json(silent=True) or {}
         if mock_mode:
             return jsonify({"success": True, "mock": True}), 200
-        result, status = _proxy_request("moip", "/osd", "POST", data)
+        text = data.get("text")
+        clear = data.get("clear", False)
+        result, status = moip.send_osd(text=text, clear=bool(clear))
         return jsonify(result), status
 
     # -------------------------------------------------------------------------
@@ -2222,15 +2255,11 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
 
         # Force fresh MoIP state broadcast so button highlights update immediately
         try:
-            resp = http_requests.get(
-                f"{mw_cfg['moip']['url']}/receivers",
-                headers={"X-Tablet-ID": "Gateway"},
-                timeout=5,
-            )
-            fresh = resp.json()
-            if fresh:
-                state_cache.set("moip", fresh)
-                socketio.emit("state:moip", fresh, room="moip")
+            if moip is not None:
+                fresh, fresh_status = moip.get_receivers()
+                if fresh_status < 400 and fresh:
+                    state_cache.set("moip", fresh)
+                    socketio.emit("state:moip", fresh, room="moip")
         except Exception:
             pass  # Background poller will catch up
 
@@ -2426,9 +2455,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if mock_mode:
             return {"success": True}
         start = time.time()
-        result, status = _proxy_request("moip", "/switch", "POST",
-                                         {"transmitter": tx, "receiver": rx}, timeout=3,
-                                         tablet=tablet)
+        result, status = moip.switch(tx, rx)
         latency = (time.time() - start) * 1000
         ok = status < 400
         if _verbose_logging:
@@ -2453,9 +2480,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if mock_mode:
             return {"success": True}
         start = time.time()
-        result, status = _proxy_request("moip", "/ir", "POST",
-                                         {"tx": "0", "rx": rx, "code": code}, timeout=3,
-                                         tablet=tablet)
+        result, status = moip.send_ir("0", rx, code)
         latency = (time.time() - start) * 1000
         ok = status < 400
         if _verbose_logging:
@@ -3134,6 +3159,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if x32 is not None:
             x32.start()
 
+        # Start the MoIP module's keepalive thread (owns Telnet connection)
+        if moip is not None:
+            moip.start()
+
         poll_cfg = cfg.get("polling", {})
 
         def poll_loop(name, interval, poll_fn):
@@ -3181,12 +3210,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             if mock_mode:
                 return MockBackend.MOIP_RECEIVERS
             try:
-                resp = http_requests.get(
-                    f"{mw_cfg['moip']['url']}/receivers",
-                    headers=_poll_headers("moip"),
-                    timeout=5,
-                )
-                return resp.json()
+                result, status = moip.get_receivers()
+                return result if status < 400 else None
             except Exception:
                 return None
 
@@ -3456,8 +3481,9 @@ def main():
     logger.info(f"  Config: {args.config}")
     logger.info(f"  Static dir: {cfg.get('gateway', {}).get('static_dir', 'N/A')}")
     x32_cfg = cfg.get("x32", {})
-    logger.info(f"  Middleware: moip={cfg['middleware']['moip']['url']}, "
-                f"obs={cfg['middleware']['obs']['url']}")
+    moip_cfg = cfg.get("moip", {})
+    logger.info(f"  Middleware: obs={cfg.get('middleware', {}).get('obs', {}).get('url', 'N/A')}")
+    logger.info(f"  MoIP (direct): {moip_cfg.get('host_internal', 'N/A')}:{moip_cfg.get('port_internal', 23)}")
     logger.info(f"  X32 (direct): {x32_cfg.get('mixer_type', 'X32')} @ {x32_cfg.get('mixer_ip', 'N/A')}")
     logger.info(f"  PTZ cameras: {len(cfg.get('ptz_cameras', {}))}")
     logger.info(f"  Projectors: {len(cfg.get('projectors', {}))}")

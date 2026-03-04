@@ -15,10 +15,12 @@ gateway:
 
 # --- Middleware services (running alongside) ----------------------------------
 middleware:
-  moip:
-    url: "http://127.0.0.1:5002"
-    api_key: ""                    # Set MOIP_API_KEY in .env
-    timeout: 5
+  # moip: DEPRECATED — now handled directly by MoIPModule (Phase 2 consolidation)
+  # Uncomment below to revert to standalone moip-flask.py proxy if needed:
+  #moip:
+  #  url: "http://127.0.0.1:5002"
+  #  api_key: ""
+  #  timeout: 5
   # x32: DEPRECATED — now handled directly by X32Module (Phase 1 consolidation)
   # Uncomment below to revert to standalone x32-flask.py proxy if needed:
   #x32:
@@ -29,6 +31,22 @@ middleware:
     url: "http://127.0.0.1:4456"
     api_key: ""            # obs-flask has no API key by default
     timeout: 10
+
+# --- MoIP controller (direct Telnet, Phase 2 consolidation) ------------------
+moip:
+  host_internal: "10.100.20.11"
+  port_internal: 23
+  host_external: "external.stpauloc.org"
+  port_external: 2323
+  username: ""                   # Set MOIP_USERNAME in .env
+  password: ""                   # Set MOIP_PASSWORD in .env
+  telnet_read_timeout: 5
+  failure_threshold: 50
+  reboot_cooldown_minutes: 15
+  keepalive_interval_normal: 30
+  keepalive_interval_max: 300
+  # HA webhook for watchdog-triggered restarts (from old moip-flask.py)
+  ha_webhook_id: ""              # Set MOIP_HA_WEBHOOK_ID in .env
 
 # --- X32 mixer (direct OSC/UDP, Phase 1 consolidation) -----------------------
 x32:
