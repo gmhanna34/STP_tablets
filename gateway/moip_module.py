@@ -296,7 +296,7 @@ class MoIPModule:
                 if self._conn.connect():
                     result = self._conn.send_command(command)
 
-        if result is not None:
+        if result:
             with self._state_lock:
                 self._last_successful_command = datetime.now()
                 self._healthy = True
@@ -466,6 +466,14 @@ class MoIPModule:
                     f"MoIP: Keepalive no response (failures={consecutive_failures}), "
                     f"next check in {interval}s"
                 )
+
+                if consecutive_failures >= self._failure_threshold:
+                    self._logger.critical(
+                        f"MoIP: KEEPALIVE FAILURE THRESHOLD REACHED "
+                        f"({self._failure_threshold})"
+                    )
+                    self._trigger_ha_restart()
+                    consecutive_failures = 0
 
     # --- HA Watchdog ---
 
