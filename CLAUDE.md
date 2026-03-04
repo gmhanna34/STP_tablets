@@ -10,6 +10,7 @@ A church AV control system that provides tablet-based control of audio, video, s
 STP_tablets/              → Gateway + Frontend (this repo)
 ├── gateway/              → Flask backend (REST API + WebSocket hub)
 │   ├── gateway.py
+│   ├── x32_module.py    ← Phase 1: direct X32 mixer OSC/UDP
 │   ├── config.yaml
 │   ├── macros.yaml
 │   └── requirements.txt
@@ -49,11 +50,11 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
            │
      ┌─────┼─────┬──────────┬───────────┐
      ▼     ▼     ▼          ▼           ▼
-  ┌──────┐ ┌──────┐ ┌──────┐ ┌───────┐ ┌───────┐
-  │ X32  │ │ MoIP │ │ OBS  │ │  PTZ  │ │ Epson │
-  │:3400 │ │:5002 │ │:4456 │ │direct │ │direct │
-  └──┬───┘ └──┬───┘ └──┬───┘ └───┬───┘ └───┬───┘
-     │        │        │         │          │
+  ┌────────┐ ┌──────┐ ┌──────┐ ┌───────┐ ┌───────┐
+  │ X32    │ │ MoIP │ │ OBS  │ │  PTZ  │ │ Epson │
+  │(built- │ │:5002 │ │:4456 │ │direct │ │direct │
+  │ in)    │ └──┬───┘ └──┬───┘ └───┬───┘ └───┬───┘
+  └──┬─────┘    │        │         │          │
   OSC/UDP   Telnet  WebSocket  HTTP/CGI   HTTP/CGI
      ▼        ▼        ▼         ▼          ▼
   Behringer  Binary   OBS      10 PTZ     4 Epson
@@ -96,7 +97,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 - **requirements.txt** — flask, flask-socketio, eventlet, requests, pyyaml
 
 ### Middleware (`STP_scripts/` — separate repo)
-- **x32-flask.py** — Audio mixer proxy (HTTP → OSC/UDP), port 3400
+- **x32-flask.py** — ~~Audio mixer proxy (HTTP → OSC/UDP), port 3400~~ **DEPRECATED** — absorbed into `gateway/x32_module.py` (Phase 1)
 - **moip-flask.py** — Video matrix proxy (HTTP → Telnet), port 5002
 - **obs-flask.py** — Streaming proxy (HTTP → OBS WebSocket), port 4456
 - Each has: background polling, ping/snapshot health, IP allowlist, API key auth, rotating logs
@@ -129,12 +130,13 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 ## Startup Order
 
 ```
-1. x32-flask.py        (port 3400)   — STP_scripts repo
-2. moip-flask.py       (port 5002)   — STP_scripts repo
-3. obs-flask.py        (port 4456)   — STP_scripts repo
-4. gateway.py          (port 8080)   ← this repo (depends on 1-3)
-5. healthdash app.py   (port 20855)  — STP_healthdash repo
+1. moip-flask.py       (port 5002)   — STP_scripts repo
+2. obs-flask.py        (port 4456)   — STP_scripts repo
+3. gateway.py          (port 20858)  ← this repo (depends on 1-2; X32 is built-in)
+4. healthdash app.py   (port 20855)  — STP_healthdash repo
 ```
+
+> **Note:** `x32-flask.py` (port 3400) is no longer needed — the gateway now communicates directly with the X32 mixer via OSC/UDP (Phase 1 consolidation). The standalone script is kept in STP_scripts as a rollback option.
 
 ## Deployment Target
 
@@ -166,7 +168,8 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
 - **Frontend:** Vanilla JS, Socket.IO client, Material Design Icons, CSS Grid
 - **Backend:** Python 3, Flask, Flask-SocketIO, Eventlet
-- **Middleware:** Flask + Waitress (each a standalone .py file, in STP_scripts)
+- **Middleware:** Flask + Waitress (MoIP, OBS still in STP_scripts; X32 absorbed into gateway)
+- **X32 Protocol:** xair-api (python-osc) for direct OSC/UDP communication
 - **Database:** SQLite (audit log only)
 - **Monitoring:** Flask + SSE, webhook alerts to Home Assistant
 
@@ -202,7 +205,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 1 | Absorb X32 middleware (`x32-flask.py`) into gateway | Not started |
+| 1 | Absorb X32 middleware (`x32-flask.py`) into gateway | **Complete** |
 | 2 | Absorb MoIP middleware (`moip-flask.py`) into gateway | Not started |
 | 3 | Absorb OBS middleware (`obs-flask.py`) into gateway | Not started |
 | 4 | Absorb HealthDash (`STP_healthdash/app.py`) into gateway as a module + frontend page | Not started |
@@ -221,7 +224,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
 ### What Changes Per Phase
 
-**Phase 1 (X32):** Move OSC/UDP protocol logic from `x32-flask.py` into a gateway module. Remove port 3400 dependency. Gateway talks directly to the X32 mixer at 192.168.1.231.
+**Phase 1 (X32) — COMPLETE:** Moved OSC/UDP protocol logic from `x32-flask.py` into `gateway/x32_module.py`. The gateway now communicates directly with the X32 mixer at 192.168.1.231 using the `xair_api` library (python-osc). Port 3400 is no longer required. New capabilities: bus mute/volume (1-16) and DCA mute/volume (1-8) are now implemented (were missing from the old middleware). The standalone `x32-flask.py` remains in STP_scripts as a rollback option.
 
 **Phase 2 (MoIP):** Move Telnet protocol logic from `moip-flask.py` into a gateway module. Remove port 5002 dependency. Gateway talks directly to MoIP controller at 10.100.20.11:23.
 

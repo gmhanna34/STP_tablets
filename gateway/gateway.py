@@ -60,7 +60,7 @@ def _apply_env_overrides(cfg: dict):
 
     mw = cfg.setdefault("middleware", {})
     mw.setdefault("moip", {})["api_key"] = _env("MOIP_API_KEY", mw.get("moip", {}).get("api_key", ""))
-    mw.setdefault("x32", {})["api_key"] = _env("X32_API_KEY", mw.get("x32", {}).get("api_key", ""))
+    # X32 no longer uses middleware proxy — handled directly by X32Module
 
     ha = cfg.setdefault("home_assistant", {})
     ha["url"] = _env("HA_URL", ha.get("url", ""))
@@ -468,6 +468,11 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     state_cache = StateCache()
 
     mw_cfg = cfg.get("middleware", {})
+
+    # X32 mixer — direct OSC/UDP via absorbed module (Phase 1 consolidation)
+    from x32_module import X32Module
+    x32 = None if mock_mode else X32Module(cfg.get("x32", {}), logger)
+
     allowed_ips = sec_cfg.get("allowed_ips", ["127.0.0.1"])
     settings_pin = sec_cfg.get("settings_pin", "1234")
     remote_auth = sec_cfg.get("remote_auth", {})
@@ -1081,8 +1086,16 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     def x32_status():
         if mock_mode:
             return jsonify(MockBackend.X32_STATUS), 200
-        result, status = _proxy_request("x32", "/status")
-        return jsonify(result), status
+        return jsonify(x32.get_status()), 200
+
+    @app.route("/api/x32/health")
+    def x32_health():
+        if mock_mode:
+            return jsonify({"healthy": True, "mixer_type": "X32", "mixer_ip": "mock",
+                            "cur_scene": "0", "cur_scene_name": "Mock Scene",
+                            "seconds_since_last_ok": 0, "error": ""}), 200
+        health = x32.get_health()
+        return jsonify(health), (200 if health.get("healthy") else 503)
 
     @app.route("/api/x32/scene/<int:num>")
     def x32_scene(num: int):
@@ -1091,8 +1104,9 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return perm_err
         if mock_mode:
             return jsonify({"success": True, "scene": num, "mock": True}), 200
-        result, status = _proxy_request("x32", f"/scene{num}")
-        socketio.emit("state:x32", {"event": "scene", "scene": num}, room="x32")
+        result, status = x32.set_scene(num)
+        if status < 400:
+            socketio.emit("state:x32", {"event": "scene", "scene": num}, room="x32")
         return jsonify(result), status
 
     @app.route("/api/x32/mute/<int:ch>/<state>")
@@ -1104,8 +1118,9 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return jsonify({"error": "State must be 'on' or 'off'"}), 400
         if mock_mode:
             return jsonify({"success": True, "channel": ch, "muted": state == "on", "mock": True}), 200
-        result, status = _proxy_request("x32", f"/mute{ch}{state}")
-        socketio.emit("state:x32", {"event": "mute", "channel": ch, "state": state}, room="x32")
+        result, status = x32.mute_channel(ch, state)
+        if status < 400:
+            socketio.emit("state:x32", {"event": "mute", "channel": ch, "state": state}, room="x32")
         return jsonify(result), status
 
     @app.route("/api/x32/aux/<int:ch>/mute/<state>")
@@ -1117,8 +1132,9 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return jsonify({"error": "State must be 'on' or 'off'"}), 400
         if mock_mode:
             return jsonify({"success": True, "aux": ch, "muted": state == "on", "mock": True}), 200
-        result, status = _proxy_request("x32", f"/aux{ch}_mute_{state}")
-        socketio.emit("state:x32", {"event": "aux_mute", "aux": ch, "state": state}, room="x32")
+        result, status = x32.mute_aux(ch, state)
+        if status < 400:
+            socketio.emit("state:x32", {"event": "aux_mute", "aux": ch, "state": state}, room="x32")
         return jsonify(result), status
 
     @app.route("/api/x32/volume/<int:ch>/<direction>")
@@ -1130,8 +1146,9 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return jsonify({"error": "Direction must be 'up' or 'down'"}), 400
         if mock_mode:
             return jsonify({"success": True, "channel": ch, "direction": direction, "mock": True}), 200
-        result, status = _proxy_request("x32", f"/ch{ch}vol{direction}")
-        socketio.emit("state:x32", {"event": "volume", "channel": ch, "direction": direction}, room="x32")
+        result, status = x32.volume_channel(ch, direction)
+        if status < 400:
+            socketio.emit("state:x32", {"event": "volume", "channel": ch, "direction": direction}, room="x32")
         return jsonify(result), status
 
     @app.route("/api/x32/bus/<int:ch>/mute/<state>")
@@ -1143,8 +1160,9 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return jsonify({"error": "State must be 'on' or 'off'"}), 400
         if mock_mode:
             return jsonify({"success": True, "bus": ch, "muted": state == "on", "mock": True}), 200
-        result, status = _proxy_request("x32", f"/bus{ch}_mute_{state}")
-        socketio.emit("state:x32", {"event": "bus_mute", "bus": ch, "state": state}, room="x32")
+        result, status = x32.mute_bus(ch, state)
+        if status < 400:
+            socketio.emit("state:x32", {"event": "bus_mute", "bus": ch, "state": state}, room="x32")
         return jsonify(result), status
 
     @app.route("/api/x32/bus/<int:ch>/volume/<direction>")
@@ -1156,8 +1174,9 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return jsonify({"error": "Direction must be 'up' or 'down'"}), 400
         if mock_mode:
             return jsonify({"success": True, "bus": ch, "direction": direction, "mock": True}), 200
-        result, status = _proxy_request("x32", f"/bus{ch}vol{direction}")
-        socketio.emit("state:x32", {"event": "bus_volume", "bus": ch, "direction": direction}, room="x32")
+        result, status = x32.volume_bus(ch, direction)
+        if status < 400:
+            socketio.emit("state:x32", {"event": "bus_volume", "bus": ch, "direction": direction}, room="x32")
         return jsonify(result), status
 
     @app.route("/api/x32/dca/<int:ch>/mute/<state>")
@@ -1169,8 +1188,9 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return jsonify({"error": "State must be 'on' or 'off'"}), 400
         if mock_mode:
             return jsonify({"success": True, "dca": ch, "muted": state == "on", "mock": True}), 200
-        result, status = _proxy_request("x32", f"/dca{ch}_mute_{state}")
-        socketio.emit("state:x32", {"event": "dca_mute", "dca": ch, "state": state}, room="x32")
+        result, status = x32.mute_dca(ch, state)
+        if status < 400:
+            socketio.emit("state:x32", {"event": "dca_mute", "dca": ch, "state": state}, room="x32")
         return jsonify(result), status
 
     @app.route("/api/x32/dca/<int:ch>/volume/<direction>")
@@ -1182,8 +1202,9 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return jsonify({"error": "Direction must be 'up' or 'down'"}), 400
         if mock_mode:
             return jsonify({"success": True, "dca": ch, "direction": direction, "mock": True}), 200
-        result, status = _proxy_request("x32", f"/dca{ch}vol{direction}")
-        socketio.emit("state:x32", {"event": "dca_volume", "dca": ch, "direction": direction}, room="x32")
+        result, status = x32.volume_dca(ch, direction)
+        if status < 400:
+            socketio.emit("state:x32", {"event": "dca_volume", "dca": ch, "direction": direction}, room="x32")
         return jsonify(result), status
 
     # -------------------------------------------------------------------------
@@ -2494,17 +2515,19 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if mock_mode:
             return {"success": True}
         start = time.time()
-        result, status = _proxy_request("x32", f"/scene{num}", tablet=tablet)
+        result, status = x32.set_scene(num)
         latency = (time.time() - start) * 1000
         ok = status < 400
-        error_detail = "" if ok else (result.get("error", "") if isinstance(result, dict) else f"HTTP {status}")
+        error_detail = "" if not ok else ""
+        if not ok:
+            error_detail = result.get("error", "") if isinstance(result, dict) else str(result)
         db.log_action(tablet, "macro:x32_scene", f"scene_{num}",
                       json.dumps({"scene": num}),
                       "OK" if ok else f"FAILED: {error_detail}" if error_detail else "FAILED", latency)
         if ok:
             socketio.emit("state:x32", {"event": "scene", "scene": num}, room="x32")
             return {"success": True}
-        return {"success": False, "error": error_detail or f"X32 scene {num} failed (HTTP {status})"}
+        return {"success": False, "error": error_detail or f"X32 scene {num} failed"}
 
     def _step_x32_mute(step: dict, tablet: str) -> dict:
         ch = step.get("channel", 1)
@@ -2512,17 +2535,17 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if mock_mode:
             return {"success": True}
         start = time.time()
-        result, status = _proxy_request("x32", f"/mute{ch}{state}", tablet=tablet)
+        result, status = x32.mute_channel(ch, state)
         latency = (time.time() - start) * 1000
         ok = status < 400
-        error_detail = "" if ok else (result.get("error", "") if isinstance(result, dict) else f"HTTP {status}")
+        error_detail = "" if ok else (result.get("error", "") if isinstance(result, dict) else str(result))
         db.log_action(tablet, "macro:x32_mute", f"ch{ch}_{state}",
                       json.dumps({"channel": ch, "state": state}),
                       "OK" if ok else f"FAILED: {error_detail}" if error_detail else "FAILED", latency)
         if ok:
             socketio.emit("state:x32", {"event": "mute", "channel": ch, "state": state}, room="x32")
             return {"success": True}
-        return {"success": False, "error": error_detail or f"X32 mute ch{ch} failed (HTTP {status})"}
+        return {"success": False, "error": error_detail or f"X32 mute ch{ch} failed"}
 
     def _step_x32_aux_mute(step: dict, tablet: str) -> dict:
         ch = step.get("channel", 1)
@@ -2530,17 +2553,17 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if mock_mode:
             return {"success": True}
         start = time.time()
-        result, status = _proxy_request("x32", f"/aux{ch}_mute_{state}", tablet=tablet)
+        result, status = x32.mute_aux(ch, state)
         latency = (time.time() - start) * 1000
         ok = status < 400
-        error_detail = "" if ok else (result.get("error", "") if isinstance(result, dict) else f"HTTP {status}")
+        error_detail = "" if ok else (result.get("error", "") if isinstance(result, dict) else str(result))
         db.log_action(tablet, "macro:x32_aux_mute", f"aux{ch}_{state}",
                       json.dumps({"channel": ch, "state": state}),
                       "OK" if ok else f"FAILED: {error_detail}" if error_detail else "FAILED", latency)
         if ok:
             socketio.emit("state:x32", {"event": "aux_mute", "aux": ch, "state": state}, room="x32")
             return {"success": True}
-        return {"success": False, "error": error_detail or f"X32 aux{ch} mute failed (HTTP {status})"}
+        return {"success": False, "error": error_detail or f"X32 aux{ch} mute failed"}
 
     def _step_obs_emit(step: dict, tablet: str) -> dict:
         action = step.get("action", "")
@@ -3107,6 +3130,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     watchdog = PollerWatchdog()
 
     def _start_pollers():
+        # Start the X32 module's internal poller (owns mixer connection)
+        if x32 is not None:
+            x32.start()
+
         poll_cfg = cfg.get("polling", {})
 
         def poll_loop(name, interval, poll_fn):
@@ -3146,12 +3173,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             if mock_mode:
                 return MockBackend.X32_STATUS
             try:
-                resp = http_requests.get(
-                    f"{mw_cfg['x32']['url']}/status",
-                    headers=_poll_headers("x32"),
-                    timeout=5,
-                )
-                return resp.json()
+                return x32.get_status()
             except Exception:
                 return None
 
@@ -3433,9 +3455,10 @@ def main():
     logger.info(f"  Mock mode: {args.mock}")
     logger.info(f"  Config: {args.config}")
     logger.info(f"  Static dir: {cfg.get('gateway', {}).get('static_dir', 'N/A')}")
+    x32_cfg = cfg.get("x32", {})
     logger.info(f"  Middleware: moip={cfg['middleware']['moip']['url']}, "
-                f"x32={cfg['middleware']['x32']['url']}, "
                 f"obs={cfg['middleware']['obs']['url']}")
+    logger.info(f"  X32 (direct): {x32_cfg.get('mixer_type', 'X32')} @ {x32_cfg.get('mixer_ip', 'N/A')}")
     logger.info(f"  PTZ cameras: {len(cfg.get('ptz_cameras', {}))}")
     logger.info(f"  Projectors: {len(cfg.get('projectors', {}))}")
 

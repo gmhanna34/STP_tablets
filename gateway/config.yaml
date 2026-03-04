@@ -13,20 +13,31 @@ gateway:
   # Adjust this path based on your server's directory layout
   static_dir: "../frontend"
 
-# --- Middleware services (unchanged, running alongside) ----------------------
+# --- Middleware services (running alongside) ----------------------------------
 middleware:
   moip:
     url: "http://127.0.0.1:5002"
     api_key: ""                    # Set MOIP_API_KEY in .env
     timeout: 5
-  x32:
-    url: "http://127.0.0.1:3400"
-    api_key: ""                    # Set X32_API_KEY in .env
-    timeout: 5
+  # x32: DEPRECATED — now handled directly by X32Module (Phase 1 consolidation)
+  # Uncomment below to revert to standalone x32-flask.py proxy if needed:
+  #x32:
+  #  url: "http://127.0.0.1:3400"
+  #  api_key: ""
+  #  timeout: 5
   obs:
     url: "http://127.0.0.1:4456"
     api_key: ""            # obs-flask has no API key by default
     timeout: 10
+
+# --- X32 mixer (direct OSC/UDP, Phase 1 consolidation) -----------------------
+x32:
+  mixer_ip: "192.168.1.231"
+  mixer_type: "X32"
+  ping_seconds: 2.0
+  snapshot_seconds: 6.0
+  offline_after_seconds: 8.0
+  ping_fails_to_offline: 3
 
 # --- PTZ cameras (server-side control, replaces browser-direct no-cors) ------
 ptz_cameras:
