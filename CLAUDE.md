@@ -138,9 +138,11 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
 ## Deployment Target
 
-- **Server:** Mac Mini (macOS), all services run locally
-- **Tablets:** iPads in kiosk mode on LAN
-- See `DEPLOYMENT.md` for full setup instructions
+- **Server:** Currently Windows PC; migrating to Mac Mini after consolidation (see Consolidation Plan below)
+- **OBS + Camlytics:** Remain on existing Windows PC (GPU/display dependent)
+- **Tablets:** iPads and Android tablets in kiosk mode on LAN
+- See `DEPLOYMENT.md` for full operations guide
+- See `MIGRATION_GUIDE_PC.md` and `MIGRATION_GUIDE_MAC.md` for fresh-install setup (pre-consolidation)
 
 ## Credentials (dev/test)
 
@@ -189,3 +191,91 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 - PTZ camera control (10 cameras, server-side to avoid CORS)
 - Epson projector control (4 projectors)
 - Home Assistant integration (power, WattBox, EcoFlow batteries)
+
+---
+
+## Consolidation Plan
+
+**Goal:** Collapse all standalone services into a single gateway process, then migrate from Windows to Mac Mini. OBS Studio and Camlytics remain on the existing Windows machine.
+
+### Phase Overview
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | Absorb X32 middleware (`x32-flask.py`) into gateway | Not started |
+| 2 | Absorb MoIP middleware (`moip-flask.py`) into gateway | Not started |
+| 3 | Absorb OBS middleware (`obs-flask.py`) into gateway | Not started |
+| 4 | Absorb HealthDash (`STP_healthdash/app.py`) into gateway as a module + frontend page | Not started |
+| 5 | Centralize all secrets into `.env` — remove duplication from config.yaml and middleware | Not started |
+| 6 | Absorb occupancy app (`STP_occupancy/` repo) into gateway | Not started |
+| 7 | Sunset The Home Remote (THR) — remove `STP_THRFiles_Current` dependency | Not started |
+| 8 | Migrate consolidated gateway to Mac Mini | Not started |
+
+### Key Decisions
+
+- **Each phase is one session.** Absorb one service at a time, test, verify, commit before moving on.
+- **Consolidation happens on Windows first.** Everything gets tested on the current machine before migrating.
+- **OBS Studio + Camlytics stay on Windows.** They need GPU/display access. The gateway's OBS proxy will point to the Windows machine's IP instead of localhost after migration.
+- **THR is being sunset.** The web frontend replaces it. No new THR development.
+- **Target end state:** One Python process (gateway) serving everything — REST API, WebSocket hub, static frontend, health monitoring, all protocol translation (OSC, Telnet, OBS WebSocket), occupancy data.
+
+### What Changes Per Phase
+
+**Phase 1 (X32):** Move OSC/UDP protocol logic from `x32-flask.py` into a gateway module. Remove port 3400 dependency. Gateway talks directly to the X32 mixer at 192.168.1.231.
+
+**Phase 2 (MoIP):** Move Telnet protocol logic from `moip-flask.py` into a gateway module. Remove port 5002 dependency. Gateway talks directly to MoIP controller at 10.100.20.11:23.
+
+**Phase 3 (OBS):** Move OBS WebSocket client logic from `obs-flask.py` into a gateway module. Remove port 4456 dependency. Gateway connects directly to OBS WebSocket (currently localhost:4455, will become Windows machine IP after Mac migration).
+
+**Phase 4 (HealthDash):** Move health monitoring logic from `STP_healthdash/app.py` into a gateway module. Add `#health` page to the frontend. Remove port 20855 dependency. HealthDash config merges into `config.yaml`.
+
+**Phase 5 (Secrets):** Make `.env` the single source of truth for all secrets. `config.yaml` keeps only non-sensitive config (IPs, polling intervals, device names). Remove all hardcoded keys/passwords from config files.
+
+**Phase 6 (Occupancy):** Move occupancy data logic from `STP_occupancy/` into a gateway module. This is the Camlytics data consumption layer (cloud API polling), not the Camlytics desktop app itself.
+
+**Phase 7 (THR Sunset):** Remove THR dependency from operational workflow. Archive `STP_THRFiles_Current`. Remove THR-specific HealthDash checks.
+
+**Phase 8 (Mac Migration):** Clone repo to Mac Mini, create venv, copy `.env`, update OBS WebSocket URL to point to Windows machine, configure launchd, test.
+
+### Post-Consolidation Architecture
+
+```
+MAC MINI (new)                         WINDOWS PC (existing)
+─────────────────────────              ─────────────────────
+STP Gateway :20858                     OBS Studio :4455
+ ├─ REST API + Socket.IO               Camlytics (analytics)
+ ├─ Static frontend
+ ├─ X32 module ──── OSC/UDP ──────►  Behringer X32 (.1.231)
+ ├─ MoIP module ─── Telnet ──────►   Binary MoIP (10.100.20.11)
+ ├─ OBS module ──── WebSocket ───►   OBS Studio (Windows IP:4455)
+ ├─ PTZ module ──── HTTP/CGI ────►   10 cameras (.1.201-.210)
+ ├─ Epson module ── HTTP ────────►   4 projectors (.1.233-.236)
+ ├─ HA module ───── REST ────────►   Home Assistant (.1.245)
+ ├─ Health monitor (built-in)
+ ├─ Occupancy module (Camlytics Cloud API)
+ ├─ Macro engine
+ └─ Audit log (SQLite)
+```
+
+### Post-Consolidation Repos
+
+After consolidation, only **one repo** is actively maintained:
+
+| Repo | Status |
+|------|--------|
+| `STP_tablets` | **Active** — contains everything (gateway + frontend) |
+| `STP_scripts` | **Archived** — middleware absorbed into gateway |
+| `STP_healthdash` | **Archived** — monitoring absorbed into gateway |
+| `STP_occupancy` | **Archived** — occupancy absorbed into gateway |
+| `STP_THRFiles_Current` | **Archived** — THR sunset |
+
+---
+
+## Migration Guides
+
+Two comprehensive migration guides exist for setting up the system on a fresh machine:
+
+- **`MIGRATION_GUIDE_PC.md`** — Windows PC setup (NSSM services, PowerShell firewall, .bat scripts)
+- **`MIGRATION_GUIDE_MAC.md`** — macOS setup (launchd plists, Homebrew, shell scripts)
+
+> **Note:** These guides reflect the **current** multi-service architecture (5 separate Python processes across 3 repos). They will need to be updated after the consolidation plan above is complete, at which point the setup simplifies to a single Python process from a single repo.
