@@ -278,6 +278,11 @@ class MoIPModule:
             f"MoIP module starting: {self._cfg.get('host_internal', '?')}:"
             f"{self._cfg.get('port_internal', 23)}"
         )
+        self._logger.info(
+            f"MoIP watchdog: threshold={self._failure_threshold}, "
+            f"cooldown={self._reboot_cooldown_minutes}min, "
+            f"webhook={'configured' if self._cfg.get('ha_webhook_id') else 'NOT SET'}"
+        )
         self._keepalive_thread.start()
 
     # --- Thread-safe command send ---
@@ -533,7 +538,10 @@ class MoIPModule:
         ha_url = self._ha_cfg.get("url", "")
         ha_token = self._ha_cfg.get("token", "")
         if not ha_url:
-            self._logger.error("MoIP: HA not configured — cannot restart controller")
+            self._logger.warning(
+                "MoIP: Watchdog triggered but HA not configured — "
+                "set HA_URL in .env to enable automatic restart"
+            )
             return False
 
         if not self._check_reboot_cooldown():
@@ -546,7 +554,10 @@ class MoIPModule:
             # Use the HA webhook to trigger restart
             webhook_url = self._cfg.get("ha_webhook_id", "")
             if not webhook_url:
-                self._logger.error("MoIP: No HA webhook configured")
+                self._logger.warning(
+                    "MoIP: Watchdog triggered but no webhook configured — "
+                    "set MOIP_HA_WEBHOOK_ID in .env to enable automatic restart"
+                )
                 return False
 
             with self._state_lock:
