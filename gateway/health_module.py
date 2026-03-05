@@ -783,12 +783,15 @@ class HealthModule:
         try:
             cmd = [
                 ffprobe, "-v", "error",
-                "-rtsp_transport", "tcp",
                 "-rw_timeout", str(rw_timeout),
                 "-show_entries", "stream=codec_name,width,height,r_frame_rate",
                 "-of", "json",
-                url,
             ]
+            # -rtsp_transport tcp only works with plain rtsp://, not rtsps://
+            if not url.startswith("rtsps://"):
+                cmd.insert(3, "-rtsp_transport")
+                cmd.insert(4, "tcp")
+            cmd.append(url)
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
             latency_ms = round((time.time() - start) * 1000, 1)
 
