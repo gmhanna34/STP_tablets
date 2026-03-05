@@ -109,7 +109,7 @@ const App = {
       reconnectionDelay: 1000 + Math.floor(Math.random() * 2000),  // jitter to avoid thundering herd
       reconnectionDelayMax: 30000,
       reconnectionAttempts: Infinity,
-      timeout: 10000,
+      timeout: 60000,           // 60s — match server ping_timeout for WiFi tolerance
     });
 
     this.socket.on('connect', () => {

@@ -252,7 +252,7 @@ const StreamPage = {
     const nextImg = new Image();
     nextImg.onload = () => {
       if (img.isConnected) img.src = nextImg.src;
-      this._feedTimeout = setTimeout(() => this._refreshCameraFeed(), 500);
+      this._feedTimeout = setTimeout(() => this._refreshCameraFeed(), 2000);
     };
     nextImg.onerror = () => {
       this._feedTimeout = setTimeout(() => this._refreshCameraFeed(), 2000);
