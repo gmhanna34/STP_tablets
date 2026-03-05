@@ -27,10 +27,21 @@ middleware:
   #  url: "http://127.0.0.1:3400"
   #  api_key: ""
   #  timeout: 5
-  obs:
-    url: "http://127.0.0.1:4456"
-    api_key: ""            # obs-flask has no API key by default
-    timeout: 10
+  # obs: DEPRECATED — now handled directly by OBSModule (Phase 3 consolidation)
+  # Uncomment below to revert to standalone obs-flask.py proxy if needed:
+  #obs:
+  #  url: "http://127.0.0.1:4456"
+  #  api_key: ""
+  #  timeout: 10
+
+# --- OBS Studio (direct WebSocket, Phase 3 consolidation) --------------------
+obs:
+  ws_url: "ws://127.0.0.1:4455"
+  ws_password: ""                  # Set OBS_WS_PASSWORD in .env
+  ping_seconds: 3.0
+  snapshot_seconds: 6.0
+  offline_after_seconds: 10.0
+  ping_fails_to_offline: 3
 
 # --- MoIP controller (direct Telnet, Phase 2 consolidation) ------------------
 moip:

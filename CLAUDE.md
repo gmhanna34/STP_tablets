@@ -12,6 +12,7 @@ STP_tablets/              → Gateway + Frontend (this repo)
 │   ├── gateway.py
 │   ├── x32_module.py    ← Phase 1: direct X32 mixer OSC/UDP
 │   ├── moip_module.py   ← Phase 2: direct MoIP controller Telnet
+│   ├── obs_module.py    ← Phase 3: direct OBS Studio WebSocket
 │   ├── config.yaml
 │   ├── macros.yaml
 │   └── requirements.txt
@@ -100,7 +101,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 ### Middleware (`STP_scripts/` — separate repo)
 - **x32-flask.py** — ~~Audio mixer proxy (HTTP → OSC/UDP), port 3400~~ **DEPRECATED** — absorbed into `gateway/x32_module.py` (Phase 1)
 - **moip-flask.py** — ~~Video matrix proxy (HTTP → Telnet), port 5002~~ **DEPRECATED** — absorbed into `gateway/moip_module.py` (Phase 2)
-- **obs-flask.py** — Streaming proxy (HTTP → OBS WebSocket), port 4456
+- **obs-flask.py** — ~~Streaming proxy (HTTP → OBS WebSocket), port 4456~~ **DEPRECATED** — absorbed into `gateway/obs_module.py` (Phase 3)
 - Each has: background polling, ping/snapshot health, IP allowlist, API key auth, rotating logs
 
 ### Health Dashboard (`STP_healthdash/` — separate repo)
@@ -131,12 +132,11 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 ## Startup Order
 
 ```
-1. obs-flask.py        (port 4456)   — STP_scripts repo
-2. gateway.py          (port 20858)  ← this repo (depends on 1; X32 + MoIP built-in)
-3. healthdash app.py   (port 20855)  — STP_healthdash repo
+1. gateway.py          (port 20858)  ← this repo (X32 + MoIP + OBS built-in)
+2. healthdash app.py   (port 20855)  — STP_healthdash repo
 ```
 
-> **Note:** `x32-flask.py` (port 3400) and `moip-flask.py` (port 5002) are no longer needed — the gateway communicates directly with the X32 mixer via OSC/UDP (Phase 1) and the MoIP controller via Telnet (Phase 2). The standalone scripts are kept in STP_scripts as rollback options.
+> **Note:** `x32-flask.py` (port 3400), `moip-flask.py` (port 5002), and `obs-flask.py` (port 4456) are no longer needed — the gateway communicates directly with the X32 mixer via OSC/UDP (Phase 1), the MoIP controller via Telnet (Phase 2), and OBS Studio via WebSocket (Phase 3). The standalone scripts are kept in STP_scripts as rollback options.
 
 ## Deployment Target
 
@@ -168,7 +168,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
 - **Frontend:** Vanilla JS, Socket.IO client, Material Design Icons, CSS Grid
 - **Backend:** Python 3, Flask, Flask-SocketIO, Eventlet
-- **Middleware:** Flask + Waitress (OBS still in STP_scripts; X32 + MoIP absorbed into gateway)
+- **Middleware:** All middleware absorbed into gateway (X32 Phase 1, MoIP Phase 2, OBS Phase 3)
 - **X32 Protocol:** xair-api (python-osc) for direct OSC/UDP communication
 - **MoIP Protocol:** Raw TCP sockets for direct Telnet communication with Binary MoIP controller (migrated from telnetlib for Python 3.13 compatibility)
 - **Database:** SQLite (audit log only)
@@ -208,7 +208,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 |-------|-------------|--------|
 | 1 | Absorb X32 middleware (`x32-flask.py`) into gateway | **Complete** |
 | 2 | Absorb MoIP middleware (`moip-flask.py`) into gateway | **Complete** |
-| 3 | Absorb OBS middleware (`obs-flask.py`) into gateway | Not started |
+| 3 | Absorb OBS middleware (`obs-flask.py`) into gateway | **Complete** |
 | 4 | Absorb HealthDash (`STP_healthdash/app.py`) into gateway as a module + frontend page | Not started |
 | 5 | Centralize all secrets into `.env` — remove duplication from config.yaml and middleware | Not started |
 | 6 | Absorb occupancy app (`STP_occupancy/` repo) into gateway | Not started |
@@ -229,7 +229,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
 **Phase 2 (MoIP) — COMPLETE:** Moved Telnet protocol logic from `moip-flask.py` into `gateway/moip_module.py`. The gateway now communicates directly with the MoIP controller at 10.100.20.11:23 via persistent Telnet connection with internal/external IP fallback. Port 5002 is no longer required. Includes keepalive thread with exponential backoff and HA watchdog for automatic controller restart after prolonged failure. Credentials moved to `.env` (MOIP_USERNAME, MOIP_PASSWORD). The standalone `moip-flask.py` remains in STP_scripts as a rollback option.
 
-**Phase 3 (OBS):** Move OBS WebSocket client logic from `obs-flask.py` into a gateway module. Remove port 4456 dependency. Gateway connects directly to OBS WebSocket (currently localhost:4455, will become Windows machine IP after Mac migration).
+**Phase 3 (OBS) — COMPLETE:** Moved OBS WebSocket client logic from `obs-flask.py` into `gateway/obs_module.py`. The gateway now connects directly to OBS Studio at ws://127.0.0.1:4455 using the `simpleobsws` library. Port 4456 is no longer required. Includes background poller with PING/SNAPSHOT two-stage health checks, fail-streak gating, and a dedicated asyncio event loop for the async simpleobsws client. The standalone `obs-flask.py` remains in STP_scripts as a rollback option.
 
 **Phase 4 (HealthDash):** Move health monitoring logic from `STP_healthdash/app.py` into a gateway module. Add `#health` page to the frontend. Remove port 20855 dependency. HealthDash config merges into `config.yaml`.
 

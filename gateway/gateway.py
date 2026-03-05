@@ -61,6 +61,11 @@ def _apply_env_overrides(cfg: dict):
     mw = cfg.setdefault("middleware", {})
     # X32 no longer uses middleware proxy — handled directly by X32Module
     # MoIP no longer uses middleware proxy — handled directly by MoIPModule
+    # OBS no longer uses middleware proxy — handled directly by OBSModule
+
+    # OBS direct connection overrides
+    obs_sec = cfg.setdefault("obs", {})
+    obs_sec["ws_password"] = _env("OBS_WS_PASSWORD", obs_sec.get("ws_password", ""))
 
     # MoIP direct connection overrides
     moip_sec = cfg.setdefault("moip", {})
@@ -486,6 +491,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     moip = None if mock_mode else MoIPModule(
         cfg.get("moip", {}), logger, ha_cfg=cfg.get("home_assistant", {})
     )
+
+    # OBS Studio — direct WebSocket via absorbed module (Phase 3 consolidation)
+    from obs_module import OBSModule
+    obs = None if mock_mode else OBSModule(cfg.get("obs", {}), logger)
 
     allowed_ips = sec_cfg.get("allowed_ips", ["127.0.0.1"])
     settings_pin = sec_cfg.get("settings_pin", "1234")
@@ -1241,7 +1250,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         return jsonify(result), status
 
     # -------------------------------------------------------------------------
-    # OBS PROXY
+    # OBS (direct WebSocket via OBSModule — Phase 3 consolidation)
     # -------------------------------------------------------------------------
 
     @app.route("/api/obs/status")
@@ -1256,8 +1265,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                     "scenes": ["MainChurch_Altar", "MainChurch_Rear", "Chapel_Rear"],
                 },
             }), 200
-        result, status = _proxy_request("obs", "/status")
-        return jsonify(result), status
+        result, status_code = obs.get_status()
+        return jsonify(result), status_code
 
     @app.route("/api/obs/call/<request_type>", methods=["POST"])
     def obs_call(request_type: str):
@@ -1272,8 +1281,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 "GetCurrentProgramScene": MockBackend.OBS_SCENE,
             }
             return jsonify(mock_map.get(request_type, {"result": True, "mock": True})), 200
-        result, status = _proxy_request("obs", f"/call/{request_type}", "POST", payload)
-        return jsonify(result), status
+        result, err = obs.call(request_type, payload)
+        if err:
+            return jsonify({"result": False, "comment": err}), 503
+        return jsonify({"result": True, "requestResult": result}), 200
 
     @app.route("/api/obs/emit/<request_type>", methods=["POST"])
     def obs_emit(request_type: str):
@@ -1283,9 +1294,11 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         payload = request.get_json(silent=True)
         if mock_mode:
             return jsonify({"result": True, "mock": True}), 200
-        result, status = _proxy_request("obs", f"/emit/{request_type}", "POST", payload)
+        err = obs.emit(request_type, payload)
+        if err:
+            return jsonify({"result": False, "comment": err}), 503
         socketio.emit("state:obs", {"event": request_type, "data": payload}, room="obs")
-        return jsonify(result), status
+        return jsonify({"result": True}), 200
 
     # -------------------------------------------------------------------------
     # PTZ CAMERA CONTROL (server-side, replaces browser no-cors)
@@ -2596,18 +2609,16 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if mock_mode:
             return {"success": True}
         start = time.time()
-        result, status = _proxy_request("obs", f"/emit/{action}", "POST", payload,
-                                         tablet=tablet)
+        err = obs.emit(action, payload)
         latency = (time.time() - start) * 1000
-        ok = status < 400
-        error_detail = "" if ok else (result.get("error", "") if isinstance(result, dict) else f"HTTP {status}")
+        ok = err is None
         db.log_action(tablet, "macro:obs_emit", action,
                       json.dumps(payload)[:500] if payload else "",
-                      "OK" if ok else f"FAILED: {error_detail}" if error_detail else "FAILED", latency)
+                      "OK" if ok else f"FAILED: {err}", latency)
         if ok:
             socketio.emit("state:obs", {"event": action, "data": payload}, room="obs")
             return {"success": True}
-        return {"success": False, "error": error_detail or f"OBS {action} failed (HTTP {status})"}
+        return {"success": False, "error": err or f"OBS {action} failed"}
 
     def _step_ptz_preset(step: dict, tablet: str) -> dict:
         cam_key = step.get("camera", "")
@@ -3163,6 +3174,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if moip is not None:
             moip.start()
 
+        # Start the OBS module's WebSocket poller (owns OBS connection)
+        if obs is not None:
+            obs.start()
+
         poll_cfg = cfg.get("polling", {})
 
         def poll_loop(name, interval, poll_fn):
@@ -3219,12 +3234,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             if mock_mode:
                 return {"streaming": True, "recording": False, "current_scene": "MainChurch_Altar"}
             try:
-                resp = http_requests.get(
-                    f"{mw_cfg['obs']['url']}/status",
-                    headers=_poll_headers("obs"),
-                    timeout=5,
-                )
-                return resp.json()
+                return obs.get_snapshot()
             except Exception:
                 return None
 
