@@ -1925,8 +1925,7 @@ const SettingsPage = {
   // -----------------------------------------------------------------------
 
   openHealthPanel() {
-    // Navigate to the built-in health page
-    Router.navigate('health');
+    App.openHealthDashPanel();
   },
 
   // -----------------------------------------------------------------------
