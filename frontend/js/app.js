@@ -117,6 +117,12 @@ const App = {
       this._reconnectAttempt = 0;
       this.setConnectionStatus('Connected', true);
 
+      // Report previous disconnect reason to server for diagnostics
+      if (this._lastDisconnectReason) {
+        this.socket.emit('diag', { prev_disconnect: this._lastDisconnectReason });
+        this._lastDisconnectReason = null;
+      }
+
       // Join rooms for all subsystems
       this.socket.emit('join', { room: 'moip' });
       this.socket.emit('join', { room: 'x32' });
@@ -128,6 +134,7 @@ const App = {
 
     this.socket.on('disconnect', (reason) => {
       console.warn('Socket.IO disconnected:', reason);
+      this._lastDisconnectReason = reason;
       this.setConnectionStatus('Disconnected', false);
     });
 
