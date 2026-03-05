@@ -122,12 +122,13 @@ const HealthPage = {
 
     grid.innerHTML = this._services.map(svc => `
       <div class="health-card" id="hcard-${this._safeId(svc.id)}" data-type="${svc.type}">
-        <div class="health-card-header">
+        <div class="health-card-header health-card-toggle" data-toggle-target="${this._safeId(svc.id)}">
           <div class="health-card-title-row">
             <span class="health-dot" id="hdot-${this._safeId(svc.id)}"></span>
             <span class="health-card-name">${this._esc(svc.name)}</span>
+            <span class="material-icons health-expand-icon" id="hexpand-${this._safeId(svc.id)}" style="font-size:18px;opacity:0.4;margin-left:auto;">expand_more</span>
           </div>
-          <div class="health-card-actions">
+          <div class="health-card-actions" onclick="event.stopPropagation();">
             <button class="btn-action-sm" data-health-action="logs" data-health-svc="${svc.id}" title="View logs">
               <span class="material-icons" style="font-size:14px;">description</span>
             </button>
@@ -139,50 +140,50 @@ const HealthPage = {
           </div>
         </div>
         <div class="health-card-subtitle" id="hsub-${this._safeId(svc.id)}">—</div>
-        <div class="health-card-stats">
-          <div class="health-stat">
-            <div class="health-stat-label">Status</div>
-            <div class="health-stat-value" id="hstatus-${this._safeId(svc.id)}">—</div>
+        <div class="health-card-body hidden" id="hbody-${this._safeId(svc.id)}">
+          <div class="health-card-stats">
+            <div class="health-stat">
+              <div class="health-stat-label">Status</div>
+              <div class="health-stat-value" id="hstatus-${this._safeId(svc.id)}">—</div>
+            </div>
+            <div class="health-stat">
+              <div class="health-stat-label">Latency</div>
+              <div class="health-stat-value" id="hlatency-${this._safeId(svc.id)}">—</div>
+            </div>
+            <div class="health-stat">
+              <div class="health-stat-label">Last OK</div>
+              <div class="health-stat-value" id="hlastok-${this._safeId(svc.id)}">—</div>
+            </div>
+            <div class="health-stat">
+              <div class="health-stat-label">Last Check</div>
+              <div class="health-stat-value" id="hcheck-${this._safeId(svc.id)}">—</div>
+            </div>
           </div>
-          <div class="health-stat">
-            <div class="health-stat-label">Latency</div>
-            <div class="health-stat-value" id="hlatency-${this._safeId(svc.id)}">—</div>
-          </div>
-          <div class="health-stat">
-            <div class="health-stat-label">Last OK</div>
-            <div class="health-stat-value" id="hlastok-${this._safeId(svc.id)}">—</div>
-          </div>
-          <div class="health-stat">
-            <div class="health-stat-label">Last Check</div>
-            <div class="health-stat-value" id="hcheck-${this._safeId(svc.id)}">—</div>
-          </div>
+          <!-- Details (key/value pairs) -->
+          <div class="health-details hidden" id="hdetails-${this._safeId(svc.id)}"></div>
+          <!-- Error -->
+          <div class="health-error hidden" id="herr-${this._safeId(svc.id)}"></div>
         </div>
         <!-- Composite members -->
         <div class="health-members hidden" id="hmembers-${this._safeId(svc.id)}">
-          <div class="health-members-header">
-            <span class="health-stat-label">Members</span>
-            <button class="btn-action-sm" id="htoggle-${this._safeId(svc.id)}">Expand</button>
-          </div>
-          <div class="health-members-list hidden" id="hmlist-${this._safeId(svc.id)}"></div>
+          <div class="health-members-list" id="hmlist-${this._safeId(svc.id)}"></div>
         </div>
-        <!-- Details -->
-        <div class="health-details hidden" id="hdetails-${this._safeId(svc.id)}"></div>
-        <!-- Error -->
-        <div class="health-error hidden" id="herr-${this._safeId(svc.id)}"></div>
       </div>
     `).join('');
 
-    // Wire up member toggles
-    this._services.forEach(svc => {
-      const btn = document.getElementById(`htoggle-${this._safeId(svc.id)}`);
-      const list = document.getElementById(`hmlist-${this._safeId(svc.id)}`);
-      if (btn && list) {
-        btn.addEventListener('click', () => {
-          const isHidden = list.classList.contains('hidden');
-          list.classList.toggle('hidden', !isHidden);
-          btn.textContent = isHidden ? 'Collapse' : 'Expand';
-        });
-      }
+    // Wire up card header toggles
+    grid.querySelectorAll('.health-card-toggle').forEach(header => {
+      header.style.cursor = 'pointer';
+      header.addEventListener('click', () => {
+        const safe = header.dataset.toggleTarget;
+        const body = document.getElementById(`hbody-${safe}`);
+        const icon = document.getElementById(`hexpand-${safe}`);
+        if (body) {
+          const expanding = body.classList.contains('hidden');
+          body.classList.toggle('hidden');
+          if (icon) icon.textContent = expanding ? 'expand_less' : 'expand_more';
+        }
+      });
     });
   },
 
@@ -297,20 +298,47 @@ const HealthPage = {
     if (Array.isArray(memberRows) && memberRows.length > 0) {
       if (membersWrap) membersWrap.classList.remove('hidden');
       if (memberList) {
-        memberList.innerHTML = memberRows.map(r => `
-          <div class="health-member-row">
-            <span class="health-dot health-dot-${r.level || 'down'}"></span>
-            <span class="health-member-name">${this._esc(r.name || r.id)}</span>
-            <span class="health-member-label">${this._esc(r.label || r.level)}</span>
-          </div>
-        `).join('');
+        memberList.innerHTML = memberRows.map(r => {
+          const mid = this._safeId(r.id || r.name || '');
+          const rlvl = r.level || 'down';
+          const rmsg = r.message || '—';
+          const rlatency = r.latency_ms != null ? `${r.latency_ms} ms` : '—';
+          const rchecked = this._fmtTime(r.checked_at);
+          const rlastok = this._fmtTime(r.last_ok_at);
+          return `
+            <div class="health-member-row health-member-toggle" data-member-detail="mdetail-${safe}-${mid}">
+              <div class="health-member-summary">
+                <span class="health-dot health-dot-${rlvl}"></span>
+                <span class="health-member-name">${this._esc(r.name || r.id)}</span>
+                <span class="health-member-label">${this._esc(r.label || rlvl)}</span>
+                <span class="material-icons health-member-chevron" style="font-size:16px;opacity:0.4;">expand_more</span>
+              </div>
+              <div class="health-member-detail hidden" id="mdetail-${safe}-${mid}">
+                <div class="health-member-detail-grid">
+                  <span class="health-stat-label">Message</span><span>${this._esc(rmsg)}</span>
+                  <span class="health-stat-label">Latency</span><span>${rlatency}</span>
+                  <span class="health-stat-label">Last OK</span><span>${rlastok}</span>
+                  <span class="health-stat-label">Last Check</span><span>${rchecked}</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
 
-        // Auto-expand on warning/down
-        if (level !== 'healthy' && memberList.classList.contains('hidden')) {
-          memberList.classList.remove('hidden');
-          const btn = document.getElementById(`htoggle-${safe}`);
-          if (btn) btn.textContent = 'Collapse';
-        }
+        // Wire up member row toggles
+        memberList.querySelectorAll('.health-member-toggle').forEach(row => {
+          row.style.cursor = 'pointer';
+          row.addEventListener('click', () => {
+            const detailId = row.dataset.memberDetail;
+            const detail = document.getElementById(detailId);
+            const chevron = row.querySelector('.health-member-chevron');
+            if (detail) {
+              const expanding = detail.classList.contains('hidden');
+              detail.classList.toggle('hidden');
+              if (chevron) chevron.textContent = expanding ? 'expand_less' : 'expand_more';
+            }
+          });
+        });
       }
       // Hide simple details for composites
       const detailsEl = document.getElementById(`hdetails-${safe}`);
