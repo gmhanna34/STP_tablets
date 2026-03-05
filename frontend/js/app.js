@@ -19,11 +19,12 @@ const App = {
     this.initDensity();
 
     // Load configuration from gateway
+    let config = null;
     try {
       const configResp = await fetch('/api/config');
       console.log('[CONFIG] /api/config status:', configResp.status);
       if (!configResp.ok) throw new Error(`Config response ${configResp.status}`);
-      const config = await configResp.json();
+      config = await configResp.json();
       console.log('[CONFIG] Response keys:', Object.keys(config));
       console.log('[CONFIG] devices keys:', config.devices ? Object.keys(config.devices) : 'MISSING');
       console.log('[CONFIG] has moip:', !!(config.devices && config.devices.moip));
@@ -50,8 +51,8 @@ const App = {
     console.log('[CONFIG] Final devicesConfig has moip:', !!this.devicesConfig?.moip,
                 'receivers:', this.devicesConfig?.moip?.receivers?.length || 0);
 
-    // Initialize auth/permissions
-    await Auth.init();
+    // Initialize auth/permissions (pass config to avoid duplicate /api/config fetch)
+    await Auth.init(config);
 
     // Initialize API services (no config params needed — they use gateway-relative URLs)
     ObsAPI.init(this.settings);
