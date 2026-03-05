@@ -1193,6 +1193,13 @@ const MacroAPI = {
           <button class="camlytics-buffer-btn" data-dir="plus"><span class="material-icons">add</span></button>
         </div>
       </div>
+
+      <div class="camlytics-analytics-link">
+        <button class="btn" id="cam-open-analytics">
+          <span class="material-icons">bar_chart</span>
+          <span class="btn-label">View Weekly Analytics</span>
+        </button>
+      </div>
     `;
   },
 
@@ -1213,6 +1220,15 @@ const MacroAPI = {
   _wireCamlyticsEvents(body, state) {
     const self = this;
     const STEP = 2.5;
+
+    // "View Weekly Analytics" button → navigate to occupancy page
+    const analyticsBtn = body.querySelector('#cam-open-analytics');
+    if (analyticsBtn) {
+      analyticsBtn.addEventListener('click', () => {
+        App.closePanel();
+        Router.navigate('occupancy');
+      });
+    }
 
     body.querySelectorAll('.camlytics-buffer-row').forEach(row => {
       const bufType = row.dataset.buffer;

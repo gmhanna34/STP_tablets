@@ -809,6 +809,41 @@ healthdash:
         down_after_seconds: 3000
         cooldown_seconds: 9000
 
+# --- Occupancy Dashboard (Phase 6 consolidation — absorbed from STP_Occupancy) -
+# Previously ran as a standalone Flask app on port 20857.
+# Now built into the gateway via occupancy_module.py.
+# CSV download replaces the Windows Scheduled Task scripts from STP_scripts.
+occupancy:
+  data_dir: 'C:\Users\info\Box\Reports'
+  building_subdir: "BuildingOccupancy"
+  communion_subdir: "CommunionCounts"
+  service_hour_start: 7
+  service_hour_end: 22
+  communion_window_start: "10:30"
+  communion_window_end: "12:15"
+  occupancy_pacing_start: "08:30"
+  occupancy_pacing_end: "12:30"
+  daily_reload_time: "01:00"
+  csv_download_urls:
+    building: "https://cloud.camlytics.com/feed/report/4f82c3553002b39064ef61fc87cb8621/csv"
+    communion: "https://cloud.camlytics.com/feed/report/b09996961a7806ed790996ff451ab2cf/csv"
+  buffer_schedule:
+    - effective_date: "2000-01-01"
+      occupancy_buffer: 0.20
+      communion_buffer: 0.05
+    - effective_date: "2026-01-19"
+      occupancy_buffer: 0.15
+      communion_buffer: 0.05
+  special_services:
+    - date: "2026-01-06"
+      label: "Coptic Christmas"
+      communion_window_start: "22:00"
+      communion_window_end: "23:45"
+      occupancy_pacing_start: "19:30"
+      occupancy_pacing_end: "23:45"
+      service_hour_start: 18
+      service_hour_end: 24
+
 # --- Audit logging (SQLite) ---------------------------------------------------
 database:
   path: "stp_gateway.db"
