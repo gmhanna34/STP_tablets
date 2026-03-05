@@ -545,6 +545,15 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     )
 
     logger = setup_logging(cfg)
+
+    # Enable Engine.IO logging to diagnose transport-level disconnects
+    import logging as _logging
+    eio_logger = _logging.getLogger("engineio.server")
+    eio_logger.setLevel(_logging.INFO)
+    # Route through our handler so it goes to the same log file
+    for h in logger.handlers:
+        eio_logger.addHandler(h)
+
     db = Database(cfg.get("database", {}).get("path", "stp_gateway.db"))
     state_cache = StateCache()
 
@@ -3258,17 +3267,31 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
 
     _sid_to_tablet: dict = {}   # sid → tablet name for disconnect logging
 
+    _sid_connect_time: dict = {}  # sid → connect timestamp for uptime tracking
+
     @socketio.on("connect")
     def on_connect():
+        import time as _time
         tablet = request.args.get("tablet", "Unknown")
         _sid_to_tablet[request.sid] = tablet
+        _sid_connect_time[request.sid] = _time.time()
         logger.info(f"SocketIO connect: tablet={tablet} sid={request.sid}")
         db.upsert_session(tablet, socket_id=request.sid)
 
     @socketio.on("disconnect")
     def on_disconnect():
+        import time as _time
         tablet = _sid_to_tablet.pop(request.sid, "Unknown")
-        logger.info(f"SocketIO disconnect: tablet={tablet} sid={request.sid}")
+        connected_at = _sid_connect_time.pop(request.sid, None)
+        uptime = f"{_time.time() - connected_at:.1f}s" if connected_at else "?"
+        logger.info(f"SocketIO disconnect: tablet={tablet} sid={request.sid} uptime={uptime}")
+
+    @socketio.on("diag")
+    def on_diag(data):
+        """Receive diagnostic info from client (e.g., previous disconnect reason)."""
+        tablet = _sid_to_tablet.get(request.sid, "Unknown")
+        prev = data.get("prev_disconnect", "?")
+        logger.info(f"SocketIO diag: tablet={tablet} sid={request.sid} prev_disconnect={prev}")
 
     @socketio.on("join")
     def on_join(data):
@@ -3666,6 +3689,9 @@ def main():
         macro_count = 0
         button_pages = 0
     logger.info(f"  Macros: {macro_count} defined, {button_pages} pages with buttons")
+    # Log actual Engine.IO ping settings so we can verify they took effect
+    eio = socketio.server.eio
+    logger.info(f"  SocketIO: ping_interval={eio.ping_interval}s, ping_timeout={eio.ping_timeout}s")
     logger.info("=" * 60)
 
     # Start background pollers
