@@ -20,12 +20,13 @@ import logging
 import time as _time
 from typing import Any, Dict, Optional, Tuple
 
-# simpleobsws needs real asyncio + real threading, not eventlet green threads.
-# eventlet.monkey_patch() runs before this module is imported, so we must
-# retrieve the originals explicitly.
+# eventlet.monkey_patch() replaces stdlib threading with green threads.
+# simpleobsws needs real OS threads for its WebSocket I/O, so we retrieve
+# the original threading module. asyncio is NOT patched by eventlet, so
+# we can import it normally.
+import asyncio as _asyncio
 import eventlet.patcher
 _threading = eventlet.patcher.original("threading")
-_asyncio = eventlet.patcher.original("asyncio")
 
 import simpleobsws
 
