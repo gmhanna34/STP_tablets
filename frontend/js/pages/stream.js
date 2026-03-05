@@ -117,9 +117,9 @@ const StreamPage = {
   },
 
   init() {
-    // Start polling OBS
-    this.updateStatus();
-    this.pollTimer = setInterval(() => this.updateStatus(), 3000);
+    // Initial HTTP poll for scene list, then rely on WebSocket for status
+    this._pollObs();
+    this._startCameraFeed();
 
     // Help button
     document.getElementById('stream-help-btn')?.addEventListener('click', () => this._showHelp());
@@ -182,9 +182,6 @@ const StreamPage = {
         `;
       });
     });
-
-    // Camera feed preview
-    this._startCameraFeed();
   },
 
   getCurrentCameraKey() {
@@ -340,10 +337,10 @@ const StreamPage = {
         const next = new Image();
         next.onload = () => {
           img.src = next.src;
-          self._panelFeedTimer = setTimeout(refreshPanel, 1000);
+          self._panelFeedTimer = setTimeout(refreshPanel, 2000);
         };
         next.onerror = () => {
-          self._panelFeedTimer = setTimeout(refreshPanel, 3000);
+          self._panelFeedTimer = setTimeout(refreshPanel, 5000);
         };
         next.src = `/api/ptz/${camId}/snapshot?t=${Date.now()}`;
       };
@@ -351,8 +348,20 @@ const StreamPage = {
     });
   },
 
-  async updateStatus() {
-    const state = await ObsAPI.poll();
+  // HTTP poll with setTimeout chaining — prevents overlapping polls.
+  // Runs every 10s as a fallback; real-time updates come via WebSocket.
+  async _pollObs() {
+    try {
+      await ObsAPI.poll();
+      this.updateStatus();
+    } catch { /* ignore */ }
+    this.pollTimer = setTimeout(() => this._pollObs(), 10000);
+  },
+
+  // UI-only refresh — reads from ObsAPI.state without making HTTP calls.
+  // Called by WebSocket state push (via refreshCurrentPage) and after HTTP polls.
+  updateStatus() {
+    const state = ObsAPI.state;
 
     // Connection
     const dotConn = document.getElementById('dot-connection');
@@ -518,7 +527,7 @@ const StreamPage = {
 
   destroy() {
     if (this.pollTimer) {
-      clearInterval(this.pollTimer);
+      clearTimeout(this.pollTimer);
       this.pollTimer = null;
     }
     this._stopCameraFeed();
