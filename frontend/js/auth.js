@@ -5,20 +5,25 @@ const Auth = {
   currentRole: null,        // resolved role key, e.g. "full_access", "chapel"
   isAuthenticated: false,
 
-  async init() {
-    try {
-      // Load permissions from gateway config endpoint (no static JSON files)
-      const resp = await fetch('/api/config');
-      const config = await resp.json();
-      this.permissions = config.permissions || { roles: {}, locations: {}, defaultRole: 'full_access' };
-    } catch (e) {
-      console.error('Failed to load permissions:', e);
-      // Fallback: try static file (for development without gateway)
+  async init(config) {
+    if (config && config.permissions) {
+      // Use config already fetched by App.init() — avoids duplicate /api/config request
+      this.permissions = config.permissions;
+    } else {
       try {
-        const resp = await fetch('config/permissions.json');
-        this.permissions = await resp.json();
-      } catch (e2) {
-        this.permissions = { roles: {}, locations: {}, defaultRole: 'full_access' };
+        // Load permissions from gateway config endpoint (no static JSON files)
+        const resp = await fetch('/api/config');
+        const cfg = await resp.json();
+        this.permissions = cfg.permissions || { roles: {}, locations: {}, defaultRole: 'full_access' };
+      } catch (e) {
+        console.error('Failed to load permissions:', e);
+        // Fallback: try static file (for development without gateway)
+        try {
+          const resp = await fetch('config/permissions.json');
+          this.permissions = await resp.json();
+        } catch (e2) {
+          this.permissions = { roles: {}, locations: {}, defaultRole: 'full_access' };
+        }
       }
     }
 

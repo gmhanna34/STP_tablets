@@ -536,7 +536,13 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     app = Flask(__name__, static_folder=None)
     app.config["SECRET_KEY"] = sec_cfg.get("secret_key", os.urandom(24).hex())
 
-    socketio = SocketIO(app, async_mode="eventlet", cors_allowed_origins="*")
+    socketio = SocketIO(
+        app,
+        async_mode="eventlet",
+        cors_allowed_origins="*",
+        ping_timeout=60,      # 60s — generous for WiFi tablets with latency spikes
+        ping_interval=25,     # 25s — standard keep-alive interval
+    )
 
     logger = setup_logging(cfg)
     db = Database(cfg.get("database", {}).get("path", "stp_gateway.db"))
