@@ -546,13 +546,16 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
 
     logger = setup_logging(cfg)
 
-    # Enable Engine.IO logging to diagnose transport-level disconnects
+    # Engine.IO / Socket.IO logging — WARNING only (INFO logs every packet,
+    # which generates enormous output with multiple tablets connected).
+    # Our own connect/disconnect/diag handlers already log what we need.
     import logging as _logging
-    eio_logger = _logging.getLogger("engineio.server")
-    eio_logger.setLevel(_logging.INFO)
-    # Route through our handler so it goes to the same log file
-    for h in logger.handlers:
-        eio_logger.addHandler(h)
+    for _eio_name in ("engineio.server", "engineio.client", "socketio.server", "socketio.client"):
+        _eio_lg = _logging.getLogger(_eio_name)
+        _eio_lg.setLevel(_logging.WARNING)
+        _eio_lg.propagate = False          # prevent triple-logging via root
+        for h in logger.handlers:
+            _eio_lg.addHandler(h)
 
     db = Database(cfg.get("database", {}).get("path", "stp_gateway.db"))
     state_cache = StateCache()
@@ -3396,7 +3399,13 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             if mock_mode:
                 return MockBackend.X32_STATUS
             try:
-                return x32.get_status()
+                status = x32.get_status()
+                # Strip age_seconds — it changes every poll even when mixer
+                # state hasn't, which defeats StateCache change detection and
+                # causes ~10 KB broadcasts to every tablet every 5 s.
+                if status:
+                    status.pop("age_seconds", None)
+                return status
             except Exception:
                 return None
 
