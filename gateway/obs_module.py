@@ -9,24 +9,25 @@ Key design:
 - Background poller: PING (GetVersion) determines online/offline with fail-streak gating,
   SNAPSHOT collects streaming/recording/scene/stats data.
 - All public methods return plain dicts suitable for jsonify().
-- Thread-safe: lock protects all mutable state.
-- IMPORTANT: Uses real stdlib threading/asyncio (not eventlet-patched) because
-  simpleobsws relies on real asyncio and real OS threads for its WebSocket I/O.
+- IMPORTANT: The asyncio loop and poller run in real OS threads (not eventlet green
+  threads) because simpleobsws needs real asyncio. We use eventlet.patcher.original()
+  for threading and time to avoid greenlet cross-thread errors. Flask-facing methods
+  are lock-free (CPython GIL guarantees atomic attribute reads/writes).
 """
 
 from __future__ import annotations
 
 import logging
-import time as _time
 from typing import Any, Dict, Optional, Tuple
 
-# eventlet.monkey_patch() replaces stdlib threading with green threads.
-# simpleobsws needs real OS threads for its WebSocket I/O, so we retrieve
-# the original threading module. asyncio is NOT patched by eventlet, so
-# we can import it normally.
+# asyncio is NOT patched by eventlet — import normally.
 import asyncio as _asyncio
+
+# eventlet.monkey_patch() replaces stdlib threading and time.sleep with green
+# versions. Our poller runs in a real OS thread, so we need the originals.
 import eventlet.patcher
 _threading = eventlet.patcher.original("threading")
+_time = eventlet.patcher.original("time")
 
 import simpleobsws
 
@@ -75,6 +76,13 @@ class OBSModule:
 
     Replaces obs-flask.py middleware — the gateway connects directly to OBS
     Studio via WebSocket instead of proxying through HTTP on port 4456.
+
+    Thread safety model:
+    - The poller thread (real OS thread) is the sole writer of all state.
+    - Flask handlers (eventlet green threads) only read state or submit
+      requests to the asyncio event loop.
+    - No cross-thread locking needed: CPython's GIL makes single-attribute
+      reads/writes atomic, and the asyncio loop serializes WebSocket access.
     """
 
     def __init__(self, cfg: dict, logger: logging.Logger) -> None:
@@ -90,8 +98,8 @@ class OBSModule:
         self._offline_after_seconds = float(cfg.get("offline_after_seconds", 10.0))
         self._ping_fails_to_offline = int(cfg.get("ping_fails_to_offline", 3))
 
-        # State (protected by _lock)
-        self._lock = _threading.Lock()
+        # State — written only by the poller thread, read by Flask handlers.
+        # Single-attribute reads are atomic under CPython's GIL.
         self._ws: Optional[simpleobsws.WebSocketClient] = None
         self._connected: bool = False
         self._online: bool = False
@@ -101,7 +109,7 @@ class OBSModule:
         self._snapshot: Optional[Dict[str, Any]] = None
         self._snapshot_ts: float = 0.0
 
-        # Thread control
+        # Thread control (real OS thread, not eventlet green thread)
         self._stop = _threading.Event()
         self._thread = _threading.Thread(target=self._run, daemon=True)
 
@@ -117,10 +125,9 @@ class OBSModule:
 
     def stop(self) -> None:
         self._stop.set()
-        with self._lock:
-            self._disconnect()
+        self._disconnect()
 
-    # --- Connection management (must hold self._lock) ---
+    # --- Connection management (called only from poller thread) ---
 
     def _ensure_connected(self) -> bool:
         if self._connected and self._ws:
@@ -153,7 +160,11 @@ class OBSModule:
         self._ws = None
         self._connected = False
 
-    # --- Public request methods (thread-safe) ---
+    # --- Public request methods (called from Flask/eventlet green threads) ---
+    #
+    # These grab a reference to self._ws (atomic read under GIL), then submit
+    # work to the asyncio event loop which serializes WebSocket access.
+    # No lock needed.
 
     def call(self, request_type: str, request_data: dict = None,
              timeout: float = 10.0) -> Tuple[Optional[dict], Optional[str]]:
@@ -161,79 +172,78 @@ class OBSModule:
 
         response_dict matches obs-websocket-http JSON format for backward compat.
         """
-        with self._lock:
-            if not self._online or not self._connected:
-                return None, "obs-websocket is not connected."
-            try:
-                req = simpleobsws.Request(request_type, request_data)
-                resp = run_async(self._ws.call(req), timeout=timeout)
-                ret = {
-                    "requestType": resp.requestType,
-                    "requestStatus": {
-                        "result": resp.requestStatus.result,
-                        "code": resp.requestStatus.code,
-                    },
-                }
-                if resp.requestStatus.comment:
-                    ret["requestStatus"]["comment"] = resp.requestStatus.comment
-                if resp.responseData:
-                    ret["responseData"] = resp.responseData
-                return ret, None
-            except simpleobsws.MessageTimeout:
-                return None, "The obs-websocket request timed out."
-            except Exception as e:
-                self._online = False
-                self._last_error = str(e)
-                self._ping_fail_streak = self._ping_fails_to_offline
-                self._disconnect()
-                return None, str(e)
+        if not self._online or not self._connected:
+            return None, "obs-websocket is not connected."
+        ws = self._ws
+        if ws is None:
+            return None, "obs-websocket is not connected."
+        try:
+            req = simpleobsws.Request(request_type, request_data)
+            resp = run_async(ws.call(req), timeout=timeout)
+            ret = {
+                "requestType": resp.requestType,
+                "requestStatus": {
+                    "result": resp.requestStatus.result,
+                    "code": resp.requestStatus.code,
+                },
+            }
+            if resp.requestStatus.comment:
+                ret["requestStatus"]["comment"] = resp.requestStatus.comment
+            if resp.responseData:
+                ret["responseData"] = resp.responseData
+            return ret, None
+        except simpleobsws.MessageTimeout:
+            return None, "The obs-websocket request timed out."
+        except Exception as e:
+            # Flag offline so the poller can reconnect on next cycle.
+            self._online = False
+            self._last_error = str(e)
+            return None, str(e)
 
     def emit(self, request_type: str,
              request_data: dict = None) -> Optional[str]:
         """Fire-and-forget OBS request. Returns error string or None on success."""
-        with self._lock:
-            if not self._online or not self._connected:
-                return "obs-websocket is not connected."
-            try:
-                req = simpleobsws.Request(request_type, request_data)
-                run_async(self._ws.emit(req), timeout=5)
-                return None
-            except Exception as e:
-                return str(e)
+        if not self._online or not self._connected:
+            return "obs-websocket is not connected."
+        ws = self._ws
+        if ws is None:
+            return "obs-websocket is not connected."
+        try:
+            req = simpleobsws.Request(request_type, request_data)
+            run_async(ws.emit(req), timeout=5)
+            return None
+        except Exception as e:
+            return str(e)
 
-    # --- Status / snapshot (thread-safe) ---
+    # --- Status / snapshot (called from Flask/eventlet green threads) ---
+    #
+    # Lock-free reads — CPython GIL guarantees atomic attribute access.
 
     def get_status(self) -> Tuple[dict, int]:
         """Return health/status dict for /api/obs/status. Returns (dict, http_status)."""
-        with self._lock:
-            online = self._online
-            error = self._last_error
-            age_ok = (
-                round(_time.time() - self._last_ok_ts, 2)
-                if self._last_ok_ts else None
-            )
-            snap = self._snapshot
-
-        data = None
-        if isinstance(snap, dict):
-            data = snap
+        online = self._online
+        error = self._last_error
+        age_ok = (
+            round(_time.time() - self._last_ok_ts, 2)
+            if self._last_ok_ts else None
+        )
+        snap = self._snapshot
 
         status_code = 200 if online else 503
         return {
             "healthy": online,
             "age_seconds": age_ok,
-            "data": data,
+            "data": snap if isinstance(snap, dict) else None,
             "error": error or "",
         }, status_code
 
     def get_snapshot(self) -> Optional[dict]:
         """Return cached snapshot for the polling loop. None if offline."""
-        with self._lock:
-            if not self._online:
-                return None
-            return self._snapshot
+        if not self._online:
+            return None
+        return self._snapshot
 
-    # --- Poll internals (must hold self._lock and be connected) ---
+    # --- Poll internals (called only from poller thread) ---
 
     def _ping(self) -> None:
         req = simpleobsws.Request("GetVersion")
@@ -338,7 +348,7 @@ class OBSModule:
 
         return snap
 
-    # --- Poller loop ---
+    # --- Poller loop (runs in real OS thread) ---
 
     def _run(self) -> None:
         self._logger.info("OBS: Poller thread started")
@@ -351,55 +361,52 @@ class OBSModule:
             start = _time.time()
 
             # 1) PING determines online/offline
-            with self._lock:
-                try:
-                    if not self._ensure_connected():
-                        raise RuntimeError("Cannot connect to OBS")
-                    self._ping()
+            try:
+                if not self._ensure_connected():
+                    raise RuntimeError("Cannot connect to OBS")
+                self._ping()
 
-                    self._ping_fail_streak = 0
-                    self._online = True
-                    self._last_ok_ts = _time.time()
-                    self._last_error = ""
-                except Exception as e:
-                    self._ping_fail_streak += 1
-                    self._last_error = (
-                        f"ping failed ({self._ping_fail_streak}): {e}"
-                    )
+                self._ping_fail_streak = 0
+                self._online = True
+                self._last_ok_ts = _time.time()
+                self._last_error = ""
+            except Exception as e:
+                self._ping_fail_streak += 1
+                self._last_error = (
+                    f"ping failed ({self._ping_fail_streak}): {e}"
+                )
 
-                    if (self._ping_fail_streak == 1
-                            or self._ping_fail_streak % 5 == 0):
-                        self._logger.warning(f"OBS: {self._last_error}")
+                if (self._ping_fail_streak == 1
+                        or self._ping_fail_streak % 5 == 0):
+                    self._logger.warning(f"OBS: {self._last_error}")
 
-                    if self._ping_fail_streak >= self._ping_fails_to_offline:
-                        self._online = False
-                        self._disconnect()
+                if self._ping_fail_streak >= self._ping_fails_to_offline:
+                    self._online = False
+                    self._disconnect()
 
             # Belt-and-suspenders offline threshold
-            with self._lock:
-                if (self._last_ok_ts
-                        and (_time.time() - self._last_ok_ts)
-                        > self._offline_after_seconds):
-                    self._online = False
+            if (self._last_ok_ts
+                    and (_time.time() - self._last_ok_ts)
+                    > self._offline_after_seconds):
+                self._online = False
 
             # 2) SNAPSHOT refresh (only if online and due)
             now = _time.time()
             if now - last_snapshot_attempt >= self._snapshot_seconds:
                 last_snapshot_attempt = now
 
-                with self._lock:
-                    if self._online and self._connected:
-                        try:
-                            snap = self._build_snapshot()
-                            self._snapshot = snap
-                            self._snapshot_ts = _time.time()
-                        except Exception as e:
-                            self._last_error = f"snapshot failed: {e}"
-                            if now - last_warn_log >= 10.0:
-                                last_warn_log = now
-                                self._logger.warning(
-                                    f"OBS: {self._last_error}"
-                                )
+                if self._online and self._connected:
+                    try:
+                        snap = self._build_snapshot()
+                        self._snapshot = snap
+                        self._snapshot_ts = _time.time()
+                    except Exception as e:
+                        self._last_error = f"snapshot failed: {e}"
+                        if now - last_warn_log >= 10.0:
+                            last_warn_log = now
+                            self._logger.warning(
+                                f"OBS: {self._last_error}"
+                            )
 
             # Sleep until next ping cadence
             elapsed = _time.time() - start
