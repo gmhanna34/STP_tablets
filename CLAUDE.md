@@ -14,6 +14,7 @@ STP_tablets/              → Gateway + Frontend (this repo)
 │   ├── moip_module.py   ← Phase 2: direct MoIP controller Telnet
 │   ├── obs_module.py    ← Phase 3: direct OBS Studio WebSocket
 │   ├── health_module.py ← Phase 4: built-in health monitoring
+│   ├── occupancy_module.py ← Phase 6: occupancy analytics (CSV + download)
 │   ├── config.yaml
 │   ├── macros.yaml
 │   └── requirements.txt
@@ -32,6 +33,8 @@ STP_scripts/              → Middleware proxies (archived, rollback only)
 └── obs-flask.py
 
 STP_healthdash/           → Monitoring dashboard (archived, absorbed in Phase 4)
+
+STP_Occupancy/            → Occupancy dashboard (archived, absorbed in Phase 6)
 ```
 
 ## Architecture
@@ -50,6 +53,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 │ • Audit logging (SQLite) │
 │ • Auth (IP allowlist+PIN)│
 │ • Health monitoring      │
+│ • Occupancy analytics    │
 └──────────┬───────────────┘
            │
      ┌─────┼─────┬──────────┬───────────┐
@@ -70,6 +74,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
   Home Assistant @ 192.168.1.245:8123 (power, WattBox, EcoFlow)
 
   Health Module (built-in) — 30+ service checks, alerts, recovery
+  Occupancy Module (built-in) — CSV analytics, daily download, Chart.js dashboard
 ```
 
 ## Key Files
@@ -82,7 +87,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 - **js/app.js** — Main controller, Socket.IO connection
 - **js/auth.js** — PIN auth + session management
 - **js/router.js** — Hash-based SPA routing
-- **js/pages/*.js** — 11 page controllers (home, main, chapel, social, gym, confroom, stream, source, security, health, settings)
+- **js/pages/*.js** — 12 page controllers (home, main, chapel, social, gym, confroom, stream, source, security, health, occupancy, settings)
 - **js/api/*.js** — API modules (obs, x32, moip, wattbox, ptz, epson, health, macro)
 - **css/styles.css** — Dark theme, touch-optimized, Material Design Icons
 
@@ -90,7 +95,8 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 - **gateway.py** — Central gateway (~1,800 lines), Flask + SocketIO
 - **config.yaml** — All secrets, device IPs, middleware URLs, polling intervals
 - **macros.yaml** — 20+ named action sequences with step types: `ha_check`, `ha_service`, `moip_switch`, `epson_power`, `delay`, `condition`
-- **requirements.txt** — flask, flask-socketio, eventlet, requests, pyyaml
+- **occupancy_module.py** — Occupancy analytics (CSV parsing, daily download, pandas)
+- **requirements.txt** — flask, flask-socketio, eventlet, requests, pyyaml, pandas
 
 ### Middleware (`STP_scripts/` — separate repo)
 - **x32-flask.py** — ~~Audio mixer proxy (HTTP → OSC/UDP), port 3400~~ **DEPRECATED** — absorbed into `gateway/x32_module.py` (Phase 1)
@@ -159,8 +165,8 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
 ## Tech Stack
 
-- **Frontend:** Vanilla JS, Socket.IO client, Material Design Icons, CSS Grid
-- **Backend:** Python 3, Flask, Flask-SocketIO, Eventlet
+- **Frontend:** Vanilla JS, Socket.IO client, Chart.js (CDN), Material Design Icons, CSS Grid
+- **Backend:** Python 3, Flask, Flask-SocketIO, Eventlet, pandas
 - **Middleware:** All middleware absorbed into gateway (X32 Phase 1, MoIP Phase 2, OBS Phase 3)
 - **X32 Protocol:** xair-api (python-osc) for direct OSC/UDP communication
 - **MoIP Protocol:** Raw TCP sockets for direct Telnet communication with Binary MoIP controller (migrated from telnetlib for Python 3.13 compatibility)
@@ -178,13 +184,15 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
 ## What's Been Built
 
-- Full tablet UI with 10 pages and per-tablet permissions
+- Full tablet UI with 12 pages and per-tablet permissions
 - Gateway with REST + WebSocket API for all device types
 - Three middleware proxies (X32 audio, MoIP video, OBS streaming)
 - Macro execution engine with scheduling support
 - Scene engine for video routing presets
 - Audit logging to SQLite
 - Built-in health monitoring of 30+ services with alerting (absorbed from STP_healthdash)
+- Occupancy analytics dashboard with Chart.js charts, KPI cards, pacing drill-down (absorbed from STP_Occupancy)
+- Automated CSV download from Camlytics cloud (absorbed from STP_scripts scheduled tasks)
 - PTZ camera control (10 cameras, server-side to avoid CORS)
 - Epson projector control (4 projectors)
 - Home Assistant integration (power, WattBox, EcoFlow batteries)
@@ -204,7 +212,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 | 3 | Absorb OBS middleware (`obs-flask.py`) into gateway | **Complete** |
 | 4 | Absorb HealthDash (`STP_healthdash/app.py`) into gateway as a module + frontend page | **Complete** |
 | 5 | Centralize all secrets into `.env` — remove duplication from config.yaml and middleware | Not started |
-| 6 | Absorb occupancy app (`STP_occupancy/` repo) into gateway | Not started |
+| 6 | Absorb occupancy app (`STP_Occupancy/` repo) into gateway | **Complete** |
 | 7 | Sunset The Home Remote (THR) — remove `STP_THRFiles_Current` dependency | Not started |
 | 8 | Migrate consolidated gateway to Mac Mini | Not started |
 
@@ -228,7 +236,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
 **Phase 5 (Secrets):** Make `.env` the single source of truth for all secrets. `config.yaml` keeps only non-sensitive config (IPs, polling intervals, device names). Remove all hardcoded keys/passwords from config files.
 
-**Phase 6 (Occupancy):** Move occupancy data logic from `STP_occupancy/` into a gateway module. This is the Camlytics data consumption layer (cloud API polling), not the Camlytics desktop app itself.
+**Phase 6 (Occupancy) — COMPLETE:** Moved CSV-based occupancy analytics from `STP_Occupancy/app.py` into `gateway/occupancy_module.py`. The gateway now scans Camlytics CSV exports (BuildingOccupancy/ and CommunionCounts/ sub-folders), parses weekly trends, communion counts, occupancy pacing, and participation ratios using pandas. CSV downloads from Camlytics cloud (previously handled by Windows Scheduled Task scripts in `STP_scripts/`) are now run by the module's internal daily scheduler. Added `#occupancy` page to frontend with Chart.js charts (occupancy trend, communion trend, comparison bar chart, pacing drill-down), KPI summary cards, week-over-week table, and buffer configuration display. Page is accessed via "View Weekly Analytics" button in the people counting panel (no nav bar button). Port 20857 is no longer required. New dependency: `pandas>=2.0`. The standalone `STP_Occupancy/app.py` remains as a rollback option.
 
 **Phase 7 (THR Sunset):** Remove THR dependency from operational workflow. Archive `STP_THRFiles_Current`. Remove THR-specific HealthDash checks.
 

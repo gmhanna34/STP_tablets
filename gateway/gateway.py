@@ -557,6 +557,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     from health_module import HealthModule
     health = None if mock_mode else HealthModule(cfg, logger)
 
+    # Occupancy analytics — absorbed from STP_Occupancy (Phase 6 consolidation)
+    from occupancy_module import OccupancyModule
+    occupancy = None if mock_mode else OccupancyModule(cfg, logger)
+
     allowed_ips = sec_cfg.get("allowed_ips", ["127.0.0.1"])
     settings_pin = sec_cfg.get("settings_pin", "1234")
     remote_auth = sec_cfg.get("remote_auth", {})
@@ -1085,6 +1089,40 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             return jsonify({"ok": True}), 200
         health.force_check_now()
         return jsonify({"ok": True}), 200
+
+    # -------------------------------------------------------------------------
+    # OCCUPANCY API ENDPOINTS (Phase 6 consolidation)
+    # -------------------------------------------------------------------------
+
+    @app.route("/api/occupancy/data")
+    def api_occupancy_data():
+        """Return cached weekly summary, trends, pacing data."""
+        if occupancy is None:
+            return jsonify({"error": "Occupancy module not available (mock mode)"}), 503
+        data = occupancy.get_data()
+        if not data:
+            return jsonify({"error": "Data not loaded yet. Try refreshing."}), 503
+        if "error" in data:
+            return jsonify({"error": data["error"]}), 404
+        return jsonify(data)
+
+    @app.route("/api/occupancy/refresh", methods=["POST"])
+    def api_occupancy_refresh():
+        """Manual refresh — re-scan CSV data directory."""
+        if occupancy is None:
+            return jsonify({"ok": True}), 200
+        try:
+            occupancy.refresh_data()
+            return jsonify({"ok": True, "message": "Data refreshed successfully."})
+        except Exception as e:
+            return jsonify({"ok": False, "message": str(e)}), 500
+
+    @app.route("/api/occupancy/config")
+    def api_occupancy_config():
+        """Return buffer schedule + communion/occupancy windows."""
+        if occupancy is None:
+            return jsonify({}), 200
+        return jsonify(occupancy.get_config())
 
     @app.route("/api/config")
     def api_config():
@@ -3276,6 +3314,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         # Start the Health module's checker loop (Phase 4 consolidation)
         if health is not None:
             health.start()
+
+        # Start the Occupancy module's scheduler (Phase 6 consolidation)
+        if occupancy is not None:
+            occupancy.start()
 
         poll_cfg = cfg.get("polling", {})
 

@@ -1686,6 +1686,13 @@ body {
   font-size: 18px;
 }
 
+.camlytics-analytics-link {
+  text-align: center;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
 @media (max-width: 599px) {
   .camlytics-hero { grid-template-columns: 1fr; }
   .camlytics-card-hero .camlytics-card-value { font-size: 64px; }
@@ -3345,3 +3352,282 @@ body.compact .cam-tab {
   border-color: var(--down);
 }
 .health-confirm-actions .btn-danger:hover { filter: brightness(1.1); }
+
+/* ============================================================
+   Occupancy Dashboard Page (Phase 6 — ported from STP_Occupancy)
+   ============================================================ */
+
+.occ-page {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.occ-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.occ-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+}
+
+.occ-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.occ-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Status bar */
+.occ-status {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  background: var(--surface);
+  border-left: 4px solid var(--border-heavy);
+  color: var(--text-secondary);
+}
+
+.occ-status-error {
+  border-left-color: var(--down);
+  color: var(--down);
+}
+
+/* KPI row */
+.occ-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.occ-kpi-card {
+  background: var(--surface);
+  border-radius: 10px;
+  border-left: 5px solid #b8860b;
+  padding: 12px;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s;
+}
+
+.occ-kpi-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.occ-kpi-label {
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.occ-kpi-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text);
+}
+
+.occ-kpi-gold { color: #b8860b; }
+.occ-kpi-rust { color: #8b3a2a; }
+.occ-kpi-sage { color: #4a6741; }
+
+.occ-kpi-sub {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.occ-kpi-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 20px;
+  color: var(--text-secondary);
+}
+
+/* Chart cards */
+.occ-card {
+  background: var(--surface);
+  border-radius: 10px;
+  border-left: 5px solid var(--ok);
+  padding: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+.occ-card-full {
+  width: 100%;
+}
+
+.occ-card-muted {
+  border-left-color: var(--border-heavy);
+}
+
+.occ-card-header {
+  margin-bottom: 10px;
+}
+
+.occ-card-header h2 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text);
+}
+
+.occ-card-desc {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.occ-chart-section,
+.occ-chart-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.occ-chart-row .occ-card {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+
+.occ-chart-wrap {
+  position: relative;
+  height: 240px;
+}
+
+.occ-chart-wrap-tall {
+  height: 300px;
+}
+
+.occ-hidden {
+  display: none !important;
+}
+
+/* Pacing section */
+.occ-pacing-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.occ-pacing-mode-toggle {
+  display: flex;
+  gap: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.occ-toggle-btn {
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  border: none;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.occ-toggle-btn.occ-toggle-active {
+  background: var(--sp-dark);
+  color: #fff;
+  font-weight: 600;
+}
+
+.occ-pacing-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.occ-pacing-tab {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.occ-pacing-tab-active {
+  background: var(--sp-dark);
+  color: #fff;
+  border-color: var(--sp-dark);
+  font-weight: 700;
+}
+
+/* Week / buffer tables */
+.occ-table-wrap {
+  overflow-x: auto;
+}
+
+.occ-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.occ-table th {
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.occ-table td {
+  padding: 6px 8px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.occ-num {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.occ-muted {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.occ-ratio-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 120px;
+}
+
+.occ-ratio-fill {
+  height: 6px;
+  background: #b8860b;
+  border-radius: 3px;
+  min-width: 2px;
+  transition: width 0.6s ease;
+}
+
+.occ-ratio-label {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
