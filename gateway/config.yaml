@@ -223,11 +223,11 @@ healthdash:
       - "47.150."
 
   services:
-    - id: "x32_middleware"
-      name: "x32 Flask Middleware (Audio)"
+    - id: "x32_module"
+      name: "X32 Audio (Built-in Module)"
       group: "Core"
       type: "http_json"
-      url: "http://127.0.0.1:3400/health"
+      url: "http://127.0.0.1:20858/api/x32/health"
       ok_json_path: "healthy"
       ok_json_value: true
       detail_json_paths:
@@ -239,35 +239,25 @@ healthdash:
       log_path: ""                     # Set to local log path on server
       alert:
         enabled: false
-      recovery:
-        type: "ha_service"
-        domain: "script"
-        service: "turn_on"
-        service_data:
-          entity_id: "script.restart_x32_middleware"
 
-    - id: "moip_middleware"
-      name: "MoIP Flask Middleware (Video)"
+    - id: "moip_module"
+      name: "MoIP Video (Built-in Module)"
       group: "Core"
       type: "http_json"
-      url: "http://127.0.0.1:5002/status"
+      url: "http://127.0.0.1:20858/api/moip/health"
       ok_json_path: "healthy"
       ok_json_value: true
       warn_if_ms_gt: 500
       timeout_seconds: 10
       log_path: ""
-      recovery:
-        type: "ha_service"
-        domain: "script"
-        service: "turn_on"
-        service_data:
-          entity_id: "script.restart_moip_middleware"
 
-    - id: "obs"
-      name: "OBS Flask Middleware (Live Stream)"
+    - id: "obs_module"
+      name: "OBS Streaming (Built-in Module)"
       group: "Core"
-      type: "obs_rpc"
-      base_url: "http://127.0.0.1:4456"
+      type: "http_json"
+      url: "http://127.0.0.1:20858/api/obs/status"
+      ok_json_path: "healthy"
+      ok_json_value: true
       timeout_seconds: 5
       log_path: ""
       alert:
@@ -275,12 +265,6 @@ healthdash:
         warn_after_seconds: 180
         down_after_seconds: 360
         cooldown_seconds: 300
-      recovery:
-        type: "ha_service"
-        domain: "script"
-        service: "turn_on"
-        service_data:
-          entity_id: "script.restart_obs_middleware"
 
     - id: "stp_gateway"
       name: "STP Gateway (Control Panel)"
@@ -777,6 +761,7 @@ healthdash:
       timeout_seconds: 20
       poll_interval_seconds: 60
       ok_http_codes: [200, 405]
+      show_standalone: false
       alert:
         enabled: true
         down_after_seconds: 3000
@@ -790,6 +775,7 @@ healthdash:
       timeout_seconds: 20
       poll_interval_seconds: 60
       ok_http_codes: [200, 405]
+      show_standalone: false
       alert:
         enabled: true
         down_after_seconds: 3000
@@ -803,6 +789,7 @@ healthdash:
       timeout_seconds: 20
       poll_interval_seconds: 60
       ok_http_codes: [200, 405]
+      show_standalone: false
       alert:
         enabled: true
         down_after_seconds: 3000
@@ -816,6 +803,7 @@ healthdash:
       timeout_seconds: 20
       poll_interval_seconds: 60
       ok_http_codes: [200, 405]
+      show_standalone: false
       alert:
         enabled: true
         down_after_seconds: 3000
