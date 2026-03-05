@@ -305,11 +305,11 @@ const App = {
     update();
     this.healthTimer = setInterval(update, 30000);
 
-    // Make health pills clickable — open health dashboard panel
+    // Make health pills clickable — navigate to built-in health page
     const healthSection = document.getElementById('status-health');
     if (healthSection) {
       healthSection.style.cursor = 'pointer';
-      healthSection.addEventListener('click', () => this.openHealthDashPanel());
+      healthSection.addEventListener('click', () => Router.navigate('health'));
     }
   },
 
@@ -374,18 +374,67 @@ const App = {
   },
 
   openHealthDashPanel() {
-    const url = HealthAPI.getStatusUrl();
-    if (!url) {
-      this.showToast('Health dashboard URL not configured');
-      return;
-    }
-    this.showPanel('System Health', (body) => {
-      body.style.padding = '0';
-      body.innerHTML = `
-        <iframe src="${url}"
-          style="width:100%;height:100%;border:none;border-radius:0 0 16px 16px;">
-        </iframe>
-      `;
+    this.showPanel('System Health', async (body) => {
+      body.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.5;">Loading…</div>';
+      try {
+        const resp = await fetch('/api/healthdash/status', { signal: AbortSignal.timeout(5000) });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        const results = data.results || {};
+        const entries = Object.values(results);
+
+        // Count by level
+        const counts = { down: 0, warning: 0, healthy: 0 };
+        entries.forEach(r => {
+          const lvl = (r.status && r.status.level) || 'down';
+          counts[lvl] = (counts[lvl] || 0) + 1;
+        });
+
+        // Sort: down first, then warning, then healthy
+        const order = { down: 0, warning: 1, healthy: 2 };
+        entries.sort((a, b) => (order[(a.status||{}).level] || 0) - (order[(b.status||{}).level] || 0));
+
+        let html = `
+          <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+            <div class="health-badge health-down" style="display:${counts.down ? 'inline-flex' : 'none'};width:auto;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600;">${counts.down} Down</div>
+            <div class="health-badge health-warning" style="display:${counts.warning ? 'inline-flex' : 'none'};width:auto;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600;">${counts.warning} Warning</div>
+            <div class="health-badge health-healthy" style="display:${counts.healthy ? 'inline-flex' : 'none'};width:auto;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600;">${counts.healthy} Healthy</div>
+          </div>
+          <div style="max-height:60vh;overflow-y:auto;">
+        `;
+
+        entries.forEach(r => {
+          const lvl = (r.status && r.status.level) || 'down';
+          const dotColor = lvl === 'healthy' ? 'var(--ok)' : lvl === 'warning' ? 'var(--warn)' : 'var(--down)';
+          const msg = r.message || r.status?.label || '';
+          html += `
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-color, rgba(255,255,255,0.08));">
+              <span style="width:10px;height:10px;border-radius:50%;background:${dotColor};flex-shrink:0;"></span>
+              <span style="flex:1;font-size:13px;">${r.name || r.id}</span>
+              <span style="font-size:11px;opacity:0.6;max-width:40%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${msg}</span>
+            </div>
+          `;
+        });
+
+        html += '</div>';
+        html += `<div style="margin-top:16px;text-align:center;">
+          <button id="health-panel-fullpage" class="btn" style="font-size:13px;">
+            <span class="material-icons" style="font-size:16px;vertical-align:middle;margin-right:4px;">open_in_full</span>
+            Open Full Dashboard
+          </button>
+        </div>`;
+
+        body.innerHTML = html;
+        document.getElementById('health-panel-fullpage')?.addEventListener('click', () => {
+          this.closePanel();
+          Router.navigate('health');
+        });
+      } catch (e) {
+        body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--down);">
+          <span class="material-icons" style="font-size:48px;display:block;margin-bottom:8px;">error_outline</span>
+          Health data unavailable<br><small style="opacity:0.6;">${e.message}</small>
+        </div>`;
+      }
     });
   },
 
