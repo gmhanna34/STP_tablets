@@ -3250,15 +3250,19 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     # SOCKET.IO EVENTS
     # -------------------------------------------------------------------------
 
+    _sid_to_tablet: dict = {}   # sid → tablet name for disconnect logging
+
     @socketio.on("connect")
     def on_connect():
         tablet = request.args.get("tablet", "Unknown")
+        _sid_to_tablet[request.sid] = tablet
         logger.info(f"SocketIO connect: tablet={tablet} sid={request.sid}")
         db.upsert_session(tablet, socket_id=request.sid)
 
     @socketio.on("disconnect")
     def on_disconnect():
-        logger.info(f"SocketIO disconnect: sid={request.sid}")
+        tablet = _sid_to_tablet.pop(request.sid, "Unknown")
+        logger.info(f"SocketIO disconnect: tablet={tablet} sid={request.sid}")
 
     @socketio.on("join")
     def on_join(data):

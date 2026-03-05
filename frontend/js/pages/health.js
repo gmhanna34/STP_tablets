@@ -9,6 +9,9 @@ const HealthPage = {
       <div class="health-page">
         <div class="health-header">
           <div class="health-header-left">
+            <button class="btn-action" id="health-back-btn" title="Back">
+              <span class="material-icons">arrow_back</span>
+            </button>
             <h1 class="health-title">Critical Systems Health Dashboard</h1>
             <div class="health-subtitle">
               Last update: <span id="health-last-update">—</span>
@@ -382,6 +385,11 @@ const HealthPage = {
   // --- Events ---
 
   _bindEvents() {
+    // Back button
+    document.getElementById('health-back-btn')?.addEventListener('click', () => {
+      Router.navigate('home');
+    });
+
     // Refresh button
     const refreshBtn = document.getElementById('health-refresh-btn');
     if (refreshBtn) {
