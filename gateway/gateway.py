@@ -137,6 +137,7 @@ def _apply_env_overrides(cfg: dict):
                 ba["password"] = _env("WATTBOX_PASSWORD", "")
 
     wb = cfg.setdefault("wattbox", {})
+    wb["username"] = _env("WATTBOX_USERNAME", wb.get("username", "admin"))
     wb["password"] = _env("WATTBOX_PASSWORD", wb.get("password", ""))
 
     sec = cfg.setdefault("security", {})
@@ -148,6 +149,10 @@ def _apply_env_overrides(cfg: dict):
 
     fk = cfg.setdefault("fully_kiosk", {})
     fk["password"] = _env("FULLY_KIOSK_PASSWORD", fk.get("password", ""))
+
+    # Anthropic API key (chatbot)
+    anth = cfg.setdefault("anthropic", {})
+    anth["api_key"] = _env("ANTHROPIC_API_KEY", anth.get("api_key", ""))
 
 
 # =============================================================================
@@ -3183,7 +3188,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if not message:
             return jsonify({"error": "message required"}), 400
 
-        api_key = cfg.get("anthropic", {}).get("api_key", "") or os.environ.get("ANTHROPIC_API_KEY", "")
+        api_key = cfg.get("anthropic", {}).get("api_key", "")
         if not api_key:
             return jsonify({"error": "Chatbot not configured. Ask an admin to add the API key."}), 503
 
