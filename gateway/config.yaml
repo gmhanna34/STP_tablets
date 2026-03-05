@@ -42,6 +42,7 @@ obs:
   snapshot_seconds: 6.0
   offline_after_seconds: 10.0
   ping_fails_to_offline: 3
+  max_scenes: 10                   # Only show the first N scenes from OBS
 
 # --- MoIP controller (direct Telnet, Phase 2 consolidation) ------------------
 moip:
@@ -105,7 +106,7 @@ home_assistant:
 
 # --- WattBox direct control (break-glass fallback, bypasses Home Assistant) ---
 wattbox:
-  username: "admin"
+  username: "admin"                 # Set WATTBOX_USERNAME in .env
   password: ""                     # Set WATTBOX_PASSWORD in .env
   timeout: 5
   # Map friendly device names → WattBox PDU IP + outlet number
@@ -157,10 +158,6 @@ camlytics:
   enter_buffer_default: 0
   peak_window_hours: 2                # Look-back window for peak detection in chart data
   poll_interval: 5                    # Seconds between Camlytics API polls
-
-# --- OBS settings -------------------------------------------------------------
-obs:
-  max_scenes: 10    # Only show the first N scenes from OBS
 
 # --- State polling intervals (seconds) ----------------------------------------
 polling:
