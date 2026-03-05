@@ -377,41 +377,46 @@ const App = {
     this.showPanel('System Health', async (body) => {
       body.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.5;">Loading…</div>';
       try {
-        const resp = await fetch('/api/healthdash/status', { signal: AbortSignal.timeout(5000) });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
-        const results = data.results || {};
-        const entries = Object.values(results);
+        const [sumResp, svcResp, statusResp] = await Promise.all([
+          fetch('/api/healthdash/summary', { signal: AbortSignal.timeout(5000) }),
+          fetch('/api/healthdash/services', { signal: AbortSignal.timeout(5000) }),
+          fetch('/api/healthdash/status', { signal: AbortSignal.timeout(5000) }),
+        ]);
+        if (!sumResp.ok || !svcResp.ok || !statusResp.ok) throw new Error('Failed to load health data');
+        const summary = await sumResp.json();
+        const svcData = await svcResp.json();
+        const statusData = await statusResp.json();
 
-        // Count by level
-        const counts = { down: 0, warning: 0, healthy: 0 };
-        entries.forEach(r => {
-          const lvl = (r.status && r.status.level) || 'down';
-          counts[lvl] = (counts[lvl] || 0) + 1;
-        });
+        const counts = summary.counts || {};
+        const services = svcData.services || [];
+        const results = statusData.results || {};
 
-        // Sort: down first, then warning, then healthy
+        // Build ordered list: match visible services to their results, sort by severity
         const order = { down: 0, warning: 1, healthy: 2 };
-        entries.sort((a, b) => (order[(a.status||{}).level] || 0) - (order[(b.status||{}).level] || 0));
+        const rows = services.map(svc => {
+          const r = results[svc.id] || {};
+          const lvl = r?.status?.level || 'unknown';
+          return { id: svc.id, name: svc.name, level: lvl, message: r.message || r?.status?.label || '' };
+        }).sort((a, b) => (order[a.level] ?? 0) - (order[b.level] ?? 0));
+
+        const esc = s => (s ?? '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
         let html = `
-          <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
-            <div class="health-badge health-down" style="display:${counts.down ? 'inline-flex' : 'none'};width:auto;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600;">${counts.down} Down</div>
-            <div class="health-badge health-warning" style="display:${counts.warning ? 'inline-flex' : 'none'};width:auto;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600;">${counts.warning} Warning</div>
-            <div class="health-badge health-healthy" style="display:${counts.healthy ? 'inline-flex' : 'none'};width:auto;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600;">${counts.healthy} Healthy</div>
+          <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+            ${counts.down ? `<span class="health-badge health-down" style="display:inline-flex;width:auto;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600;">${counts.down} Down</span>` : ''}
+            ${counts.warning ? `<span class="health-badge health-warning" style="display:inline-flex;width:auto;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600;">${counts.warning} Warning</span>` : ''}
+            ${counts.healthy ? `<span class="health-badge health-healthy" style="display:inline-flex;width:auto;padding:4px 12px;border-radius:12px;font-size:13px;font-weight:600;">${counts.healthy} Healthy</span>` : ''}
           </div>
           <div style="max-height:60vh;overflow-y:auto;">
         `;
 
-        entries.forEach(r => {
-          const lvl = (r.status && r.status.level) || 'down';
-          const dotColor = lvl === 'healthy' ? 'var(--ok)' : lvl === 'warning' ? 'var(--warn)' : 'var(--down)';
-          const msg = r.message || r.status?.label || '';
+        rows.forEach(r => {
+          const dotColor = r.level === 'healthy' ? 'var(--ok)' : r.level === 'warning' ? 'var(--warn)' : 'var(--down)';
           html += `
             <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-color, rgba(255,255,255,0.08));">
               <span style="width:10px;height:10px;border-radius:50%;background:${dotColor};flex-shrink:0;"></span>
-              <span style="flex:1;font-size:13px;">${r.name || r.id}</span>
-              <span style="font-size:11px;opacity:0.6;max-width:40%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${msg}</span>
+              <span style="flex:1;font-size:13px;">${esc(r.name)}</span>
+              <span style="font-size:11px;opacity:0.6;max-width:40%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(r.message)}</span>
             </div>
           `;
         });
