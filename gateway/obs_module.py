@@ -57,7 +57,7 @@ def _ensure_async_loop() -> None:
     _loop_thread = _threading.Thread(target=_start_event_loop, daemon=True)
     _loop_thread.start()
     while _loop is None:
-        __time.sleep(0.01)
+        _time.sleep(0.01)
 
 
 def run_async(coro, timeout: float = 10.0):
