@@ -62,9 +62,21 @@ def _ensure_async_loop() -> None:
 
 
 def run_async(coro, timeout: float = 10.0):
-    """Submit an async coroutine to the background loop and block for result."""
+    """Submit an async coroutine to the background loop and block for result.
+
+    We poll with _time.sleep instead of future.result(timeout) because
+    concurrent.futures.Future internally uses threading.Condition which
+    eventlet has monkey-patched. Calling the patched Condition from a real
+    OS thread triggers 'Cannot switch to a different thread'.
+    """
     future = _asyncio.run_coroutine_threadsafe(coro, _loop)
-    return future.result(timeout=timeout)
+    deadline = _time.time() + timeout
+    while not future.done():
+        if _time.time() >= deadline:
+            future.cancel()
+            raise TimeoutError("OBS async request timed out")
+        _time.sleep(0.02)
+    return future.result(timeout=0)  # already done, won't block
 
 
 # =============================================================================
