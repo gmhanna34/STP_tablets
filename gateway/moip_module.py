@@ -15,13 +15,18 @@ Key design:
 from __future__ import annotations
 
 import logging
-import telnetlib
+import select
+import socket
 import threading
 import time
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 import requests as http_requests
+import urllib3
+
+# Suppress warnings for verify=False calls to Nabu Casa webhooks
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 # =============================================================================
@@ -75,7 +80,11 @@ def parse_devices(response: str) -> dict:
 # =============================================================================
 
 class MoIPConnection:
-    """Manages persistent Telnet connection to the MoIP controller."""
+    """Manages persistent TCP connection to the MoIP controller.
+
+    Uses raw sockets instead of telnetlib (removed in Python 3.13).
+    The MoIP controller speaks plain ASCII over TCP on port 23.
+    """
 
     def __init__(self, cfg: dict, logger: logging.Logger) -> None:
         self._logger = logger
@@ -87,14 +96,29 @@ class MoIPConnection:
         self._password = cfg.get("password", "")
         self._read_timeout = cfg.get("telnet_read_timeout", 5)
 
-        self.tn: Optional[telnetlib.Telnet] = None
+        self._sock: Optional[socket.socket] = None
         self.connected: bool = False
         self.host: str = self._host_internal
         self.port: int = self._port_internal
         self._use_external: bool = False
 
+    def _open_socket(self, host: str, port: int, timeout: int) -> socket.socket:
+        """Open a TCP connection and return the socket."""
+        sock = socket.create_connection((host, port), timeout=timeout)
+        sock.setblocking(False)
+        return sock
+
+    def _authenticate(self) -> None:
+        """Send username/password if configured."""
+        if self._username:
+            self._sock.sendall(f"{self._username}\n".encode("ascii"))
+            time.sleep(0.1)
+            self._sock.sendall(f"{self._password}\n".encode("ascii"))
+            time.sleep(0.2)
+            self._logger.info("MoIP: Authentication sent")
+
     def connect(self) -> bool:
-        """Establish Telnet connection with internal/external fallback."""
+        """Establish TCP connection with internal/external fallback."""
         self._close_socket()
 
         try:
@@ -103,7 +127,7 @@ class MoIPConnection:
                     self._logger.info(
                         f"MoIP: Connecting (internal) {self._host_internal}:{self._port_internal}"
                     )
-                    self.tn = telnetlib.Telnet(
+                    self._sock = self._open_socket(
                         self._host_internal, self._port_internal, timeout=5
                     )
                     self.host = self._host_internal
@@ -116,21 +140,14 @@ class MoIPConnection:
                 self._logger.info(
                     f"MoIP: Connecting (external) {self._host_external}:{self._port_external}"
                 )
-                self.tn = telnetlib.Telnet(
+                self._sock = self._open_socket(
                     self._host_external, self._port_external, timeout=10
                 )
                 self.host = self._host_external
                 self.port = self._port_external
                 self._logger.info("MoIP: Connected via external")
 
-            # Authenticate
-            if self._username:
-                self.tn.write(f"{self._username}\n".encode("ascii"))
-                time.sleep(0.1)
-                self.tn.write(f"{self._password}\n".encode("ascii"))
-                time.sleep(0.2)
-                self._logger.info("MoIP: Authentication sent")
-
+            self._authenticate()
             self.connected = True
             return True
 
@@ -143,16 +160,12 @@ class MoIPConnection:
                 self._logger.info("MoIP: Attempting external connection...")
                 self._use_external = True
                 try:
-                    self.tn = telnetlib.Telnet(
+                    self._sock = self._open_socket(
                         self._host_external, self._port_external, timeout=10
                     )
                     self.host = self._host_external
                     self.port = self._port_external
-                    if self._username:
-                        self.tn.write(f"{self._username}\n".encode("ascii"))
-                        time.sleep(0.1)
-                        self.tn.write(f"{self._password}\n".encode("ascii"))
-                        time.sleep(0.2)
+                    self._authenticate()
                     self.connected = True
                     self._logger.info("MoIP: Connected via external (fallback)")
                     return True
@@ -164,9 +177,9 @@ class MoIPConnection:
 
     def disconnect(self) -> None:
         """Graceful close: send exit command, then close socket."""
-        if self.tn:
+        if self._sock:
             try:
-                self.tn.write(b"!Exit\n")
+                self._sock.sendall(b"!Exit\n")
                 time.sleep(0.1)
             except Exception:
                 pass
@@ -174,13 +187,13 @@ class MoIPConnection:
         self.connected = False
 
     def _close_socket(self) -> None:
-        """Forcibly close the underlying Telnet socket."""
-        if self.tn:
+        """Forcibly close the underlying socket."""
+        if self._sock:
             try:
-                self.tn.close()
+                self._sock.close()
             except Exception:
                 pass
-            self.tn = None
+            self._sock = None
 
     def send_command(self, command: str) -> Optional[str]:
         """Send command and return response. Single attempt — no internal retry.
@@ -196,7 +209,7 @@ class MoIPConnection:
             if not command.endswith("\n"):
                 command += "\n"
 
-            self.tn.write(command.encode("ascii"))
+            self._sock.sendall(command.encode("ascii"))
             time.sleep(0.05)
 
             if command.strip().startswith("?"):
@@ -209,20 +222,30 @@ class MoIPConnection:
             return None
 
     def _read_response(self) -> str:
-        """Read Telnet response with timeout to prevent indefinite hangs."""
+        """Read TCP response with timeout to prevent indefinite hangs.
+
+        Uses select() to poll for available data (replaces telnetlib's
+        read_very_eager which was also non-blocking).
+        """
         deadline = time.time() + self._read_timeout
         chunks = []
         while time.time() < deadline:
             try:
-                chunk = self.tn.read_very_eager().decode("ascii", errors="ignore")
-                if chunk:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    break
+                ready, _, _ = select.select([self._sock], [], [], min(remaining, 0.1))
+                if ready:
+                    chunk = self._sock.recv(4096).decode("ascii", errors="ignore")
+                    if not chunk:
+                        # Connection closed by remote
+                        raise ConnectionError("MoIP: Remote closed connection")
                     chunks.append(chunk)
                     time.sleep(0.05)
                 else:
                     if chunks:
                         break
-                    time.sleep(0.1)
-            except EOFError:
+            except (ConnectionError, OSError):
                 raise
             except Exception:
                 break
@@ -472,7 +495,18 @@ class MoIPModule:
                     f"next check in {interval}s"
                 )
 
-                if consecutive_failures >= self._failure_threshold:
+                # Check if _send() already triggered a restart (streak was
+                # reset to 0 inside _trigger_ha_restart).  If so, just reset
+                # the local counter — no need for a duplicate trigger.
+                with self._state_lock:
+                    streak = self._failure_streak
+                if streak == 0 and consecutive_failures >= self._failure_threshold:
+                    self._logger.info(
+                        "MoIP: Restart already triggered by send path, "
+                        "resetting keepalive counter"
+                    )
+                    consecutive_failures = 0
+                elif consecutive_failures >= self._failure_threshold:
                     self._logger.critical(
                         f"MoIP: KEEPALIVE FAILURE THRESHOLD REACHED "
                         f"({self._failure_threshold})"

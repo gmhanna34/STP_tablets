@@ -170,7 +170,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 - **Backend:** Python 3, Flask, Flask-SocketIO, Eventlet
 - **Middleware:** Flask + Waitress (OBS still in STP_scripts; X32 + MoIP absorbed into gateway)
 - **X32 Protocol:** xair-api (python-osc) for direct OSC/UDP communication
-- **MoIP Protocol:** telnetlib for direct Telnet communication with Binary MoIP controller
+- **MoIP Protocol:** Raw TCP sockets for direct Telnet communication with Binary MoIP controller (migrated from telnetlib for Python 3.13 compatibility)
 - **Database:** SQLite (audit log only)
 - **Monitoring:** Flask + SSE, webhook alerts to Home Assistant
 
