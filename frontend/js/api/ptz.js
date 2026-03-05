@@ -1,7 +1,6 @@
 // PTZ Camera API Service - communicates via STP Gateway (server-side proxy)
 const PtzAPI = {
   init() {
-    this.tabletId = localStorage.getItem('tabletId') || 'WebApp';
   },
 
   async sendCommand(cameraKey, command) {
@@ -10,7 +9,6 @@ const PtzAPI = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Tablet-ID': this.tabletId,
         },
         body: JSON.stringify({ command }),
         signal: AbortSignal.timeout(3000),
@@ -27,7 +25,6 @@ const PtzAPI = {
     try {
       const resp = await fetch(`/api/ptz/${cameraKey}/preset/${presetNum}`, {
         method: 'POST',
-        headers: { 'X-Tablet-ID': this.tabletId },
         signal: AbortSignal.timeout(3000),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

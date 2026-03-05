@@ -12,13 +12,12 @@ const X32API = {
   },
 
   init() {
-    this.tabletId = localStorage.getItem('tabletId') || 'WebApp';
   },
 
   async sendCommand(endpoint) {
     const url = `/api/x32/${endpoint}`;
     const options = {
-      headers: { 'X-Tablet-ID': this.tabletId },
+      headers: {},
       signal: AbortSignal.timeout(5000),
     };
 

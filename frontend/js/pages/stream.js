@@ -254,7 +254,8 @@ const StreamPage = {
     nextImg.onerror = () => {
       this._feedTimeout = setTimeout(() => this._refreshCameraFeed(), 2000);
     };
-    nextImg.src = `/api/ptz/${camKey}/snapshot?t=${Date.now()}`;
+    const _tid = (typeof Auth !== 'undefined' && Auth.getTabletId) ? Auth.getTabletId() : '';
+    nextImg.src = `/api/ptz/${camKey}/snapshot?t=${Date.now()}${_tid ? '&tablet=' + _tid : ''}`;
   },
 
   _panelFeedTimer: null,
@@ -342,7 +343,8 @@ const StreamPage = {
         next.onerror = () => {
           self._panelFeedTimer = setTimeout(refreshPanel, 5000);
         };
-        next.src = `/api/ptz/${camId}/snapshot?t=${Date.now()}`;
+        const _tid = (typeof Auth !== 'undefined' && Auth.getTabletId) ? Auth.getTabletId() : '';
+        next.src = `/api/ptz/${camId}/snapshot?t=${Date.now()}${_tid ? '&tablet=' + _tid : ''}`;
       };
       refreshPanel();
     });

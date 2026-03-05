@@ -14,7 +14,6 @@ const ObsAPI = {
   init(config) {
     this.cameraMap = config?.ptzCameras || {};
     this.maxScenes = config?.obs?.maxScenes || 10;
-    this.tabletId = localStorage.getItem('tabletId') || 'WebApp';
   },
 
   async sendCommand(endpoint, payload = '') {
@@ -23,7 +22,6 @@ const ObsAPI = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Tablet-ID': this.tabletId,
       },
       body: payload ? JSON.stringify(payload) : '',
       signal: AbortSignal.timeout(10000),

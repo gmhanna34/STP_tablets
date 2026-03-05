@@ -3,7 +3,6 @@ const MoIPAPI = {
   state: { receivers: {} },
 
   init() {
-    this.tabletId = localStorage.getItem('tabletId') || 'WebApp';
   },
 
   async sendCommand(endpoint, method = 'GET', data = null) {
@@ -12,7 +11,6 @@ const MoIPAPI = {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'X-Tablet-ID': this.tabletId,
       },
       signal: AbortSignal.timeout(5000),
     };

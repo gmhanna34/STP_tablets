@@ -6,7 +6,6 @@ const MacroAPI = {
   _longPressDelay: 800,
 
   init() {
-    this.tabletId = localStorage.getItem('tabletId') || 'WebApp';
     // Listen for state updates from all subsystems
     if (App.socket) {
       this._bindSocketEvents(App.socket);
@@ -59,7 +58,7 @@ const MacroAPI = {
   async getButtons(page) {
     try {
       const resp = await fetch(`/api/macros?page=${page}`, {
-        headers: { 'X-Tablet-ID': this.tabletId },
+
         signal: AbortSignal.timeout(5000),
       });
       const data = await resp.json();
@@ -79,7 +78,6 @@ const MacroAPI = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Tablet-ID': this.tabletId,
         },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(60000), // macros can take up to 60s
@@ -94,7 +92,7 @@ const MacroAPI = {
   async expandMacro(macroKey) {
     try {
       const resp = await fetch(`/api/macro/expand/${encodeURIComponent(macroKey)}`, {
-        headers: { 'X-Tablet-ID': this.tabletId },
+
         signal: AbortSignal.timeout(5000),
       });
       return await resp.json();
@@ -107,7 +105,7 @@ const MacroAPI = {
   async fetchState() {
     try {
       const resp = await fetch('/api/macro/state', {
-        headers: { 'X-Tablet-ID': this.tabletId },
+
         signal: AbortSignal.timeout(5000),
       });
       const data = await resp.json();
@@ -493,7 +491,7 @@ const MacroAPI = {
       } else if (action.type === 'ha_service') {
         await fetch(`/api/ha/service/${action.domain}/${action.service}`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': this.tabletId },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(action.data || {}),
         });
         App.showToast(displayLabel || 'HA service called');
@@ -747,7 +745,7 @@ const MacroAPI = {
     let state = null;
     try {
       const resp = await fetch(`/api/ha/states/${entityId}`, {
-        headers: { 'X-Tablet-ID': this.tabletId },
+
       });
       if (!resp.ok) {
         const errText = await resp.text();
@@ -813,7 +811,7 @@ const MacroAPI = {
       _pollTimer = setInterval(async () => {
         try {
           const r = await fetch(`/api/ha/states/${entityId}`, {
-            headers: { 'X-Tablet-ID': self.tabletId },
+    
           });
           const s = await r.json();
           const a = s.attributes || {};
@@ -986,7 +984,7 @@ const MacroAPI = {
         try {
           const r = await fetch(`/api/ha/service/climate/set_temperature`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': self.tabletId },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
           console.log('set_temperature response:', r.status, await r.text());
@@ -1084,7 +1082,7 @@ const MacroAPI = {
         try {
           const r = await fetch(`/api/ha/service/climate/set_hvac_mode`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': self.tabletId },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(modePayload),
           });
           console.log('set_hvac_mode response:', r.status, await r.text());
@@ -1103,7 +1101,7 @@ const MacroAPI = {
     let state = null;
     try {
       const resp = await fetch('/api/camlytics/state', {
-        headers: { 'X-Tablet-ID': this.tabletId },
+
       });
       if (resp.ok) state = await resp.json();
     } catch (e) {
@@ -1132,7 +1130,7 @@ const MacroAPI = {
       _pollTimer = setInterval(async () => {
         try {
           const r = await fetch('/api/camlytics/state', {
-            headers: { 'X-Tablet-ID': self.tabletId },
+    
           });
           if (!r.ok) return;
           const s = await r.json();
@@ -1252,7 +1250,7 @@ const MacroAPI = {
           try {
             await fetch('/api/camlytics/buffer', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': self.tabletId },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ type: bufType, value: current }),
             });
           } catch (e) {
@@ -1514,7 +1512,7 @@ const MacroAPI = {
     let switchIds;
     try {
       const resp = await fetch(`/api/macros/switches?page=${roomId}`, {
-        headers: { 'X-Tablet-ID': this.tabletId },
+
         signal: AbortSignal.timeout(5000),
       });
       const data = await resp.json();
@@ -1533,7 +1531,7 @@ const MacroAPI = {
       let entities = [];
       try {
         const resp = await fetch('/api/ha/entities?domain=switch', {
-          headers: { 'X-Tablet-ID': self.tabletId },
+  
           signal: AbortSignal.timeout(5000),
         });
         const data = await resp.json();
@@ -1578,7 +1576,7 @@ const MacroAPI = {
           try {
             await fetch('/api/ha/service/switch/toggle', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': self.tabletId },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ entity_id: entityId }),
             });
             setTimeout(() => renderSwitches(), 500);
@@ -1657,7 +1655,7 @@ const MacroAPI = {
     let state = null;
     try {
       const resp = await fetch('/api/camlytics/state', {
-        headers: { 'X-Tablet-ID': this.tabletId },
+
       });
       if (resp.ok) state = await resp.json();
     } catch (e) {
@@ -1679,7 +1677,7 @@ const MacroAPI = {
     const pollTimer = setInterval(async () => {
       try {
         const r = await fetch('/api/camlytics/state', {
-          headers: { 'X-Tablet-ID': self.tabletId },
+  
         });
         if (!r.ok) return;
         const s = await r.json();
@@ -1857,7 +1855,7 @@ const MacroAPI = {
     let switchIds;
     try {
       const resp = await fetch(`/api/macros/switches?page=${roomId}`, {
-        headers: { 'X-Tablet-ID': this.tabletId },
+
         signal: AbortSignal.timeout(5000),
       });
       const data = await resp.json();
@@ -1886,7 +1884,7 @@ const MacroAPI = {
         let entities = [];
         try {
           const resp = await fetch('/api/ha/entities?domain=switch', {
-            headers: { 'X-Tablet-ID': this.tabletId },
+    
             signal: AbortSignal.timeout(5000),
           });
           const data = await resp.json();
@@ -1944,7 +1942,7 @@ const MacroAPI = {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'X-Tablet-ID': this.tabletId,
+                  ,
                 },
                 body: JSON.stringify({ entity_id: entityId }),
               });

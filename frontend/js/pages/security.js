@@ -229,7 +229,8 @@ const SecurityPage = {
       next.onerror = () => {
         this._feedTimers[camKey] = setTimeout(refresh, 5000);
       };
-      next.src = `/api/ptz/${camKey}/snapshot?t=${Date.now()}`;
+      const _tid = (typeof Auth !== 'undefined' && Auth.getTabletId) ? Auth.getTabletId() : '';
+      next.src = `/api/ptz/${camKey}/snapshot?t=${Date.now()}${_tid ? '&tablet=' + _tid : ''}`;
     };
     refresh();
   },
@@ -302,7 +303,8 @@ const SecurityPage = {
       next.onerror = () => {
         this._feedTimers[safeId] = setTimeout(refresh, 8000);
       };
-      next.src = `/api/ha/camera/${entityId}/snapshot?t=${Date.now()}`;
+      const _tid = (typeof Auth !== 'undefined' && Auth.getTabletId) ? Auth.getTabletId() : '';
+      next.src = `/api/ha/camera/${entityId}/snapshot?t=${Date.now()}${_tid ? '&tablet=' + _tid : ''}`;
     };
     refresh();
   },
@@ -401,7 +403,8 @@ const SecurityPage = {
           next.onerror = () => {
             self._feedTimers['_panel'] = setTimeout(refreshPanel, 3000);
           };
-          next.src = `/api/ptz/${camId}/snapshot?t=${Date.now()}`;
+          const _tid = (typeof Auth !== 'undefined' && Auth.getTabletId) ? Auth.getTabletId() : '';
+          next.src = `/api/ptz/${camId}/snapshot?t=${Date.now()}${_tid ? '&tablet=' + _tid : ''}`;
         };
         refreshPanel();
       } else {

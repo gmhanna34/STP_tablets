@@ -455,7 +455,7 @@ const SettingsPage = {
       try {
         const resp = await fetch('/api/settings/verbose-logging', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ enabled: e.target.checked }),
         });
         const data = await resp.json();
@@ -509,7 +509,7 @@ const SettingsPage = {
 
       const fetchEntities = async () => {
         const resp = await fetch(`/api/ha/entities?domain=switch&q=${prefix}`, {
-          headers: { 'X-Tablet-ID': tabletId },
+
         });
         const data = await resp.json();
         if (data.error) throw new Error(data.error);
@@ -573,7 +573,7 @@ const SettingsPage = {
             try {
               await fetch(`/api/ha/service/switch/toggle`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': tabletId },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ entity_id: entityId }),
               });
               setTimeout(() => renderSwitches(), 800);
@@ -654,7 +654,7 @@ const SettingsPage = {
         try {
           // Fetch all battery entities in one call (no domain filter — need both switch + sensor)
           const resp = await fetch('/api/ha/entities?q=bat_', {
-            headers: { 'X-Tablet-ID': tabletId },
+  
           });
           const data = await resp.json();
 
@@ -718,7 +718,7 @@ const SettingsPage = {
               try {
                 await fetch('/api/ha/service/switch/toggle', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': tabletId },
+                  headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ entity_id: btn.dataset.ecoflowEntity }),
                 });
                 setTimeout(() => renderBatteries(), 800);
@@ -758,7 +758,7 @@ const SettingsPage = {
 
     try {
       const resp = await fetch('/api/wattbox/devices', {
-        headers: { 'X-Tablet-ID': tabletId },
+
       });
       const devices = await resp.json();
       if (devices.error) {
@@ -811,7 +811,7 @@ const SettingsPage = {
           try {
             const resp = await fetch(`/api/wattbox/${key}/power`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': tabletId },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ action }),
             });
             const result = await resp.json();
@@ -875,7 +875,7 @@ const SettingsPage = {
     let state;
     try {
       const resp = await fetch(`/api/ha/states/${entityId}`, {
-        headers: { 'X-Tablet-ID': tabletId },
+
       });
       if (!resp.ok) {
         body.innerHTML = `<div style="color:var(--danger);">Failed to load (${resp.status})</div>`;
@@ -963,7 +963,7 @@ const SettingsPage = {
         try {
           await fetch('/api/ha/service/climate/set_temperature', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': tabletId },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ entity_id: entityId, temperature: _target }),
           });
         } catch (e) { console.error('set_temperature error:', e); }
@@ -1041,7 +1041,7 @@ const SettingsPage = {
         try {
           await fetch('/api/ha/service/climate/set_hvac_mode', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': tabletId },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ entity_id: entityId, hvac_mode: newMode }),
           });
         } catch (e) { console.error('set_hvac_mode error:', e); }
@@ -1052,7 +1052,7 @@ const SettingsPage = {
     const pollTimer = setInterval(async () => {
       if (!body.isConnected) { clearInterval(pollTimer); return; }
       try {
-        const r = await fetch(`/api/ha/states/${entityId}`, { headers: { 'X-Tablet-ID': tabletId } });
+        const r = await fetch(`/api/ha/states/${entityId}`, {});
         const s = await r.json();
         const a = s.attributes || {};
         const curEl = body.querySelector(`#thermo-current-${index}`);
@@ -1285,7 +1285,7 @@ const SettingsPage = {
   async loadVerboseLogging() {
     try {
       const resp = await fetch('/api/settings/verbose-logging', {
-        headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+
       });
       const data = await resp.json();
       const toggle = document.getElementById('toggle-verbose-logging');
@@ -1301,8 +1301,8 @@ const SettingsPage = {
     try {
       const tabletId = localStorage.getItem('tabletId') || 'WebApp';
       const [logsResp, sessionsResp] = await Promise.all([
-        fetch('/api/audit/logs?limit=500', { headers: { 'X-Tablet-ID': tabletId } }),
-        fetch('/api/audit/sessions', { headers: { 'X-Tablet-ID': tabletId } }),
+        fetch('/api/audit/logs?limit=500', {}),
+        fetch('/api/audit/sessions', {}),
       ]);
       this._auditData = await logsResp.json();
       const sessions = await sessionsResp.json();
@@ -1649,7 +1649,7 @@ const SettingsPage = {
     if (!container) return;
     try {
       const resp = await fetch('/api/schedules', {
-        headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+
       });
       const schedules = await resp.json();
       this.renderSchedules(schedules);
@@ -1709,7 +1709,7 @@ const SettingsPage = {
         const currentlyEnabled = btn.dataset.enabled === '1';
         await fetch(`/api/schedule/${id}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ enabled: !currentlyEnabled }),
         });
         this.loadSchedules();
@@ -1726,7 +1726,7 @@ const SettingsPage = {
         try {
           const resp = await fetch('/api/macro/execute', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ macro: macroKey }),
           });
           const result = await resp.json();
@@ -1751,7 +1751,7 @@ const SettingsPage = {
         if (!await App.showConfirm('Delete this scheduled automation?')) return;
         await fetch(`/api/schedule/${id}`, {
           method: 'DELETE',
-          headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+
         });
         this.loadSchedules();
       });
@@ -1785,7 +1785,7 @@ const SettingsPage = {
     if (!select) return;
     try {
       const resp = await fetch('/api/macros', {
-        headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+
       });
       const data = await resp.json();
       const macros = data.macros || {};
@@ -1821,7 +1821,7 @@ const SettingsPage = {
 
     try {
       const resp = await fetch(`/api/macro/expand/${encodeURIComponent(macroKey)}`, {
-        headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+
         signal: AbortSignal.timeout(5000),
       });
       const data = await resp.json();
@@ -1885,14 +1885,14 @@ const SettingsPage = {
       if (editId) {
         await fetch(`/api/schedule/${editId}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, macro, time, days }),
         });
         App.showToast('Schedule updated');
       } else {
         await fetch('/api/schedule', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, macro, time, days }),
         });
         App.showToast('Schedule created');
@@ -1964,7 +1964,7 @@ const SettingsPage = {
       if (!self._haDomainSummary) {
         try {
           const resp = await fetch('/api/ha/entities', {
-            headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+  
           });
           const data = await resp.json();
           if (data.domains) {
@@ -2020,7 +2020,7 @@ const SettingsPage = {
 
     try {
       const resp = await fetch(`/api/ha/entities?${params.toString()}`, {
-        headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+
       });
       const data = await resp.json();
       if (data.error) {
@@ -2099,7 +2099,7 @@ const SettingsPage = {
     try {
       App.showToast('Generating YAML reference...');
       const resp = await fetch('/api/ha/entities/yaml', {
-        headers: { 'X-Tablet-ID': localStorage.getItem('tabletId') || 'WebApp' },
+
       });
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);

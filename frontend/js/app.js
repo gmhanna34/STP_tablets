@@ -777,10 +777,9 @@ const App = {
         messagesEl.scrollTop = messagesEl.scrollHeight;
 
         try {
-          const tabletId = localStorage.getItem('tabletId') || 'WebApp';
           const resp = await fetch('/api/chat', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': tabletId },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               message: text,
               page: currentPage,

@@ -347,7 +347,6 @@ const SourcePage = {
 
     try {
       const resp = await fetch('/api/ha/entities?domain=automation&q=alexaannounce', {
-        headers: { 'X-Tablet-ID': MacroAPI.tabletId },
         signal: AbortSignal.timeout(10000),
       });
       const data = await resp.json();
@@ -441,7 +440,7 @@ const SourcePage = {
       if (isCustom) {
         resp = await fetch('/api/ha/service/notify/send_message', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': MacroAPI.tabletId },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             entity_id: 'notify.av_room_echo_dot_announce',
             message: customMsg,
@@ -451,7 +450,7 @@ const SourcePage = {
       } else {
         resp = await fetch('/api/ha/service/automation/trigger', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Tablet-ID': MacroAPI.tabletId },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ entity_id: val }),
           signal: AbortSignal.timeout(15000),
         });
