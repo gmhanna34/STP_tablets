@@ -305,11 +305,11 @@ const App = {
     update();
     this.healthTimer = setInterval(update, 30000);
 
-    // Make health pills clickable — open health dashboard panel
+    // Make health pills clickable — navigate to built-in health page
     const healthSection = document.getElementById('status-health');
     if (healthSection) {
       healthSection.style.cursor = 'pointer';
-      healthSection.addEventListener('click', () => this.openHealthDashPanel());
+      healthSection.addEventListener('click', () => Router.navigate('health'));
     }
   },
 
@@ -374,19 +374,8 @@ const App = {
   },
 
   openHealthDashPanel() {
-    const url = HealthAPI.getStatusUrl();
-    if (!url) {
-      this.showToast('Health dashboard URL not configured');
-      return;
-    }
-    this.showPanel('System Health', (body) => {
-      body.style.padding = '0';
-      body.innerHTML = `
-        <iframe src="${url}"
-          style="width:100%;height:100%;border:none;border-radius:0 0 16px 16px;">
-        </iframe>
-      `;
-    });
+    // Navigate to the built-in health page
+    Router.navigate('health');
   },
 
   // -----------------------------------------------------------------------

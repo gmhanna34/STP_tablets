@@ -1925,16 +1925,8 @@ const SettingsPage = {
   // -----------------------------------------------------------------------
 
   openHealthPanel() {
-    const url = HealthAPI.getStatusUrl();
-
-    App.showPanel('System Health', (body) => {
-      body.style.padding = '0';
-      body.innerHTML = `
-        <iframe id="health-iframe" src="${url}"
-          style="width:100%;height:100%;border:none;border-radius:0 0 16px 16px;">
-        </iframe>
-      `;
-    });
+    // Navigate to the built-in health page
+    Router.navigate('health');
   },
 
   // -----------------------------------------------------------------------
