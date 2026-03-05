@@ -705,8 +705,62 @@ class HealthModule:
                 last_ok_at=prev.last_ok_at if prev else None,
             )
 
+    def _check_rtsp_tcp_fallback(self, svc: dict) -> ServiceResult:
+        """TCP socket fallback when ffprobe is not installed.
+
+        Parses the RTSP/RTSPS URL to extract host:port, then attempts a
+        TCP connection.  Reports 'healthy' if the port is open, 'down'
+        otherwise.  This gives meaningful reachability data without
+        requiring the ffmpeg package.
+        """
+        sid = svc["id"]
+        name = svc.get("name", sid)
+        url = svc.get("url", "")
+        timeout = float(svc.get("timeout_seconds", 10))
+
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+        port = parsed.port or (554 if parsed.scheme == "rtsp" else 443)
+
+        start = time.time()
+        try:
+            sock = socket.create_connection((host, port), timeout=timeout)
+            sock.close()
+            latency_ms = round((time.time() - start) * 1000, 1)
+
+            level = "healthy"
+            msg = "Reachable (TCP, ffprobe unavailable)"
+            if svc.get("warn_if_ms_gt") and latency_ms > float(svc["warn_if_ms_gt"]):
+                level = "warning"
+                msg = f"Reachable but slow ({latency_ms}ms, TCP fallback)"
+
+            prev = self._results.get(sid)
+            return ServiceResult(
+                id=sid, name=name,
+                status=_level_label(level),
+                message=msg,
+                checked_at=_now_iso(),
+                last_ok_at=_now_iso() if level == "healthy" else (prev.last_ok_at if prev else None),
+                latency_ms=latency_ms,
+                details={"mode": "tcp_fallback"},
+            )
+        except Exception as e:
+            prev = self._results.get(sid)
+            return ServiceResult(
+                id=sid, name=name,
+                status=_level_label("down"),
+                message=f"Unreachable: {e}",
+                checked_at=_now_iso(),
+                last_ok_at=prev.last_ok_at if prev else None,
+                latency_ms=round((time.time() - start) * 1000, 1),
+            )
+
     def _check_ffprobe_rtsp(self, svc: dict) -> ServiceResult:
-        """RTSP/RTSPS stream validation via ffprobe subprocess."""
+        """RTSP/RTSPS stream validation via ffprobe subprocess.
+
+        Falls back to TCP socket connection test if ffprobe is not installed,
+        so camera health still shows reachability without requiring ffmpeg.
+        """
         sid = svc["id"]
         name = svc.get("name", sid)
         url = svc.get("url", "")
@@ -714,16 +768,30 @@ class HealthModule:
         rw_timeout = svc.get("rw_timeout_us", 3000000)
         ffprobe = svc.get("ffprobe_path", "ffprobe")
 
+        # Check if ffprobe binary exists (cached after first call)
+        if not hasattr(self, '_ffprobe_available'):
+            import shutil
+            self._ffprobe_available = shutil.which(ffprobe) is not None
+            if not self._ffprobe_available:
+                self.log.warning(f"[health] ffprobe not found ('{ffprobe}'). "
+                                 f"Camera checks will use TCP fallback.")
+
+        if not self._ffprobe_available:
+            return self._check_rtsp_tcp_fallback(svc)
+
         start = time.time()
         try:
             cmd = [
                 ffprobe, "-v", "error",
-                "-rtsp_transport", "tcp",
                 "-rw_timeout", str(rw_timeout),
                 "-show_entries", "stream=codec_name,width,height,r_frame_rate",
                 "-of", "json",
-                url,
             ]
+            # -rtsp_transport tcp only works with plain rtsp://, not rtsps://
+            if not url.startswith("rtsps://"):
+                cmd.insert(3, "-rtsp_transport")
+                cmd.insert(4, "tcp")
+            cmd.append(url)
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
             latency_ms = round((time.time() - start) * 1000, 1)
 
