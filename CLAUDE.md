@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A church AV control system that provides tablet-based control of audio, video, streaming, cameras, projectors, and power. This repo (`STP_tablets`) contains the gateway backend (including built-in health monitoring) and the frontend tablet UI. The middleware proxies remain in `STP_scripts` as rollback options.
+A church AV control system that provides tablet-based control of audio, video, streaming, cameras, projectors, and power. This repo (`STP_tablets`) is the single active repo containing the gateway backend (all protocols built-in), health monitoring, occupancy analytics, and the frontend tablet UI. All other repos (`STP_scripts`, `STP_healthdash`, `STP_Occupancy`, `STP_THRFiles_Current`) are archived.
 
 ## Repository Structure
 
@@ -213,7 +213,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 | 4 | Absorb HealthDash (`STP_healthdash/app.py`) into gateway as a module + frontend page | **Complete** |
 | 5 | Centralize all secrets into `.env` — remove duplication from config.yaml and middleware | Not started |
 | 6 | Absorb occupancy app (`STP_Occupancy/` repo) into gateway | **Complete** |
-| 7 | Sunset The Home Remote (THR) — remove `STP_THRFiles_Current` dependency | Not started |
+| 7 | Sunset The Home Remote (THR) — remove `STP_THRFiles_Current` dependency | **Complete** |
 | 8 | Migrate consolidated gateway to Mac Mini | Not started |
 
 ### Key Decisions
@@ -238,7 +238,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
 **Phase 6 (Occupancy) — COMPLETE:** Moved CSV-based occupancy analytics from `STP_Occupancy/app.py` into `gateway/occupancy_module.py`. The gateway now scans Camlytics CSV exports (BuildingOccupancy/ and CommunionCounts/ sub-folders), parses weekly trends, communion counts, occupancy pacing, and participation ratios using pandas. CSV downloads from Camlytics cloud (previously handled by Windows Scheduled Task scripts in `STP_scripts/`) are now run by the module's internal daily scheduler. Added `#occupancy` page to frontend with Chart.js charts (occupancy trend, communion trend, comparison bar chart, pacing drill-down), KPI summary cards, week-over-week table, and buffer configuration display. Page is accessed via "View Weekly Analytics" button in the people counting panel (no nav bar button). Port 20857 is no longer required. New dependency: `pandas>=2.0`. The standalone `STP_Occupancy/app.py` remains as a rollback option.
 
-**Phase 7 (THR Sunset):** Remove THR dependency from operational workflow. Archive `STP_THRFiles_Current`. Remove THR-specific HealthDash checks.
+**Phase 7 (THR Sunset) — COMPLETE:** The Home Remote (THR) app has been fully sunset. The web-based tablet frontend replaces all THR functionality. `STP_THRFiles_Current` and `STP_scripts` repos archived with deprecation READMEs documenting what was absorbed and rollback procedures. No `obs_rpc` (THR bridge) health checks were active in the gateway config. THR-referencing comments in `macros.yaml` retained as design-decision documentation (explaining retry patterns). The Chrome crash recovery and network adapter fix scripts in `STP_scripts` remain useful as standalone Windows Scheduled Tasks.
 
 **Phase 8 (Mac Migration):** Clone repo to Mac Mini, create venv, copy `.env`, update OBS WebSocket URL to point to Windows machine, configure launchd, test.
 
