@@ -79,7 +79,7 @@ const Router = {
 
     // Push history state
     if (pushState) {
-      history.pushState({ page }, '', `#${page}`);
+      history.pushState({ page }, '', `${window.location.pathname}#${page}`);
     }
 
     // Callback
