@@ -135,23 +135,42 @@ const App = {
     this.socket.on('disconnect', (reason) => {
       console.warn('Socket.IO disconnected:', reason);
       this._lastDisconnectReason = reason;
-      this.setConnectionStatus('Disconnected', false);
+      this._disconnectedAt = Date.now();
+      // Delay showing "Disconnected" UI by 3s — hides brief WiFi blips
+      clearTimeout(this._disconnectUiTimer);
+      this._disconnectUiTimer = setTimeout(() => {
+        if (!this.socket.connected) {
+          this.setConnectionStatus('Disconnected', false);
+        }
+      }, 3000);
     });
 
     this.socket.on('connect_error', () => {
-      this.setConnectionStatus('Connection Error', false);
+      // Only show error after the grace period
+      if (this._disconnectedAt && Date.now() - this._disconnectedAt > 3000) {
+        this.setConnectionStatus('Connection Error', false);
+      }
     });
 
     this.socket.io.on('reconnect_attempt', (attempt) => {
       this._reconnectAttempt = attempt;
-      this.setConnectionStatus(`Reconnecting (${attempt})...`, false);
+      // Only show reconnecting UI after the grace period
+      if (this._disconnectedAt && Date.now() - this._disconnectedAt > 3000) {
+        this.setConnectionStatus(`Reconnecting (${attempt})...`, false);
+      }
     });
 
     this.socket.io.on('reconnect', () => {
       this._reconnectAttempt = 0;
-      this.showToast('Reconnected to gateway', 2000);
-      // Re-navigate to current page so destroy() runs first, avoiding stacked listeners
-      Router.navigate(Router.currentPage, false);
+      clearTimeout(this._disconnectUiTimer);
+      const downtime = this._disconnectedAt ? Date.now() - this._disconnectedAt : 0;
+      this._disconnectedAt = null;
+      // Only show toast + re-navigate for long disconnects (>3s)
+      // Brief WiFi blips are invisible to the user
+      if (downtime > 3000) {
+        this.showToast('Reconnected to gateway', 2000);
+        Router.navigate(Router.currentPage, false);
+      }
     });
 
     this.socket.io.on('reconnect_failed', () => {

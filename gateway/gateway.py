@@ -541,7 +541,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         async_mode="eventlet",
         cors_allowed_origins="*",
         ping_timeout=60,      # 60s — generous for WiFi tablets with latency spikes
-        ping_interval=25,     # 25s — standard keep-alive interval
+        ping_interval=15,     # 15s — frequent pings keep WiFi/NAT connections alive
     )
 
     logger = setup_logging(cfg)
@@ -3302,6 +3302,11 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         if room in ("moip", "x32", "obs", "projectors", "ha", "macros", "camlytics", "health"):
             join_room(room)
             logger.debug(f"sid={request.sid} joined room={room}")
+            # Push cached state immediately so reconnecting tablets
+            # don't wait for the next state change to get data
+            cached = state_cache.get(room)
+            if cached is not None:
+                emit(f"state:{room}", cached)
 
     @socketio.on("leave")
     def on_leave(data):
