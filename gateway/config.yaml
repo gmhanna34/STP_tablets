@@ -169,9 +169,16 @@ polling:
   obs: 3
   projectors: 30
 
-# --- Health Dashboard heartbeat forwarding ------------------------------------
+# --- Health Dashboard (Phase 4 consolidation — absorbed from STP_healthdash) --
+# Previously ran as a standalone service on port 20855.
+# Now built into the gateway via health_module.py.
 healthdash:
-  url: "http://127.0.0.1:20855"
+  app:
+    refresh_seconds: 5
+    check_interval_seconds: 10
+    request_timeout_seconds: 7
+    client_id: "Health Check"
+
   # Map location slugs → friendly names shown on health dashboard
   tablet_names:
     chapel: "Chapel Tablet"
@@ -192,6 +199,627 @@ healthdash:
     Tablet_Gym: "Gym Tablet"
     Tablet_Lobby: "Lobby Tablet"
     Tablet_Office: "Office Tablet"
+
+  home_assistant:
+    base_url: ""                       # Set HA_URL in .env (reuses gateway HA config)
+    token: ""                          # Set HA_TOKEN in .env
+    verify_tls: true
+
+  alerts:
+    ha_webhook_url: ""                 # Set HEALTHDASH_WEBHOOK_URL in .env
+    defaults:
+      enabled: true
+      warn_after_seconds: 30
+      down_after_seconds: 60
+      cooldown_seconds: 300
+
+  security:
+    trusted_ip_prefixes:
+      - "192.168.1."
+      - "10.100."
+      - "10.10."
+      - "172.16."
+      - "127.0.0.1"
+      - "47.150."
+
+  services:
+    - id: "x32_middleware"
+      name: "x32 Flask Middleware (Audio)"
+      group: "Core"
+      type: "http_json"
+      url: "http://127.0.0.1:3400/health"
+      ok_json_path: "healthy"
+      ok_json_value: true
+      detail_json_paths:
+        Scene: "cur_scene"
+        Scene Name: "cur_scene_name"
+      warn_if_ms_gt: 5500
+      poll_interval_seconds: 120
+      timeout_seconds: 20
+      log_path: ""                     # Set to local log path on server
+      alert:
+        enabled: false
+      recovery:
+        type: "ha_service"
+        domain: "script"
+        service: "turn_on"
+        service_data:
+          entity_id: "script.restart_x32_middleware"
+
+    - id: "moip_middleware"
+      name: "MoIP Flask Middleware (Video)"
+      group: "Core"
+      type: "http_json"
+      url: "http://127.0.0.1:5002/status"
+      ok_json_path: "healthy"
+      ok_json_value: true
+      warn_if_ms_gt: 500
+      timeout_seconds: 10
+      log_path: ""
+      recovery:
+        type: "ha_service"
+        domain: "script"
+        service: "turn_on"
+        service_data:
+          entity_id: "script.restart_moip_middleware"
+
+    - id: "obs"
+      name: "OBS Flask Middleware (Live Stream)"
+      group: "Core"
+      type: "obs_rpc"
+      base_url: "http://127.0.0.1:4456"
+      timeout_seconds: 5
+      log_path: ""
+      alert:
+        enabled: true
+        warn_after_seconds: 180
+        down_after_seconds: 360
+        cooldown_seconds: 300
+      recovery:
+        type: "ha_service"
+        domain: "script"
+        service: "turn_on"
+        service_data:
+          entity_id: "script.restart_obs_middleware"
+
+    - id: "stp_gateway"
+      name: "STP Gateway (Control Panel)"
+      group: "Core"
+      type: "http_json"
+      url: "http://127.0.0.1:20858/api/health"
+      ok_json_path: "healthy"
+      ok_json_value: true
+      detail_json_paths:
+        Version: "version"
+        Mock Mode: "mock_mode"
+      warn_if_ms_gt: 2000
+      timeout_seconds: 5
+      show_standalone: true
+      alert:
+        enabled: true
+        warn_after_seconds: 60
+        down_after_seconds: 120
+        cooldown_seconds: 300
+
+    - id: "home_assistant"
+      name: "Home Assistant (Automation Hub)"
+      group: "Automation Hubs"
+      type: "http"
+      url: ""                          # Set HA URL — uses HA_URL env var at runtime
+      timeout_seconds: 5
+      ok_http_codes: [200]
+      bearer_token: ""                 # Set HA_TOKEN env var at runtime
+
+    - id: "insteon"
+      name: "Insteon (Automation Hub)"
+      group: "Automation Hubs"
+      type: "http"
+      url: "http://192.168.1.193:25105/"
+      timeout_seconds: 5
+      ok_http_codes: [200, 401]
+
+    - id: "wattbox_overall"
+      name: "WattBox Power (Rack PDUs)"
+      group: "Power"
+      type: "composite"
+      members:
+        - "wattbox_1"
+        - "wattbox_2"
+        - "wattbox_3"
+        - "wattbox_4"
+        - "wattbox_5"
+        - "wattbox_6"
+        - "wattbox_7"
+        - "wattbox_8"
+        - "wattbox_9"
+      warn_if_bad_ge: 1
+      down_if_bad_ge: 2
+      poll_interval_seconds: 300
+      alert:
+        enabled: false
+
+    - id: "wattbox_1"
+      name: "WattBox 1 (Audio Wall) - 61"
+      group: "Power"
+      type: "http"
+      url: "http://192.168.1.61/wattbox_info.xml"
+      timeout_seconds: 5
+      poll_interval_seconds: 300
+      ok_http_codes: [200, 401]
+      show_standalone: false
+      basic_auth:
+        username: "admin"
+        password: ""                   # Set WATTBOX_PASSWORD in .env
+      alert:
+        enabled: true
+        warn_after_seconds: 360
+        down_after_seconds: 720
+        cooldown_seconds: 1000
+
+    - id: "wattbox_2"
+      name: "WattBox 2 (Video Wall) - 62"
+      group: "Power"
+      type: "http"
+      url: "http://192.168.1.62/wattbox_info.xml"
+      timeout_seconds: 5
+      poll_interval_seconds: 300
+      ok_http_codes: [200, 401]
+      show_standalone: false
+      basic_auth:
+        username: "admin"
+        password: ""
+      alert:
+        enabled: false
+
+    - id: "wattbox_3"
+      name: "WattBox 3 (Floor Rack 1) - 63"
+      group: "Power"
+      type: "http"
+      url: "http://192.168.1.63/wattbox_info.xml"
+      timeout_seconds: 5
+      poll_interval_seconds: 300
+      ok_http_codes: [200, 401]
+      show_standalone: false
+      basic_auth:
+        username: "admin"
+        password: ""
+      alert:
+        enabled: false
+
+    - id: "wattbox_4"
+      name: "WattBox 4 - 64"
+      group: "Power"
+      type: "http"
+      url: "http://192.168.1.64/wattbox_info.xml"
+      timeout_seconds: 5
+      poll_interval_seconds: 300
+      ok_http_codes: [200, 401]
+      show_standalone: false
+      basic_auth:
+        username: "admin"
+        password: ""
+      alert:
+        enabled: false
+
+    - id: "wattbox_5"
+      name: "WattBox 5 - 65"
+      group: "Power"
+      type: "http"
+      url: "http://192.168.1.65/wattbox_info.xml"
+      timeout_seconds: 5
+      poll_interval_seconds: 300
+      ok_http_codes: [200, 401]
+      show_standalone: false
+      basic_auth:
+        username: "admin"
+        password: ""
+      alert:
+        enabled: false
+
+    - id: "wattbox_6"
+      name: "WattBox 6 - 66"
+      group: "Power"
+      type: "http"
+      url: "http://192.168.1.66/wattbox_info.xml"
+      timeout_seconds: 5
+      poll_interval_seconds: 300
+      ok_http_codes: [200, 401]
+      show_standalone: false
+      basic_auth:
+        username: "admin"
+        password: ""
+      alert:
+        enabled: false
+
+    - id: "wattbox_7"
+      name: "WattBox 7 - 67"
+      group: "Power"
+      type: "http"
+      url: "http://192.168.1.67/wattbox_info.xml"
+      timeout_seconds: 5
+      poll_interval_seconds: 300
+      ok_http_codes: [200, 401]
+      show_standalone: false
+      basic_auth:
+        username: "admin"
+        password: ""
+      alert:
+        enabled: false
+
+    - id: "wattbox_8"
+      name: "WattBox 8 - 68"
+      group: "Power"
+      type: "http"
+      url: "http://192.168.1.68/wattbox_info.xml"
+      timeout_seconds: 5
+      poll_interval_seconds: 300
+      ok_http_codes: [200, 401]
+      show_standalone: false
+      basic_auth:
+        username: "admin"
+        password: ""
+      alert:
+        enabled: false
+
+    - id: "wattbox_9"
+      name: "WattBox 9 - 69"
+      group: "Power"
+      type: "http"
+      url: "http://192.168.1.69/wattbox_info.xml"
+      timeout_seconds: 5
+      poll_interval_seconds: 300
+      ok_http_codes: [200, 401]
+      show_standalone: false
+      basic_auth:
+        username: "admin"
+        password: ""
+      alert:
+        enabled: false
+
+    - id: "ecoflow_overall"
+      name: "EcoFlow Batteries (Portable TV's)"
+      group: "Power"
+      type: "composite"
+      members:
+        - "ecoflow_1"
+        - "ecoflow_2"
+        - "ecoflow_3"
+        - "ecoflow_4"
+        - "ecoflow_5"
+        - "ecoflow_6"
+        - "ecoflow_7"
+        - "ecoflow_8"
+      warn_if_bad_ge: 1
+      down_if_bad_ge: 1
+      poll_interval_seconds: 60
+      alert:
+        enabled: false
+
+    - id: "ecoflow_1"
+      name: "Chapel TV #1 - AC Power"
+      group: "Power"
+      type: "http_json"
+      url: ""                          # HA entity URL — set at runtime via HA_URL env
+      timeout_seconds: 5
+      poll_interval_seconds: 60
+      ok_json_path: "state"
+      ok_json_value: "on"
+      bearer_token: ""                 # Set HA_TOKEN in .env
+      show_standalone: false
+      alert:
+        enabled: true
+        warn_after_seconds: 360
+        down_after_seconds: 720
+        cooldown_seconds: 30000
+
+    - id: "ecoflow_2"
+      name: "Chapel TV #1 - DC Power"
+      group: "Power"
+      type: "http_json"
+      url: ""
+      timeout_seconds: 5
+      poll_interval_seconds: 60
+      ok_json_path: "state"
+      ok_json_value: "on"
+      bearer_token: ""
+      show_standalone: false
+      alert:
+        enabled: true
+        warn_after_seconds: 360
+        down_after_seconds: 720
+        cooldown_seconds: 30000
+
+    - id: "ecoflow_3"
+      name: "Chapel TV #2 - AC Power"
+      group: "Power"
+      type: "http_json"
+      url: ""
+      timeout_seconds: 5
+      poll_interval_seconds: 60
+      ok_json_path: "state"
+      ok_json_value: "on"
+      bearer_token: ""
+      show_standalone: false
+      alert:
+        enabled: true
+        warn_after_seconds: 360
+        down_after_seconds: 720
+        cooldown_seconds: 30000
+
+    - id: "ecoflow_4"
+      name: "Chapel TV #2 - DC Power"
+      group: "Power"
+      type: "http_json"
+      url: ""
+      timeout_seconds: 5
+      poll_interval_seconds: 60
+      ok_json_path: "state"
+      ok_json_value: "on"
+      bearer_token: ""
+      show_standalone: false
+      alert:
+        enabled: true
+        warn_after_seconds: 360
+        down_after_seconds: 720
+        cooldown_seconds: 30000
+
+    - id: "ecoflow_5"
+      name: "Main Church TV #1 - AC Power"
+      group: "Power"
+      type: "http_json"
+      url: ""
+      timeout_seconds: 5
+      poll_interval_seconds: 60
+      ok_json_path: "state"
+      ok_json_value: "on"
+      bearer_token: ""
+      show_standalone: false
+      alert:
+        enabled: true
+        warn_after_seconds: 360
+        down_after_seconds: 720
+        cooldown_seconds: 30000
+
+    - id: "ecoflow_6"
+      name: "Main Church TV #1 - DC Power"
+      group: "Power"
+      type: "http_json"
+      url: ""
+      timeout_seconds: 5
+      poll_interval_seconds: 60
+      ok_json_path: "state"
+      ok_json_value: "on"
+      bearer_token: ""
+      show_standalone: false
+      alert:
+        enabled: true
+        warn_after_seconds: 360
+        down_after_seconds: 720
+        cooldown_seconds: 30000
+
+    - id: "ecoflow_7"
+      name: "Main Church TV #2 - AC Power"
+      group: "Power"
+      type: "http_json"
+      url: ""
+      timeout_seconds: 5
+      poll_interval_seconds: 60
+      ok_json_path: "state"
+      ok_json_value: "on"
+      bearer_token: ""
+      show_standalone: false
+      alert:
+        enabled: true
+        warn_after_seconds: 360
+        down_after_seconds: 720
+        cooldown_seconds: 30000
+
+    - id: "ecoflow_8"
+      name: "Main Church TV #2 - DC Power"
+      group: "Power"
+      type: "http_json"
+      url: ""
+      timeout_seconds: 5
+      poll_interval_seconds: 60
+      ok_json_path: "state"
+      ok_json_value: "on"
+      bearer_token: ""
+      show_standalone: false
+      alert:
+        enabled: true
+        warn_after_seconds: 360
+        down_after_seconds: 720
+        cooldown_seconds: 30000
+
+    - id: "tablets"
+      name: "Control Tablets"
+      group: "Tablets"
+      type: "heartbeat_group"
+      warn_after_seconds: 900
+      stale_after_seconds: 1800
+      warn_if_bad_ge: 1
+      down_if_bad_ge: 2
+      alert:
+        enabled: false
+      expected:
+        - id: "Chapel Tablet"
+          name: "Chapel Tablet"
+        - id: "Social Hall Tablet"
+          name: "Social Hall Tablet"
+        - id: "AV Room Tablet"
+          name: "A/V Room Tablet"
+        - id: "Conference Room Tablet"
+          name: "Conference Room Tablet"
+        - id: "Test Device"
+          name: "Test Device"
+        - id: "PC"
+          name: "PC"
+
+    - id: "cameras_overall"
+      name: "Camlytics Cameras (People Count)"
+      type: "composite"
+      members:
+        - "cam_altar"
+        - "cam_front_lobby"
+        - "cam_main_entry"
+        - "cam_rear_door"
+        - "camlytics_cloud"
+      warn_if_bad_ge: 1
+      down_if_bad_ge: 2
+      poll_interval_seconds: 60
+      alert:
+        enabled: false
+
+    - id: "cam_altar"
+      name: "Camera - Altar (Stream)"
+      group: "Camlytics"
+      type: "ffprobe_rtsp"
+      url: "rtsps://10.100.40.100:7441/IHKuQJxqvI67rDOm?enableSrtp"
+      timeout_seconds: 10
+      warn_if_ms_gt: 7200
+      rw_timeout_us: 3000000
+      poll_interval_seconds: 600
+      show_standalone: false
+      ffprobe_path: "ffprobe"          # Adjust for your system (e.g. full path on Windows)
+      alert:
+        enabled: true
+        warn_after_seconds: 180
+        down_after_seconds: 360
+        cooldown_seconds: 300
+
+    - id: "cam_front_lobby"
+      name: "Camera - Front Lobby (Stream)"
+      group: "Camlytics"
+      type: "ffprobe_rtsp"
+      url: "rtsps://10.100.40.100:7441/UiFux8kG5IhuIW8L?enableSrtp"
+      timeout_seconds: 10
+      warn_if_ms_gt: 7200
+      rw_timeout_us: 3000000
+      poll_interval_seconds: 600
+      show_standalone: false
+      ffprobe_path: "ffprobe"
+      alert:
+        enabled: true
+        warn_after_seconds: 180
+        down_after_seconds: 360
+        cooldown_seconds: 300
+
+    - id: "cam_main_entry"
+      name: "Camera - Main Church Entry (Stream)"
+      group: "Camlytics"
+      type: "ffprobe_rtsp"
+      url: "rtsps://10.100.40.100:7441/TkNRAj1Avn8Y0egI?enableSrtp"
+      timeout_seconds: 10
+      warn_if_ms_gt: 7200
+      rw_timeout_us: 3000000
+      poll_interval_seconds: 600
+      show_standalone: false
+      ffprobe_path: "ffprobe"
+      alert:
+        enabled: true
+        warn_after_seconds: 180
+        down_after_seconds: 360
+        cooldown_seconds: 300
+
+    - id: "cam_rear_door"
+      name: "Camera - Rear Door (Stream)"
+      group: "Camlytics"
+      type: "ffprobe_rtsp"
+      url: "rtsps://10.100.40.100:7441/RYnGxI82DVBN7b7Z?enableSrtp"
+      timeout_seconds: 10
+      warn_if_ms_gt: 7200
+      rw_timeout_us: 3000000
+      poll_interval_seconds: 600
+      show_standalone: false
+      ffprobe_path: "ffprobe"
+      alert:
+        enabled: true
+        warn_after_seconds: 180
+        down_after_seconds: 360
+        cooldown_seconds: 300
+
+    - id: "camlytics_cloud"
+      name: "Camlytics Cloud"
+      group: "Camlytics"
+      type: "http"
+      url: "https://cloud.camlytics.com/"
+      timeout_seconds: 3
+      poll_interval_seconds: 600
+      show_standalone: false
+      ok_http_codes: [200, 301, 302, 401, 403]
+      alert:
+        enabled: true
+        warn_after_seconds: 180
+        down_after_seconds: 360
+        cooldown_seconds: 300
+
+    - id: "proj_overall"
+      name: "Epson Projectors"
+      group: "Projectors"
+      type: "composite"
+      members:
+        - "proj_1"
+        - "proj_2"
+        - "proj_3"
+        - "proj_4"
+      warn_if_bad_ge: 1
+      down_if_bad_ge: 1
+      timeout_seconds: 120
+      poll_interval_seconds: 20
+      alert:
+        enabled: false
+
+    - id: "proj_1"
+      name: "Epson Projector 1 - Front Left"
+      group: "Projectors"
+      type: "http"
+      url: "http://192.168.1.233/api/v01/contentmgr/remote/power/"
+      timeout_seconds: 20
+      poll_interval_seconds: 60
+      ok_http_codes: [200, 405]
+      alert:
+        enabled: true
+        down_after_seconds: 3000
+        cooldown_seconds: 9000
+
+    - id: "proj_2"
+      name: "Epson Projector 2 - Front Right"
+      group: "Projectors"
+      type: "http"
+      url: "http://192.168.1.234/api/v01/contentmgr/remote/power/"
+      timeout_seconds: 20
+      poll_interval_seconds: 60
+      ok_http_codes: [200, 405]
+      alert:
+        enabled: true
+        down_after_seconds: 3000
+        cooldown_seconds: 9000
+
+    - id: "proj_3"
+      name: "Epson Projector 3 - Rear Right"
+      group: "Projectors"
+      type: "http"
+      url: "http://192.168.1.235/api/v01/contentmgr/remote/power/"
+      timeout_seconds: 20
+      poll_interval_seconds: 60
+      ok_http_codes: [200, 405]
+      alert:
+        enabled: true
+        down_after_seconds: 3000
+        cooldown_seconds: 9000
+
+    - id: "proj_4"
+      name: "Epson Projector 4 - Rear Left"
+      group: "Projectors"
+      type: "http"
+      url: "http://192.168.1.236/api/v01/contentmgr/remote/power/"
+      timeout_seconds: 20
+      poll_interval_seconds: 60
+      ok_http_codes: [200, 405]
+      alert:
+        enabled: true
+        down_after_seconds: 3000
+        cooldown_seconds: 9000
 
 # --- Audit logging (SQLite) ---------------------------------------------------
 database:

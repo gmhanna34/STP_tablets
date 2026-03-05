@@ -2980,3 +2980,341 @@ body.compact .cam-tab {
   0%, 100% { opacity: 0.4; }
   50% { opacity: 1; }
 }
+
+
+/* ============================================================
+   Health Dashboard Page (Phase 4 consolidation)
+   ============================================================ */
+
+.health-page {
+  padding: 16px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.health-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.health-header-left {}
+
+.health-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.health-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.health-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.health-severity {
+  display: flex;
+  gap: 6px;
+}
+
+.health-sev-tile {
+  min-width: 40px;
+  height: 28px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  font-weight: 800;
+  font-size: 14px;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,.15);
+}
+.health-sev-down { background: var(--down); }
+.health-sev-warn { background: var(--warn); color: var(--sp-dark); }
+.health-sev-ok   { background: var(--ok); }
+
+.health-banner {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.health-banner-warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa8; }
+.health-banner-danger  { background: #f8d7da; color: #842029; border: 1px solid #f5c2c7; }
+.health-banner-info    { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 12px;
+}
+
+.health-loading {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 40px;
+}
+
+/* --- Health Cards --- */
+
+.health-card {
+  background: var(--card-bg);
+  border-radius: 10px;
+  padding: 14px;
+  border-left: 5px solid #adb5bd;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.health-card-healthy { border-left-color: var(--ok); }
+.health-card-warning { border-left-color: var(--warn); }
+.health-card-down    { border-left-color: var(--down); }
+
+.health-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.health-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.health-card-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.health-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.health-card-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 4px 0 8px 20px;
+}
+
+.health-card-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.health-stat {}
+
+.health-stat-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.health-stat-value {
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+/* --- Status Dots --- */
+
+.health-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  background: #adb5bd;
+  flex-shrink: 0;
+}
+.health-dot-healthy { background: var(--ok); }
+.health-dot-warning { background: var(--warn); }
+.health-dot-down    { background: var(--down); }
+
+/* --- Members (composite) --- */
+
+.health-members {
+  margin-top: 8px;
+  border-top: 1px solid var(--border-color, #e0ddd8);
+  padding-top: 8px;
+}
+
+.health-members-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.health-members-list {
+  margin-top: 6px;
+}
+
+.health-member-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.health-member-name {
+  flex: 1;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.health-member-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+/* --- Details --- */
+
+.health-details {
+  margin-top: 8px;
+  border-top: 1px solid var(--border-color, #e0ddd8);
+  padding-top: 8px;
+}
+
+.health-detail-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 12px;
+}
+
+.health-detail-key {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.health-detail-val {
+  color: var(--text-primary);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+}
+
+/* --- Error Box --- */
+
+.health-error {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #f8d7da;
+  color: #842029;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* --- Action Buttons --- */
+
+.btn-action-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #d1cdc4);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  gap: 4px;
+}
+.btn-action-sm:hover { background: var(--sp-light, #B4B0A5); }
+
+.btn-danger-sm {
+  border-color: var(--down);
+  color: var(--down);
+}
+.btn-danger-sm:hover {
+  background: var(--down);
+  color: #fff;
+}
+
+/* --- Logs Modal --- */
+
+.health-logs-modal {
+  max-width: 900px;
+  width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--sp-dark);
+  color: #fff;
+  border-radius: 12px 12px 0 0;
+}
+
+.modal-header-bar h2 {
+  font-size: 16px;
+  margin: 0;
+  font-weight: 600;
+}
+
+.health-logs-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.health-logs-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.health-logs-pre {
+  background: #1f2325;
+  color: #e6edf3;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
+  max-height: 50vh;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* --- Confirm Modal --- */
+
+.health-confirm-modal {
+  max-width: 400px;
+  width: 90vw;
+}
+
+.health-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.btn-danger {
+  background: var(--down);
+  color: #fff;
+  border-color: var(--down);
+}
+.btn-danger:hover { filter: brightness(1.1); }
