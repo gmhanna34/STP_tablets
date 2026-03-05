@@ -627,7 +627,7 @@ healthdash:
           name: "Chapel Tablet"
         - id: "Social Hall Tablet"
           name: "Social Hall Tablet"
-        - id: "AV Room Tablet"
+        - id: "A/V Room Tablet"
           name: "A/V Room Tablet"
         - id: "Conference Room Tablet"
           name: "Conference Room Tablet"
