@@ -16,7 +16,8 @@ const Router = {
       stream: StreamPage,
       source: SourcePage,
       security: SecurityPage,
-      settings: SettingsPage
+      settings: SettingsPage,
+      health: HealthPage
     };
 
     // Setup nav click handlers

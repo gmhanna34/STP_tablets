@@ -79,6 +79,63 @@ def _apply_env_overrides(cfg: dict):
     ha["url"] = _env("HA_URL", ha.get("url", ""))
     ha["token"] = _env("HA_TOKEN", ha.get("token", ""))
 
+    # HealthDash module — inherit HA credentials and webhook from env
+    hd = cfg.setdefault("healthdash", {})
+    hd_ha = hd.setdefault("home_assistant", {})
+    hd_ha["base_url"] = _env("HA_URL", hd_ha.get("base_url", "") or ha.get("url", ""))
+    hd_ha["token"] = _env("HA_TOKEN", hd_ha.get("token", "") or ha.get("token", ""))
+    hd_alerts = hd.setdefault("alerts", {})
+    hd_alerts["ha_webhook_url"] = _env("HEALTHDASH_WEBHOOK_URL", hd_alerts.get("ha_webhook_url", ""))
+    # Populate HA-backed service URLs (EcoFlow batteries + Home Assistant endpoint)
+    ha_url = hd_ha.get("base_url", "")
+    ha_token = hd_ha.get("token", "")
+    for svc in hd.get("services", []):
+        if svc.get("id") == "home_assistant" and not svc.get("url"):
+            svc["url"] = f"{ha_url}/api/" if ha_url else ""
+            svc["bearer_token"] = ha_token
+        # EcoFlow services: populate HA entity URLs from env
+        if svc.get("id", "").startswith("ecoflow_") and svc.get("type") == "http_json":
+            if not svc.get("url") and ha_url:
+                entity_map = {
+                    "ecoflow_1": "switch.bat_chapeltv_1_ac_enabled",
+                    "ecoflow_2": "switch.bat_chapeltv_1_dc_12v_enabled",
+                    "ecoflow_3": "switch.bat_chapeltv_2_ac_enabled",
+                    "ecoflow_4": "switch.bat_chapeltv_2_dc_12v_enabled",
+                    "ecoflow_5": "switch.bat_mainchurchtv_1_ac_enabled",
+                    "ecoflow_6": "switch.bat_mainchurchtv_1_dc_12v_enabled",
+                    "ecoflow_7": "switch.bat_mainchurchtv_2_ac_enabled",
+                    "ecoflow_8": "switch.bat_mainchurchtv_2_dc_12v_enabled",
+                }
+                entity = entity_map.get(svc["id"], "")
+                if entity:
+                    svc["url"] = f"{ha_url}/api/states/{entity}"
+                    svc["bearer_token"] = ha_token
+                    # Also set battery detail URL
+                    battery_map = {
+                        "ecoflow_1": "sensor.bat_chapeltv_1_main_battery_level",
+                        "ecoflow_2": "sensor.bat_chapeltv_1_main_battery_level",
+                        "ecoflow_3": "sensor.bat_chapeltv_2_main_battery_level",
+                        "ecoflow_4": "sensor.bat_chapeltv_2_main_battery_level",
+                        "ecoflow_5": "sensor.bat_mainchurchtv_1_main_battery_level",
+                        "ecoflow_6": "sensor.bat_mainchurchtv_1_main_battery_level",
+                        "ecoflow_7": "sensor.bat_mainchurchtv_2_main_battery_level",
+                        "ecoflow_8": "sensor.bat_mainchurchtv_2_main_battery_level",
+                    }
+                    bat_entity = battery_map.get(svc["id"], "")
+                    if bat_entity:
+                        svc["detail_url_json_paths"] = {
+                            "Battery Level": {
+                                "url": f"{ha_url}/api/states/{bat_entity}",
+                                "path": "state",
+                            }
+                        }
+                        svc["warn_if_detail_equals"] = {"Battery Level": "unknown"}
+        # WattBox services: populate password from env
+        if svc.get("id", "").startswith("wattbox_") and svc.get("type") == "http":
+            ba = svc.get("basic_auth")
+            if ba and not ba.get("password"):
+                ba["password"] = _env("WATTBOX_PASSWORD", "")
+
     wb = cfg.setdefault("wattbox", {})
     wb["password"] = _env("WATTBOX_PASSWORD", wb.get("password", ""))
 
@@ -495,6 +552,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     # OBS Studio — direct WebSocket via absorbed module (Phase 3 consolidation)
     from obs_module import OBSModule
     obs = None if mock_mode else OBSModule(cfg.get("obs", {}), logger)
+
+    # Health monitoring — absorbed from STP_healthdash (Phase 4 consolidation)
+    from health_module import HealthModule
+    health = None if mock_mode else HealthModule(cfg, logger)
 
     allowed_ips = sec_cfg.get("allowed_ips", ["127.0.0.1"])
     settings_pin = sec_cfg.get("settings_pin", "1234")
@@ -962,22 +1023,68 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
 
     @app.route("/api/healthdash/summary")
     def api_healthdash_summary():
-        """Proxy the health dashboard /api/summary endpoint so tablets don't
-        need direct access to the healthdash service (avoids CORS issues)."""
-        hd_cfg = cfg.get("healthdash", {})
-        hd_url = hd_cfg.get("url", "").rstrip("/")
-        if not hd_url:
-            return jsonify({"error": "Health dashboard not configured"}), 503
-        try:
-            resp = http_requests.get(
-                f"{hd_url}/api/summary",
-                timeout=5,
-            )
-            return Response(resp.content, status=resp.status_code,
-                            content_type=resp.headers.get("Content-Type", "application/json"))
-        except Exception as exc:
-            logger.debug("Healthdash summary proxy failed: %s", exc)
-            return jsonify({"error": "Health dashboard unreachable"}), 503
+        """Return lightweight health summary (counts only) for tablet status bar."""
+        if health is None:
+            return jsonify({"counts": {"healthy": 0, "warning": 0, "down": 0}, "total": 0}), 200
+        return jsonify(health.get_summary()), 200
+
+    @app.route("/api/healthdash/status")
+    def api_healthdash_status():
+        """Return full service health results for the health dashboard page."""
+        if health is None:
+            return jsonify({"generated_at": "", "results": {}, "heartbeat": {}}), 200
+        from datetime import datetime, timezone
+        return jsonify({
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "results": health.get_all_results(),
+            "heartbeat": health.get_heartbeats(),
+        }), 200
+
+    @app.route("/api/healthdash/services")
+    def api_healthdash_services():
+        """Return service definitions for the health dashboard UI."""
+        if health is None:
+            return jsonify({"services": []}), 200
+        return jsonify({"services": health.get_services_for_ui()}), 200
+
+    @app.route("/api/healthdash/heartbeat", methods=["POST"])
+    def api_healthdash_heartbeat():
+        """Receive tablet heartbeats for health monitoring."""
+        if health is None:
+            return jsonify({"ok": True}), 200
+        data = request.get_json(silent=True) or {}
+        tablet_id = data.get("tablet_id", "")
+        if tablet_id:
+            health.record_heartbeat(tablet_id, data)
+        return jsonify({"ok": True}), 200
+
+    @app.route("/api/healthdash/logs/<service_id>")
+    def api_healthdash_logs(service_id: str):
+        """Fetch logs for a health-monitored service."""
+        if health is None:
+            return jsonify({"service_id": service_id, "name": "", "lines": 0, "log": "Health module not active"}), 200
+        lines = request.args.get("lines", 200, type=int)
+        return jsonify(health.get_service_logs(service_id, lines)), 200
+
+    @app.route("/api/healthdash/recover/<service_id>", methods=["POST"])
+    def api_healthdash_recover(service_id: str):
+        """Trigger recovery action for a health-monitored service."""
+        if health is None:
+            return jsonify({"ok": False, "message": "Health module not active"}), 503
+        tablet = _tablet_id()
+        result = health.trigger_recovery(service_id)
+        db.log_action(tablet, "healthdash:recover", service_id, "",
+                      result.get("message", ""), 0)
+        status_code = 200 if result.get("ok") else 500
+        return jsonify(result), status_code
+
+    @app.route("/api/healthdash/check_now", methods=["POST"])
+    def api_healthdash_check_now():
+        """Force immediate re-check of all health services."""
+        if health is None:
+            return jsonify({"ok": True}), 200
+        health.force_check_now()
+        return jsonify({"ok": True}), 200
 
     @app.route("/api/config")
     def api_config():
@@ -3113,7 +3220,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
     @socketio.on("join")
     def on_join(data):
         room = data.get("room", "")
-        if room in ("moip", "x32", "obs", "projectors", "ha", "macros", "camlytics"):
+        if room in ("moip", "x32", "obs", "projectors", "ha", "macros", "camlytics", "health"):
             join_room(room)
             logger.debug(f"sid={request.sid} joined room={room}")
 
@@ -3135,29 +3242,17 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         )
         emit("heartbeat_ack", {"ok": True})
 
-        # Forward heartbeat to Health Dashboard (fire-and-forget)
-        _forward_heartbeat_to_healthdash(tablet)
+        # Forward heartbeat to Health Module (in-process, no HTTP)
+        _forward_heartbeat_to_health(tablet)
 
-    def _forward_heartbeat_to_healthdash(tablet_key: str):
-        """POST a heartbeat to the health dashboard in the background."""
-        hd_cfg = cfg.get("healthdash", {})
-        hd_url = hd_cfg.get("url", "").rstrip("/")
-        if not hd_url:
+    def _forward_heartbeat_to_health(tablet_key: str):
+        """Record a tablet heartbeat in the health module."""
+        if health is None:
             return
+        hd_cfg = cfg.get("healthdash", {})
         name_map = hd_cfg.get("tablet_names", {})
         friendly = name_map.get(tablet_key, tablet_key)
-
-        def _post():
-            try:
-                http_requests.post(
-                    f"{hd_url}/api/heartbeat",
-                    json={"tablet_id": friendly},
-                    timeout=3,
-                )
-            except Exception as exc:
-                logger.debug("Healthdash heartbeat forward failed for %s: %s", friendly, exc)
-
-        eventlet.spawn_n(_post)
+        health.record_heartbeat(friendly)
 
     # -------------------------------------------------------------------------
     # BACKGROUND STATE POLLERS
@@ -3177,6 +3272,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         # Start the OBS module's WebSocket poller (owns OBS connection)
         if obs is not None:
             obs.start()
+
+        # Start the Health module's checker loop (Phase 4 consolidation)
+        if health is not None:
+            health.start()
 
         poll_cfg = cfg.get("polling", {})
 
@@ -3498,6 +3597,7 @@ def main():
     logger.info(f"  X32 (direct): {x32_cfg.get('mixer_type', 'X32')} @ {x32_cfg.get('mixer_ip', 'N/A')}")
     logger.info(f"  PTZ cameras: {len(cfg.get('ptz_cameras', {}))}")
     logger.info(f"  Projectors: {len(cfg.get('projectors', {}))}")
+    logger.info(f"  Health services: {len(cfg.get('healthdash', {}).get('services', []))}")
 
     # Count macros loaded
     try:

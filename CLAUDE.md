@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A church AV control system that provides tablet-based control of audio, video, streaming, cameras, projectors, and power. This repo (`STP_tablets`) contains the gateway backend and the frontend tablet UI. The middleware proxies remain in `STP_scripts` and the health dashboard in `STP_healthdash`.
+A church AV control system that provides tablet-based control of audio, video, streaming, cameras, projectors, and power. This repo (`STP_tablets`) contains the gateway backend (including built-in health monitoring) and the frontend tablet UI. The middleware proxies remain in `STP_scripts` as rollback options.
 
 ## Repository Structure
 
@@ -13,6 +13,7 @@ STP_tablets/              → Gateway + Frontend (this repo)
 │   ├── x32_module.py    ← Phase 1: direct X32 mixer OSC/UDP
 │   ├── moip_module.py   ← Phase 2: direct MoIP controller Telnet
 │   ├── obs_module.py    ← Phase 3: direct OBS Studio WebSocket
+│   ├── health_module.py ← Phase 4: built-in health monitoring
 │   ├── config.yaml
 │   ├── macros.yaml
 │   └── requirements.txt
@@ -25,12 +26,12 @@ STP_tablets/              → Gateway + Frontend (this repo)
 ├── CLAUDE.md
 └── DEPLOYMENT.md
 
-STP_scripts/              → Middleware proxies (separate repo)
+STP_scripts/              → Middleware proxies (archived, rollback only)
 ├── x32-flask.py
 ├── moip-flask.py
 └── obs-flask.py
 
-STP_healthdash/           → Monitoring dashboard (separate repo)
+STP_healthdash/           → Monitoring dashboard (archived, absorbed in Phase 4)
 ```
 
 ## Architecture
@@ -48,6 +49,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 │ • Macro execution engine │
 │ • Audit logging (SQLite) │
 │ • Auth (IP allowlist+PIN)│
+│ • Health monitoring      │
 └──────────┬───────────────┘
            │
      ┌─────┼─────┬──────────┬───────────┐
@@ -67,15 +69,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
   Home Assistant @ 192.168.1.245:8123 (power, WattBox, EcoFlow)
 
-┌──────────────────────────────┐
-│   HealthDash (:20855)        │  Monitors everything above
-│   STP_healthdash/app.py      │
-├──────────────────────────────┤
-│ • 30+ service health checks  │
-│ • Alert webhooks to HA       │
-│ • Recovery action triggers   │
-│ • Server-Sent Events for UI  │
-└──────────────────────────────┘
+  Health Module (built-in) — 30+ service checks, alerts, recovery
 ```
 
 ## Key Files
@@ -88,7 +82,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 - **js/app.js** — Main controller, Socket.IO connection
 - **js/auth.js** — PIN auth + session management
 - **js/router.js** — Hash-based SPA routing
-- **js/pages/*.js** — 10 page controllers (home, main, chapel, social, gym, confroom, stream, source, security, settings)
+- **js/pages/*.js** — 11 page controllers (home, main, chapel, social, gym, confroom, stream, source, security, health, settings)
 - **js/api/*.js** — API modules (obs, x32, moip, wattbox, ptz, epson, health, macro)
 - **css/styles.css** — Dark theme, touch-optimized, Material Design Icons
 
@@ -104,21 +98,20 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 - **obs-flask.py** — ~~Streaming proxy (HTTP → OBS WebSocket), port 4456~~ **DEPRECATED** — absorbed into `gateway/obs_module.py` (Phase 3)
 - Each has: background polling, ping/snapshot health, IP allowlist, API key auth, rotating logs
 
-### Health Dashboard (`STP_healthdash/` — separate repo)
-- **app.py** — Flask monitoring app (~1,400 lines)
-- **config.yaml** — 30+ service definitions, alert thresholds, polling intervals
-- **templates/dashboard.html** — Real-time status tiles
-- **static/app.js** — SSE-based live updates
+### Health Dashboard (`STP_healthdash/` — archived, absorbed in Phase 4)
+- ~~**app.py** — Flask monitoring app (~1,400 lines)~~ **DEPRECATED** — absorbed into `gateway/health_module.py` (Phase 4)
+- ~~**config.yaml** — 30+ service definitions~~ **DEPRECATED** — merged into `gateway/config.yaml` under `healthdash:` section
+- The standalone `STP_healthdash/app.py` remains as a rollback option
 
 ## Data Flow
 
 1. **User** taps button on tablet (e.g., "Chapel TVs On")
 2. **Frontend** sends REST request or Socket.IO event to gateway
 3. **Gateway** executes macro steps from `macros.yaml` (HA checks → device commands → delays → notifications)
-4. **Middleware** translates HTTP to native protocol (OSC, Telnet, WebSocket)
+4. **Gateway modules** translate to native protocol (OSC, Telnet, WebSocket)
 5. **Device** receives command
 6. **Gateway** polls state, broadcasts updates via Socket.IO to all tablets
-7. **HealthDash** independently polls all services, fires alerts on failure
+7. **Health module** (built-in) polls all services, fires alerts on failure
 
 ## Network
 
@@ -132,11 +125,10 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 ## Startup Order
 
 ```
-1. gateway.py          (port 20858)  ← this repo (X32 + MoIP + OBS built-in)
-2. healthdash app.py   (port 20855)  — STP_healthdash repo
+1. gateway.py          (port 20858)  ← this repo (X32 + MoIP + OBS + Health built-in)
 ```
 
-> **Note:** `x32-flask.py` (port 3400), `moip-flask.py` (port 5002), and `obs-flask.py` (port 4456) are no longer needed — the gateway communicates directly with the X32 mixer via OSC/UDP (Phase 1), the MoIP controller via Telnet (Phase 2), and OBS Studio via WebSocket (Phase 3). The standalone scripts are kept in STP_scripts as rollback options.
+> **Note:** `x32-flask.py` (port 3400), `moip-flask.py` (port 5002), `obs-flask.py` (port 4456), and `STP_healthdash/app.py` (port 20855) are no longer needed — the gateway handles everything directly. The standalone scripts are kept as rollback options.
 
 ## Deployment Target
 
@@ -163,6 +155,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 | Projectors | 30s |
 | WattBox PDUs | 300s (5 min) |
 | Cameras | 600s (10 min) |
+| Health checks | 15s |
 
 ## Tech Stack
 
@@ -172,7 +165,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 - **X32 Protocol:** xair-api (python-osc) for direct OSC/UDP communication
 - **MoIP Protocol:** Raw TCP sockets for direct Telnet communication with Binary MoIP controller (migrated from telnetlib for Python 3.13 compatibility)
 - **Database:** SQLite (audit log only)
-- **Monitoring:** Flask + SSE, webhook alerts to Home Assistant
+- **Monitoring:** Built-in health module (30+ checks), webhook alerts to Home Assistant
 
 ## Conventions
 
@@ -191,7 +184,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 - Macro execution engine with scheduling support
 - Scene engine for video routing presets
 - Audit logging to SQLite
-- Health dashboard monitoring 30+ services with alerting
+- Built-in health monitoring of 30+ services with alerting (absorbed from STP_healthdash)
 - PTZ camera control (10 cameras, server-side to avoid CORS)
 - Epson projector control (4 projectors)
 - Home Assistant integration (power, WattBox, EcoFlow batteries)
@@ -209,7 +202,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 | 1 | Absorb X32 middleware (`x32-flask.py`) into gateway | **Complete** |
 | 2 | Absorb MoIP middleware (`moip-flask.py`) into gateway | **Complete** |
 | 3 | Absorb OBS middleware (`obs-flask.py`) into gateway | **Complete** |
-| 4 | Absorb HealthDash (`STP_healthdash/app.py`) into gateway as a module + frontend page | Not started |
+| 4 | Absorb HealthDash (`STP_healthdash/app.py`) into gateway as a module + frontend page | **Complete** |
 | 5 | Centralize all secrets into `.env` — remove duplication from config.yaml and middleware | Not started |
 | 6 | Absorb occupancy app (`STP_occupancy/` repo) into gateway | Not started |
 | 7 | Sunset The Home Remote (THR) — remove `STP_THRFiles_Current` dependency | Not started |
@@ -231,7 +224,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
 **Phase 3 (OBS) — COMPLETE:** Moved OBS WebSocket client logic from `obs-flask.py` into `gateway/obs_module.py`. The gateway now connects directly to OBS Studio at ws://127.0.0.1:4455 using `websocket-client` (sync) with manual OBS WebSocket v5 protocol handling. Port 4456 is no longer required. Uses synchronous WebSocket to avoid eventlet/asyncio cross-thread conflicts. Includes background poller with PING/SNAPSHOT two-stage health checks and fail-streak gating. The standalone `obs-flask.py` remains in STP_scripts as a rollback option.
 
-**Phase 4 (HealthDash):** Move health monitoring logic from `STP_healthdash/app.py` into a gateway module. Add `#health` page to the frontend. Remove port 20855 dependency. HealthDash config merges into `config.yaml`.
+**Phase 4 (HealthDash) — COMPLETE:** Moved all health monitoring logic from `STP_healthdash/app.py` into `gateway/health_module.py`. The gateway now runs 30+ health checks internally with 9 check types (http, http_json, tcp, process, process_and_tcp, obs_rpc, ffprobe_rtsp, composite, heartbeat_group). Port 20855 is no longer required. All service definitions merged into `gateway/config.yaml` under `healthdash:` section. Added `#health` page to frontend with severity summary tiles, service cards, composite member expansion, log viewer, and recovery actions. Tablet heartbeat forwarding is now in-process (no HTTP hop). HA credentials inherited from gateway's HA_URL/HA_TOKEN env vars. The standalone `STP_healthdash/app.py` remains as a rollback option.
 
 **Phase 5 (Secrets):** Make `.env` the single source of truth for all secrets. `config.yaml` keeps only non-sensitive config (IPs, polling intervals, device names). Remove all hardcoded keys/passwords from config files.
 
