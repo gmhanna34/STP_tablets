@@ -3012,6 +3012,10 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 return f"Notify: {step.get('message', '')}"
             elif t == "condition":
                 return f"Condition: check {step.get('check', {}).get('entity', '')}"
+            elif t == "macro":
+                nested = step.get("macro", "")
+                nested_label = macro_defs.get(nested, {}).get("label", nested)
+                return f"Run macro: {nested_label}"
             return f"{t}"
 
         return jsonify(_expand(macro_key)), 200
