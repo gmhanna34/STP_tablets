@@ -3339,9 +3339,9 @@ body.compact .cam-tab {
   margin-top: 16px;
 }
 
-.btn-danger {
+.health-confirm-actions .btn-danger {
   background: var(--down);
   color: #fff;
   border-color: var(--down);
 }
-.btn-danger:hover { filter: brightness(1.1); }
+.health-confirm-actions .btn-danger:hover { filter: brightness(1.1); }
