@@ -41,7 +41,7 @@ moip:
   username: ""                   # Set MOIP_USERNAME in .env
   password: ""                   # Set MOIP_PASSWORD in .env
   telnet_read_timeout: 5
-  failure_threshold: 50
+  failure_threshold: 5
   reboot_cooldown_minutes: 15
   keepalive_interval_normal: 30
   keepalive_interval_max: 300
