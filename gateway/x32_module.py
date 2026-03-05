@@ -39,7 +39,15 @@ class MixerOwner:
     def connect(self) -> None:
         self._logger.info(f"X32: Connecting to {self.mixer_type} @ {self.ip}...")
         m = xair_api.connect(self.mixer_type, ip=self.ip)
-        m.__enter__()
+        try:
+            m.__enter__()
+        except Exception:
+            # Clean up the socket so it doesn't leak file descriptors
+            try:
+                m.__exit__(None, None, None)
+            except Exception:
+                pass
+            raise
         self.mixer = m
         self.connected = True
         self._logger.info("X32: Connected to mixer")
@@ -255,6 +263,7 @@ class X32Poller:
 
         last_snapshot_attempt = 0.0
         last_warn_log = 0.0
+        _reconnect_backoff = 0.0  # extra delay after repeated connect failures
 
         while not self._stop.is_set():
             start = time.time()
@@ -263,6 +272,7 @@ class X32Poller:
             if not self._owner.connected:
                 try:
                     self._owner.connect()
+                    _reconnect_backoff = 0.0  # reset on success
                 except Exception as e:
                     self._ping_fail_streak += 1
                     self._last_error = f"connect failed ({self._ping_fail_streak}): {e}"
@@ -270,8 +280,9 @@ class X32Poller:
                         self._logger.warning(f"X32: {self._last_error}")
                     if self._ping_fail_streak >= self._ping_fails_to_offline:
                         self._online = False
-                    elapsed = time.time() - start
-                    self._stop.wait(timeout=max(0.2, self._ping_seconds - elapsed))
+                    # Exponential backoff: 2s, 4s, 8s, … capped at 30s
+                    _reconnect_backoff = min(_reconnect_backoff * 2 or 2.0, 30.0)
+                    self._stop.wait(timeout=_reconnect_backoff)
                     continue
 
             # ---- 1) PING determines online/offline ----
