@@ -1808,6 +1808,12 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
+        data: { entity_id: "switch.sw_033_av_3spare" }
+        on_fail: skip
+        message: "Turning on Social Hall Wireless Mics"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
         data: { entity_id: "switch.sw_020_spare_plug2" }
         on_fail: skip
         message: "Turning on Social Hall Amplifier"
@@ -1829,6 +1835,12 @@ macros:
         data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_6" }
         on_fail: skip
         message: "Turning off Social Hall Mics 2"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.sw_033_av_3spare" }
+        on_fail: skip
+        message: "Turning off Social Hall Wireless Mics"
 
   social_ac_on:
     label: "Social Hall A/C On"
