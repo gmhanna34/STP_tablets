@@ -601,6 +601,7 @@ const SourcePage = {
   destroy() {
     if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
     if (this.mixerTimer) { clearInterval(this.mixerTimer); this.mixerTimer = null; }
+    this._activeTab = 'video';
     this._announcementsLoaded = false;
     this._announcements = [];
   }

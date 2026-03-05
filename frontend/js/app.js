@@ -10,6 +10,10 @@ const App = {
   async init() {
     console.log('St. Paul Control Panel - Initializing...');
 
+    // Patch global fetch to auto-inject X-Tablet-ID header on all API requests.
+    // This eliminates [Unknown] in gateway logs for pages that call fetch() directly.
+    this._patchFetch();
+
     // Apply saved theme and density before anything renders
     this.initTheme();
     this.initDensity();
@@ -202,6 +206,23 @@ const App = {
         });
       }
     }, 30000);
+  },
+
+  _patchFetch() {
+    const originalFetch = window.fetch;
+    window.fetch = function(input, init) {
+      // Only patch same-origin API requests (not external CDN resources)
+      const url = typeof input === 'string' ? input : (input?.url || '');
+      if (url.startsWith('/api/') || url.startsWith('api/')) {
+        init = init || {};
+        init.headers = new Headers(init.headers || {});
+        if (!init.headers.has('X-Tablet-ID')) {
+          const tabletId = (typeof Auth !== 'undefined' && Auth.getTabletId) ? Auth.getTabletId() : 'Unknown';
+          init.headers.set('X-Tablet-ID', tabletId);
+        }
+      }
+      return originalFetch.call(this, input, init);
+    };
   },
 
   setConnectionStatus(text, connected) {
