@@ -422,18 +422,25 @@ class HealthModule:
                                 timeout=timeout, verify=verify_tls)
             latency_ms = round((time.time() - start) * 1000, 1)
 
-            if resp.status_code != 200:
-                prev = self._results.get(sid)
-                return ServiceResult(
-                    id=sid, name=name,
-                    status=_level_label("down"),
-                    message=f"HTTP {resp.status_code}",
-                    checked_at=_now_iso(),
-                    last_ok_at=prev.last_ok_at if prev else None,
-                    latency_ms=latency_ms,
-                )
-
-            data = resp.json()
+            # Try to parse JSON body regardless of HTTP status code,
+            # since internal module endpoints return 503 with valid JSON
+            # when they report unhealthy — we want the JSON path check
+            # to be the authority, not the HTTP status code.
+            try:
+                data = resp.json()
+            except Exception:
+                # No JSON body — fall back to HTTP status check
+                if resp.status_code != 200:
+                    prev = self._results.get(sid)
+                    return ServiceResult(
+                        id=sid, name=name,
+                        status=_level_label("down"),
+                        message=f"HTTP {resp.status_code}",
+                        checked_at=_now_iso(),
+                        last_ok_at=prev.last_ok_at if prev else None,
+                        latency_ms=latency_ms,
+                    )
+                data = {}
 
             # Check JSON path
             actual = self._resolve_json_path(data, ok_path)
