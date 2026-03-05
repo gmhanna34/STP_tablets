@@ -3086,6 +3086,12 @@ body.compact .cam-tab {
   align-items: flex-start;
   gap: 8px;
 }
+.health-card-toggle {
+  cursor: pointer;
+}
+.health-card-toggle:hover {
+  opacity: 0.85;
+}
 
 .health-card-title-row {
   display: flex;
@@ -3164,11 +3170,17 @@ body.compact .cam-tab {
 }
 
 .health-member-row {
+  padding: 4px 0;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border-color, rgba(255,255,255,0.06));
+  cursor: pointer;
+}
+.health-member-row:last-child { border-bottom: none; }
+
+.health-member-summary {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 0;
-  font-size: 12px;
 }
 
 .health-member-name {
@@ -3180,6 +3192,21 @@ body.compact .cam-tab {
 .health-member-label {
   color: var(--text-secondary);
   font-size: 11px;
+}
+
+.health-member-detail {
+  padding: 6px 0 4px 18px;
+}
+
+.health-member-detail-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.health-member-detail-grid span:nth-child(even) {
+  color: var(--text-primary);
 }
 
 /* --- Details --- */
