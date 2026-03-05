@@ -178,6 +178,7 @@ healthdash:
 
   # Map location slugs → friendly names shown on health dashboard
   tablet_names:
+    main-church: "Main Church Tablet"
     chapel: "Chapel Tablet"
     social-hall: "Social Hall Tablet"
     av-room: "A/V Room Tablet"
@@ -623,6 +624,8 @@ healthdash:
       alert:
         enabled: false
       expected:
+        - id: "Main Church Tablet"
+          name: "Main Church Tablet"
         - id: "Chapel Tablet"
           name: "Chapel Tablet"
         - id: "Social Hall Tablet"

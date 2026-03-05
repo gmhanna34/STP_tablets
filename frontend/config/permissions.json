@@ -107,6 +107,7 @@
     }
   },
   "locations": {
+    "main-church": { "displayName": "Main Church",      "defaultRole": "full_access" },
     "chapel":      { "displayName": "Chapel",          "defaultRole": "chapel" },
     "social-hall": { "displayName": "Social Hall",     "defaultRole": "social_hall" },
     "av-room":     { "displayName": "A/V Room",        "defaultRole": "full_access" },
