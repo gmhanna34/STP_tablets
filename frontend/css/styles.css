@@ -3728,6 +3728,8 @@ body.compact .cam-tab {
 
 .spinning {
   animation: spin 1.2s linear infinite;
+}
+
 /* ══════════════════════════════════════════════════════════════
    MOBILE NAV — Hamburger menu + slide-out drawer (phones only)
    ══════════════════════════════════════════════════════════════ */
