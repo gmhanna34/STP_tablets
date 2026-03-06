@@ -166,6 +166,7 @@ const App = {
     this.socket.io.on('reconnect', () => {
       this._reconnectAttempt = 0;
       clearTimeout(this._disconnectUiTimer);
+      this._hideRestartOverlay();
       const downtime = this._disconnectedAt ? Date.now() - this._disconnectedAt : 0;
       this._disconnectedAt = null;
       // Only show toast + re-navigate for long disconnects (>3s)
@@ -225,6 +226,11 @@ const App = {
       }
     });
 
+    // Gateway restart notification — show full-screen overlay until reconnected
+    this.socket.on('gateway:restarting', (data) => {
+      this._showRestartOverlay(data?.message || 'Gateway is restarting...');
+    });
+
     // Heartbeat — report presence every 30 seconds
     this._heartbeatInterval = setInterval(() => {
       if (this.socket && this.socket.connected) {
@@ -262,6 +268,31 @@ const App = {
       connEl.classList.toggle('status-connected', connected);
       connEl.classList.toggle('status-disconnected', !connected);
     }
+  },
+
+  _showRestartOverlay(message) {
+    // Remove existing overlay if any
+    this._hideRestartOverlay();
+    const overlay = document.createElement('div');
+    overlay.id = 'gateway-restart-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-size:18px;gap:16px;';
+    overlay.innerHTML = `
+      <span class="material-icons" style="font-size:48px;animation:spin 1.5s linear infinite;">sync</span>
+      <div>${message}</div>
+      <div style="font-size:13px;opacity:0.6;">Reconnecting automatically...</div>
+    `;
+    // Add spin animation if not present
+    if (!document.getElementById('restart-spin-style')) {
+      const style = document.createElement('style');
+      style.id = 'restart-spin-style';
+      style.textContent = '@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}';
+      document.head.appendChild(style);
+    }
+    document.body.appendChild(overlay);
+  },
+
+  _hideRestartOverlay() {
+    document.getElementById('gateway-restart-overlay')?.remove();
   },
 
   refreshCurrentPage(subsystem) {

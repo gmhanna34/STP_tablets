@@ -38,6 +38,10 @@ const SettingsPage = {
           <span class="material-icons">history</span>
           <span>Logs</span>
         </button>
+        <button class="cam-tab" data-settings-tab="config">
+          <span class="material-icons">settings_applications</span>
+          <span>Config</span>
+        </button>
         <button class="cam-tab active" data-settings-tab="admin">
           <span class="material-icons">admin_panel_settings</span>
           <span>Admin</span>
@@ -260,6 +264,34 @@ const SettingsPage = {
       </div>
 
       <!-- ============================================================ -->
+      <!-- CONFIG TAB                                                    -->
+      <!-- ============================================================ -->
+      <div id="settings-tab-config" class="settings-tab-content" style="display:none;">
+        <div class="page-grid" id="config-editor-grid">
+          <div class="text-center" style="opacity:0.5;padding:30px;">Loading configuration...</div>
+        </div>
+        <div class="page-grid" style="margin-top:12px;">
+          <div class="control-section" style="grid-column:1/-1;">
+            <div class="section-title">Apply Changes</div>
+            <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+              Save writes to config.yaml (backup created automatically).
+              Restart is required for most changes to take effect.
+            </div>
+            <div class="control-grid" style="grid-template-columns:1fr 1fr;">
+              <button class="btn" id="btn-config-save">
+                <span class="material-icons">save</span>
+                <span class="btn-label">Save Config</span>
+              </button>
+              <button class="btn danger" id="btn-gateway-restart">
+                <span class="material-icons">restart_alt</span>
+                <span class="btn-label">Restart Gateway</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
       <!-- ADMIN TAB                                                     -->
       <!-- ============================================================ -->
       <div id="settings-tab-admin" class="settings-tab-content">
@@ -404,6 +436,11 @@ const SettingsPage = {
     document.getElementById('btn-load-audit')?.addEventListener('click', () => this.loadAuditLog());
     document.getElementById('audit-filter')?.addEventListener('change', () => this.filterAuditLog());
     document.getElementById('audit-search')?.addEventListener('input', () => this.filterAuditLog());
+
+    // ── Config tab ────────────────────────────────────────────────
+    this._loadConfigEditor();
+    document.getElementById('btn-config-save')?.addEventListener('click', () => this._saveConfig());
+    document.getElementById('btn-gateway-restart')?.addEventListener('click', () => this._restartGateway());
 
     // ── Admin tab ──────────────────────────────────────────────────
     // Role selection
@@ -2113,6 +2150,247 @@ const SettingsPage = {
       App.showToast('YAML reference downloaded');
     } catch (e) {
       App.showToast('Failed to download YAML', 3000, 'error');
+    }
+  },
+
+  // =========================================================================
+  // CONFIG EDITOR
+  // =========================================================================
+
+  _configData: null,
+
+  async _loadConfigEditor() {
+    const grid = document.getElementById('config-editor-grid');
+    if (!grid) return;
+    try {
+      const resp = await fetch('/api/config/editable', {signal: AbortSignal.timeout(5000)});
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      this._configData = await resp.json();
+      this._renderConfigSections(grid);
+    } catch (e) {
+      grid.innerHTML = `<div class="control-section" style="grid-column:1/-1;">
+        <div class="info-text" style="color:var(--danger);">Failed to load config: ${e.message}</div>
+      </div>`;
+    }
+  },
+
+  _renderConfigSections(grid) {
+    const data = this._configData;
+    if (!data) return;
+
+    const sectionMeta = {
+      gateway:    {title: 'Gateway',       icon: 'dns'},
+      obs:        {title: 'OBS Studio',    icon: 'videocam'},
+      moip:       {title: 'MoIP Controller', icon: 'settings_input_hdmi'},
+      x32:        {title: 'X32 Mixer',     icon: 'equalizer'},
+      ptz_cameras:{title: 'PTZ Cameras',   icon: 'videocam'},
+      projectors: {title: 'Projectors',    icon: 'tv'},
+      camlytics:  {title: 'Camlytics',     icon: 'analytics'},
+      security:   {title: 'Security',      icon: 'security'},
+      fully_kiosk:{title: 'Fully Kiosk',   icon: 'tablet'},
+    };
+
+    const fieldLabels = {
+      host: 'Host', port: 'Port', debug: 'Debug',
+      ws_url: 'WebSocket URL', ping_seconds: 'Ping Interval (s)',
+      snapshot_seconds: 'Snapshot Interval (s)', offline_after_seconds: 'Offline After (s)',
+      ping_fails_to_offline: 'Ping Fails to Offline', max_scenes: 'Max Scenes',
+      host_internal: 'Internal Host', port_internal: 'Internal Port',
+      host_external: 'External Host', port_external: 'External Port',
+      mixer_ip: 'Mixer IP', mixer_type: 'Mixer Type',
+      communion_url: 'Communion URL', communion_buffer_default: 'Communion Buffer %',
+      occupancy_url_peak: 'Occupancy Peak URL', occupancy_url_live: 'Occupancy Live URL',
+      occupancy_buffer_default: 'Occupancy Buffer %',
+      allowed_ips: 'Allowed IPs', session_timeout_minutes: 'Session Timeout (min)',
+      devices: 'Devices',
+    };
+
+    let html = '';
+    for (const [section, info] of Object.entries(data)) {
+      const meta = sectionMeta[section] || {title: section, icon: 'settings'};
+      const envFlags = info._env || {};
+      const value = info._value || {};
+
+      if (info._fields === '*') {
+        // Dict editor (cameras, projectors)
+        html += this._renderDictSection(section, meta, value, envFlags);
+      } else {
+        // Field list editor
+        html += `<div class="control-section" style="grid-column:1/-1;">
+          <div class="section-title"><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">${meta.icon}</span>${meta.title}</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(250px, 1fr));gap:8px;">`;
+
+        for (const [field, val] of Object.entries(value)) {
+          const label = fieldLabels[field] || field;
+          const isEnv = envFlags[field];
+          const envBadge = isEnv ? ' <span style="font-size:10px;background:#ff9800;color:#000;padding:1px 5px;border-radius:3px;margin-left:4px;">from .env</span>' : '';
+          const disabled = isEnv ? 'disabled' : '';
+
+          if (field === 'allowed_ips' && Array.isArray(val)) {
+            html += `<div style="grid-column:1/-1;">
+              <label style="font-size:11px;opacity:0.7;">${label}${envBadge}</label>
+              <textarea id="cfg-${section}-${field}" rows="3" ${disabled}
+                style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:${isEnv ? '#333' : '#222'};color:#fff;font-size:13px;font-family:inherit;resize:vertical;"
+              >${(val || []).join('\n')}</textarea>
+            </div>`;
+          } else if (typeof val === 'boolean') {
+            html += `<div>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+                <input type="checkbox" id="cfg-${section}-${field}" ${val ? 'checked' : ''} ${disabled}
+                  style="width:18px;height:18px;">
+                <span>${label}${envBadge}</span>
+              </label>
+            </div>`;
+          } else if (typeof val === 'number') {
+            html += `<div>
+              <label style="font-size:11px;opacity:0.7;">${label}${envBadge}</label>
+              <input type="number" id="cfg-${section}-${field}" value="${val}" ${disabled} step="any"
+                style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:${isEnv ? '#333' : '#222'};color:#fff;font-size:13px;font-family:inherit;">
+            </div>`;
+          } else {
+            html += `<div>
+              <label style="font-size:11px;opacity:0.7;">${label}${envBadge}</label>
+              <input type="text" id="cfg-${section}-${field}" value="${val || ''}" ${disabled}
+                style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:${isEnv ? '#333' : '#222'};color:#fff;font-size:13px;font-family:inherit;">
+            </div>`;
+          }
+        }
+        html += '</div></div>';
+      }
+    }
+    grid.innerHTML = html;
+  },
+
+  _renderDictSection(section, meta, value, envFlags) {
+    const items = Object.entries(value);
+    let rows = '';
+    for (const [key, obj] of items) {
+      const ip = typeof obj === 'object' ? (obj.ip || '') : obj;
+      const name = typeof obj === 'object' ? (obj.name || '') : '';
+      rows += `<tr data-cfg-dict-row="${section}">
+        <td><input type="text" value="${key}" data-field="key" style="width:100%;padding:4px;border-radius:3px;border:1px solid #444;background:#222;color:#fff;font-size:12px;font-family:inherit;"></td>
+        <td><input type="text" value="${ip}" data-field="ip" style="width:100%;padding:4px;border-radius:3px;border:1px solid #444;background:#222;color:#fff;font-size:12px;font-family:inherit;"></td>
+        <td><input type="text" value="${name}" data-field="name" style="width:100%;padding:4px;border-radius:3px;border:1px solid #444;background:#222;color:#fff;font-size:12px;font-family:inherit;"></td>
+        <td style="text-align:center;"><button class="btn" style="padding:2px 6px;min-width:0;" onclick="this.closest('tr').remove()"><span class="material-icons" style="font-size:16px;">delete</span></button></td>
+      </tr>`;
+    }
+    return `<div class="control-section" style="grid-column:1/-1;">
+      <div class="section-title"><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">${meta.icon}</span>${meta.title}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;" id="cfg-table-${section}">
+        <thead><tr style="opacity:0.7;font-size:11px;text-align:left;">
+          <th style="padding:4px;">Name</th><th style="padding:4px;">IP</th><th style="padding:4px;">Display Name</th><th style="width:40px;"></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <button class="btn" style="margin-top:6px;display:inline-flex;padding:4px 10px;" onclick="SettingsPage._addDictRow('${section}')">
+        <span class="material-icons" style="font-size:16px;">add</span>
+        <span class="btn-label" style="font-size:12px;">Add</span>
+      </button>
+    </div>`;
+  },
+
+  _addDictRow(section) {
+    const table = document.getElementById(`cfg-table-${section}`);
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    const tr = document.createElement('tr');
+    tr.setAttribute('data-cfg-dict-row', section);
+    tr.innerHTML = `
+      <td><input type="text" value="" data-field="key" style="width:100%;padding:4px;border-radius:3px;border:1px solid #444;background:#222;color:#fff;font-size:12px;font-family:inherit;"></td>
+      <td><input type="text" value="" data-field="ip" style="width:100%;padding:4px;border-radius:3px;border:1px solid #444;background:#222;color:#fff;font-size:12px;font-family:inherit;"></td>
+      <td><input type="text" value="" data-field="name" style="width:100%;padding:4px;border-radius:3px;border:1px solid #444;background:#222;color:#fff;font-size:12px;font-family:inherit;"></td>
+      <td style="text-align:center;"><button class="btn" style="padding:2px 6px;min-width:0;" onclick="this.closest('tr').remove()"><span class="material-icons" style="font-size:16px;">delete</span></button></td>
+    `;
+    tbody.appendChild(tr);
+  },
+
+  _collectConfigValues() {
+    const data = this._configData;
+    if (!data) return null;
+    const result = {};
+
+    for (const [section, info] of Object.entries(data)) {
+      const envFlags = info._env || {};
+
+      if (info._fields === '*') {
+        // Collect dict from table rows
+        const rows = document.querySelectorAll(`tr[data-cfg-dict-row="${section}"]`);
+        const dict = {};
+        rows.forEach(row => {
+          const key = row.querySelector('[data-field="key"]')?.value?.trim();
+          const ip = row.querySelector('[data-field="ip"]')?.value?.trim();
+          const name = row.querySelector('[data-field="name"]')?.value?.trim();
+          if (key) {
+            dict[key] = {ip: ip || '', name: name || ''};
+          }
+        });
+        result[section] = dict;
+      } else {
+        const fields = info._fields || [];
+        const sectionData = {};
+        for (const field of fields) {
+          if (envFlags[field]) continue; // skip env-overridden
+          const el = document.getElementById(`cfg-${section}-${field}`);
+          if (!el) continue;
+
+          if (field === 'allowed_ips') {
+            sectionData[field] = el.value.split('\n').map(s => s.trim()).filter(Boolean);
+          } else if (el.type === 'checkbox') {
+            sectionData[field] = el.checked;
+          } else if (el.type === 'number') {
+            const num = parseFloat(el.value);
+            sectionData[field] = isNaN(num) ? el.value : num;
+          } else {
+            sectionData[field] = el.value;
+          }
+        }
+        result[section] = sectionData;
+      }
+    }
+    return result;
+  },
+
+  async _saveConfig() {
+    const values = this._collectConfigValues();
+    if (!values) { App.showToast('No config loaded', 3000, 'error'); return; }
+
+    const btn = document.getElementById('btn-config-save');
+    if (btn) { btn.disabled = true; btn.querySelector('.btn-label').textContent = 'Saving...'; }
+
+    try {
+      const resp = await fetch('/api/config/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(values),
+        signal: AbortSignal.timeout(10000),
+      });
+      const result = await resp.json();
+      if (result.success) {
+        const msg = result.changes?.length
+          ? `Saved ${result.changes.length} change(s). Restart gateway to apply.`
+          : result.message || 'No changes detected.';
+        App.showToast(msg, 4000);
+      } else {
+        App.showToast(result.error || 'Save failed', 4000, 'error');
+      }
+    } catch (e) {
+      App.showToast(`Save failed: ${e.message}`, 4000, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.querySelector('.btn-label').textContent = 'Save Config'; }
+    }
+  },
+
+  async _restartGateway() {
+    if (!confirm('Restart the gateway? All tablets will briefly disconnect.')) return;
+
+    try {
+      await fetch('/api/gateway/restart', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        signal: AbortSignal.timeout(5000),
+      });
+    } catch (e) {
+      // Expected — server dies before response completes
     }
   },
 
