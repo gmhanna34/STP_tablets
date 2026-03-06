@@ -2513,30 +2513,30 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
 
     # Collect all HA entity IDs referenced by button state bindings
     ha_state_entities: set = set()
+
+    def _collect_ha_entities(binding):
+        """Extract HA entity IDs from a state/badge/disabled_when binding."""
+        if not binding or binding.get("source") != "ha":
+            return
+        if binding.get("entity"):
+            ha_state_entities.add(binding["entity"])
+        for eid in (binding.get("entities") or []):
+            ha_state_entities.add(eid)
+
     for page_sections in button_defs.values():
         for section in page_sections:
             for item in section.get("items", []):
-                st = item.get("state")
-                if st and st.get("source") == "ha" and st.get("entity"):
-                    ha_state_entities.add(st["entity"])
+                _collect_ha_entities(item.get("state"))
                 # Also scan toggle state bindings
                 toggle = item.get("toggle")
                 if toggle:
-                    tst = toggle.get("state")
-                    if tst and tst.get("source") == "ha" and tst.get("entity"):
-                        ha_state_entities.add(tst["entity"])
+                    _collect_ha_entities(toggle.get("state"))
                 # Also scan badge bindings
-                badge = item.get("badge")
-                if badge and badge.get("source") == "ha" and badge.get("entity"):
-                    ha_state_entities.add(badge["entity"])
+                _collect_ha_entities(item.get("badge"))
                 # Also scan disabled_when bindings
-                dw = item.get("disabled_when")
-                if dw and dw.get("source") == "ha" and dw.get("entity"):
-                    ha_state_entities.add(dw["entity"])
+                _collect_ha_entities(item.get("disabled_when"))
             # Section-level disabled_when
-            sdw = section.get("disabled_when")
-            if sdw and sdw.get("source") == "ha" and sdw.get("entity"):
-                ha_state_entities.add(sdw["entity"])
+            _collect_ha_entities(section.get("disabled_when"))
 
     def _execute_macro(macro_key: str, tablet: str, depth: int = 0,
                        skip_steps: set = None, prefix: str = "") -> dict:
