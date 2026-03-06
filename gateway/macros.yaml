@@ -19,6 +19,7 @@
 #   ptz_preset    Recall a PTZ camera preset
 #   delay         Wait N seconds (with optional progress message)
 #   macro         Call another macro (nesting, max depth 5)
+#   parallel      Run sub-steps concurrently (all must succeed unless on_fail: skip)
 #   condition     If/then/else branching based on a check
 #   notify        Broadcast a message to all tablets
 #
@@ -117,44 +118,40 @@ macros:
         receiver: 09
         code: "IRPowerOnRCA"
         message: "Quick power-on to Chapel Floating TV"
-      # Enable Chapel HDMI Transmitter and IR
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_1" }
-        on_fail: skip
-        message: "Turning on Chapel HDMI Transmitter"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_2" }
-        on_fail: skip
-        message: "Turning on Chapel Screens IR"
-      # Enable battery power for TVs
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.bat_chapeltv_1_ac_enabled" }
-        on_fail: skip
-        message: "Enabling Chapel TV 1 AC power"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.bat_chapeltv_1_dc12v_enabled" }
-        on_fail: skip
-        message: "Enabling Chapel TV 1 DC 12V power"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.bat_chapeltv_2_ac_enabled" }
-        on_fail: skip
-        message: "Enabling Chapel TV 2 AC power"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.bat_chapeltv_2_dc12v_enabled" }
-        on_fail: skip
-        message: "Enabling Chapel TV 2 DC 12V power"
+      # Enable HDMI transmitter, IR, and battery power — all independent
+      - type: parallel
+        message: "Enabling Chapel HDMI, IR, and TV battery power"
+        steps:
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_1" }
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_2" }
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.bat_chapeltv_1_ac_enabled" }
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.bat_chapeltv_1_dc12v_enabled" }
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.bat_chapeltv_2_ac_enabled" }
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.bat_chapeltv_2_dc12v_enabled" }
+            on_fail: skip
       # IR Power On - Round 1
       - type: moip_ir
         receiver: 09
@@ -469,30 +466,42 @@ macros:
     icon: "play_circle"
     description: "Full AV startup: TVs, audio, Apple TV source, live stream scene, camera preset, and unlock exterior doors for 3 hours"
     steps:
-      - type: macro
-        macro: "chapel_tv_on"
-        message: "Turning on Chapel TVs"
-      - type: macro
-        macro: "chapel_audio_on"
-        message: "Turning on Chapel audio"
+      # TVs and audio are independent — run simultaneously
+      - type: parallel
+        message: "Starting TVs and audio simultaneously"
+        steps:
+          - type: macro
+            macro: "chapel_tv_on"
+          - type: macro
+            macro: "chapel_audio_on"
       - type: macro
         macro: "chapel_source_appletv"
         message: "Setting Chapel source to Apple TV"
-      - type: obs_emit
-        action: "SetCurrentProgramScene"
-        data:
-          sceneName: "Chapel_Rear"
-        on_fail: skip
-        message: "Setting live stream scene to Chapel Rear"
-      - type: macro
-        macro: "stream_scene_chapel"
-        on_fail: skip
-        message: "Setting audio routing and X32 scene for Chapel"
-      - type: ptz_preset
-        camera: "Chapel_Rear"
-        preset: 1
-        on_fail: skip
-        message: "Setting Chapel Rear camera to Full View (Preset 1)"
+      # OBS scene, camera preset, and door unlocks are all independent
+      - type: parallel
+        message: "Setting stream scene, camera, and unlocking doors"
+        steps:
+          - type: obs_emit
+            action: "SetCurrentProgramScene"
+            data:
+              sceneName: "Chapel_Rear"
+            on_fail: skip
+          - type: ptz_preset
+            camera: "Chapel_Rear"
+            preset: 1
+            on_fail: skip
+          - type: door_timed_unlock
+            entity: "lock.main_church_door"
+            minutes: 180
+            on_fail: skip
+          - type: door_timed_unlock
+            entity: "lock.main_lobby"
+            minutes: 180
+            on_fail: skip
+          - type: macro
+            macro: "stream_scene_chapel"
+            on_fail: skip
+            message: "Setting audio routing and X32 scene for Chapel"
       # --- Unlock exterior doors for 3 hours ---
       - type: door_timed_unlock
         entity: "lock.main_church_door"
@@ -510,15 +519,15 @@ macros:
     icon: "power_settings_new"
     description: "Full AV shutdown: TVs off, audio off, A/C off"
     steps:
-      - type: macro
-        macro: "chapel_tv_off"
-        message: "Turning off Chapel TVs"
-      - type: macro
-        macro: "chapel_audio_off"
-        message: "Turning off Chapel audio"
-      - type: macro
-        macro: "chapel_ac_off"
-        message: "Turning off Chapel A/C"
+      - type: parallel
+        message: "Shutting down TVs, audio, and A/C simultaneously"
+        steps:
+          - type: macro
+            macro: "chapel_tv_off"
+          - type: macro
+            macro: "chapel_audio_off"
+          - type: macro
+            macro: "chapel_ac_off"
 
   # ---------------------------------------------------------------------------
   # MAIN CHURCH (examples — expand as needed)
@@ -561,31 +570,30 @@ macros:
     icon: "tv"
     description: "Power outlets on, then each projector with stagger delays"
     steps:
-      # Projector power switches (Kasa plugs)
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_034_mc_frontleft_new" }
-        on_fail: skip
-        message: "Powering on front-left projector outlet"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_035_mc_frontright" }
-        on_fail: skip
-        message: "Powering on front-right projector outlet"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_036_mc_rearright" }
-        on_fail: skip
-        message: "Powering on rear-right projector outlet"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_037_mc_rearleft" }
-        on_fail: skip
-        message: "Powering on rear-left projector outlet"
+      # Projector power switches (Kasa plugs) — all independent
+      - type: parallel
+        message: "Powering on all projector outlets"
+        steps:
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.sw_034_mc_frontleft_new" }
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.sw_035_mc_frontright" }
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.sw_036_mc_rearright" }
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.sw_037_mc_rearleft" }
+            on_fail: skip
       # Individual Epson projectors with 1s stagger delays
       - type: epson_power
         projector: "epson1"
@@ -722,18 +730,18 @@ macros:
     icon: "tv"
     description: "Lower screens, power on projectors, cry room, shared video"
     steps:
-      - type: macro
-        macro: "main_screens_shelf_down"
-        message: "Lowering screens and shelves"
-      - type: macro
-        macro: "main_projectors_on"
-        message: "Turning on projectors"
-      - type: macro
-        macro: "main_cryroom_on"
-        message: "Turning on cry room"
-      - type: macro
-        macro: "shared_video_on"
-        message: "Starting shared video components"
+      # All four sub-systems are independent — run simultaneously
+      - type: parallel
+        message: "Starting all video sub-systems simultaneously"
+        steps:
+          - type: macro
+            macro: "main_screens_shelf_down"
+          - type: macro
+            macro: "main_projectors_on"
+          - type: macro
+            macro: "main_cryroom_on"
+          - type: macro
+            macro: "shared_video_on"
       - type: macro
         macro: "main_source_appletv_no_pages"
         message: "Setting video source to Apple TV (No Page #s)"
@@ -747,43 +755,39 @@ macros:
     icon: "tv_off"
     confirm: "Turn OFF the entire video system (all projectors + screens)?"
     steps:
-      # Raise screens and shelves first (instant relay toggle)
-      - type: macro
-        macro: "main_screens_shelf_up"
-        message: "Raising screens and shelves"
-      # Turn off all projectors
-      - type: epson_all
-        state: "off"
-        message: "Powering off all projectors"
-      # Virtual switches off
-      - type: ha_service
-        domain: "switch"
-        service: "turn_off"
-        data: { entity_id: "switch.vs_epsonprojector1" }
-        on_fail: skip
-      - type: ha_service
-        domain: "switch"
-        service: "turn_off"
-        data: { entity_id: "switch.vs_epsonprojector2" }
-        on_fail: skip
-      - type: ha_service
-        domain: "switch"
-        service: "turn_off"
-        data: { entity_id: "switch.vs_epsonprojector3" }
-        on_fail: skip
-      - type: ha_service
-        domain: "switch"
-        service: "turn_off"
-        data: { entity_id: "switch.vs_epsonprojector4" }
-        on_fail: skip
-      # Cry room off
-      - type: macro
-        macro: "main_cryroom_off"
-        message: "Turning off cry room"
-      # Portables off
-      - type: macro
-        macro: "main_portables_off"
-        message: "Turning off portables"
+      # Everything is independent — screens, projectors, virtual switches, cry room, portables
+      - type: parallel
+        message: "Shutting down all video sub-systems simultaneously"
+        steps:
+          - type: macro
+            macro: "main_screens_shelf_up"
+          - type: epson_all
+            state: "off"
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_off"
+            data: { entity_id: "switch.vs_epsonprojector1" }
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_off"
+            data: { entity_id: "switch.vs_epsonprojector2" }
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_off"
+            data: { entity_id: "switch.vs_epsonprojector3" }
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_off"
+            data: { entity_id: "switch.vs_epsonprojector4" }
+            on_fail: skip
+          - type: macro
+            macro: "main_cryroom_off"
+          - type: macro
+            macro: "main_portables_off"
       - type: notify
         message: "Main church video system powered off"
 
@@ -2767,61 +2771,61 @@ macros:
     icon: "play_circle"
     description: "Full AV startup: video, audio, Apple TV source, live stream scene, camera preset, and unlock exterior doors for 5 hours"
     steps:
-      - type: macro
-        macro: "main_video_on"
-        message: "Turning on video system (projectors + screens)"
-      - type: macro
-        macro: "main_audio_on"
-        message: "Turning on audio system"
+      # Video and audio are independent — run simultaneously
+      - type: parallel
+        message: "Starting video and audio systems simultaneously"
+        steps:
+          - type: macro
+            macro: "main_video_on"
+          - type: macro
+            macro: "main_audio_on"
       - type: macro
         macro: "main_source_appletv_no_pages"
         message: "Setting video source to Apple TV (No Page #s)"
-      - type: obs_emit
-        action: "SetCurrentProgramScene"
-        data:
-          sceneName: "MainChurch_Rear"
-        on_fail: skip
-        message: "Setting live stream scene to Main Church Rear"
+      # OBS scene, camera preset, and door unlocks are all independent
+      - type: parallel
+        message: "Setting stream scene, camera, and unlocking doors"
+        steps:
+          - type: obs_emit
+            action: "SetCurrentProgramScene"
+            data:
+              sceneName: "MainChurch_Rear"
+            on_fail: skip
+          - type: ptz_preset
+            camera: "MainChurch_Rear"
+            preset: 1
+            on_fail: skip
+          - type: door_timed_unlock
+            entity: "lock.main_church_door"
+            minutes: 300
+            on_fail: skip
+          - type: door_timed_unlock
+            entity: "lock.main_lobby"
+            minutes: 300
+            on_fail: skip
+          - type: door_timed_unlock
+            entity: "lock.rear_entry"
+            minutes: 300
+            on_fail: skip
       - type: macro
         macro: "stream_scene_main_church"
         on_fail: skip
         message: "Setting audio routing and X32 scene for Main Church"
-      - type: ptz_preset
-        camera: "MainChurch_Rear"
-        preset: 1
-        on_fail: skip
-        message: "Setting Main Church Rear camera to Full View (Preset 1)"
-      # --- Unlock exterior doors for 5 hours ---
-      - type: door_timed_unlock
-        entity: "lock.main_church_door"
-        minutes: 300
-        on_fail: skip
-        message: "Unlocking main church door for 5 hours"
-      - type: door_timed_unlock
-        entity: "lock.main_lobby"
-        minutes: 300
-        on_fail: skip
-        message: "Unlocking lobby door for 5 hours"
-      - type: door_timed_unlock
-        entity: "lock.rear_entry"
-        minutes: 300
-        on_fail: skip
-        message: "Unlocking rear door for 5 hours"
 
   main_full_teardown:
     label: "Main Church Teardown"
     icon: "power_settings_new"
     description: "Full AV shutdown: video off, audio off, A/C off"
     steps:
-      - type: macro
-        macro: "main_video_off"
-        message: "Turning off video system (projectors + screens)"
-      - type: macro
-        macro: "main_audio_off"
-        message: "Turning off audio system"
-      - type: macro
-        macro: "main_ac_off"
-        message: "Turning off Main Church A/C"
+      - type: parallel
+        message: "Shutting down video, audio, and A/C simultaneously"
+        steps:
+          - type: macro
+            macro: "main_video_off"
+          - type: macro
+            macro: "main_audio_off"
+          - type: macro
+            macro: "main_ac_off"
       - type: notify
         message: "Main church fully shut down"
 
@@ -2834,42 +2838,46 @@ macros:
     icon: "play_circle"
     description: "Full AV startup: video, audio, live stream scene, and camera preset"
     steps:
-      - type: macro
-        macro: "social_video_on"
-        message: "Turning on video system"
-      - type: macro
-        macro: "social_audio_on"
-        message: "Turning on audio system"
-      - type: obs_emit
-        action: "SetCurrentProgramScene"
-        data:
-          sceneName: "SocialHall_Rear"
-        on_fail: skip
-        message: "Setting live stream scene to Social Hall Rear"
+      # Video and audio are independent — run simultaneously
+      - type: parallel
+        message: "Starting video and audio systems simultaneously"
+        steps:
+          - type: macro
+            macro: "social_video_on"
+          - type: macro
+            macro: "social_audio_on"
+      # OBS scene and camera preset are independent
+      - type: parallel
+        message: "Setting stream scene and camera preset"
+        steps:
+          - type: obs_emit
+            action: "SetCurrentProgramScene"
+            data:
+              sceneName: "SocialHall_Rear"
+            on_fail: skip
+          - type: ptz_preset
+            camera: "SocialHall_Rear"
+            preset: 1
+            on_fail: skip
       - type: macro
         macro: "stream_scene_social_hall"
         on_fail: skip
         message: "Setting audio routing and X32 scene for Social Hall"
-      - type: ptz_preset
-        camera: "SocialHall_Rear"
-        preset: 1
-        on_fail: skip
-        message: "Setting Social Hall Rear camera to Full View (Preset 1)"
 
   social_full_teardown:
     label: "Social Hall Teardown"
     icon: "power_settings_new"
     description: "Full AV shutdown: video off, audio off, A/C off"
     steps:
-      - type: macro
-        macro: "social_video_off"
-        message: "Turning off video system"
-      - type: macro
-        macro: "social_audio_off"
-        message: "Turning off audio system"
-      - type: macro
-        macro: "social_ac_off"
-        message: "Turning off Social Hall A/C"
+      - type: parallel
+        message: "Shutting down video, audio, and A/C simultaneously"
+        steps:
+          - type: macro
+            macro: "social_video_off"
+          - type: macro
+            macro: "social_audio_off"
+          - type: macro
+            macro: "social_ac_off"
 
 
 # =============================================================================
