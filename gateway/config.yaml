@@ -125,14 +125,15 @@ wattbox:
       outlet: 2
 security:
   allowed_ips:
-  - 192.168.1.
-  - 10.100.
-  - 10.10.
-  - 172.16.
-  - 127.0.0.1
-  - 47.150.
-  settings_pin: ''
-  secret_key: ''
+    - "192.168.1."
+    - "10.100."
+    - "10.10."
+    - "172.16."
+    - "127.0.0.1"
+    - "47.150."
+  settings_pin: ""                 # Set SETTINGS_PIN in .env
+  secure_pin: ""                   # Set SECURE_PIN in .env (protects Config tab & Security page)
+  secret_key: ""                   # Set FLASK_SECRET_KEY in .env
   session_timeout_minutes: 480
   remote_auth:
     username: ''

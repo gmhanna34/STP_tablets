@@ -191,5 +191,25 @@ const Auth = {
 
   requiresPIN(page) {
     return page === 'settings';
+  },
+
+  requiresSecurePIN(page) {
+    return page === 'security';
+  },
+
+  async verifySecurePIN(pin) {
+    try {
+      const resp = await fetch('/api/auth/verify-secure-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+        signal: AbortSignal.timeout(3000),
+      });
+      const result = await resp.json();
+      return result.success === true;
+    } catch (e) {
+      console.error('Secure PIN verification failed:', e);
+      return false;
+    }
   }
 };

@@ -145,6 +145,7 @@ def _apply_env_overrides(cfg: dict):
     sec = cfg.setdefault("security", {})
     sec["secret_key"] = _env("FLASK_SECRET_KEY", sec.get("secret_key", ""))
     sec["settings_pin"] = _env("SETTINGS_PIN", sec.get("settings_pin", ""))
+    sec["secure_pin"] = _env("SECURE_PIN", sec.get("secure_pin", ""))
     ra = sec.setdefault("remote_auth", {})
     ra["username"] = _env("REMOTE_AUTH_USER", ra.get("username", ""))
     ra["password"] = _env("REMOTE_AUTH_PASS", ra.get("password", ""))
@@ -588,6 +589,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
 
     allowed_ips = sec_cfg.get("allowed_ips", ["127.0.0.1"])
     settings_pin = sec_cfg.get("settings_pin", "1234")
+    secure_pin = sec_cfg.get("secure_pin", "")
     remote_auth = sec_cfg.get("remote_auth", {})
 
     # Camlytics runtime buffer state (resets to config defaults on restart)
@@ -1228,6 +1230,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
         "WATTBOX_PASSWORD": ("wattbox", "password"),
         "FLASK_SECRET_KEY": ("security", "secret_key"),
         "SETTINGS_PIN": ("security", "settings_pin"),
+        "SECURE_PIN": ("security", "secure_pin"),
         "REMOTE_AUTH_USER": ("security", "remote_auth.username"),
         "REMOTE_AUTH_PASS": ("security", "remote_auth.password"),
         "FULLY_KIOSK_PASSWORD": ("fully_kiosk", "password"),
@@ -1377,6 +1380,16 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
         data = request.get_json(silent=True) or {}
         pin = data.get("pin", "")
         if pin == settings_pin:
+            return jsonify({"success": True}), 200
+        return jsonify({"success": False, "error": "Invalid PIN"}), 401
+
+    @app.route("/api/auth/verify-secure-pin", methods=["POST"])
+    def verify_secure_pin():
+        data = request.get_json(silent=True) or {}
+        pin = data.get("pin", "")
+        if not secure_pin:
+            return jsonify({"success": False, "error": "Secure PIN not configured"}), 503
+        if pin == secure_pin:
             return jsonify({"success": True}), 200
         return jsonify({"success": False, "error": "Invalid PIN"}), 401
 
