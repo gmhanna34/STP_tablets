@@ -101,7 +101,7 @@ fully_kiosk:
 home_assistant:
   url: ''
   token: ''
-  timeout: 10
+  timeout: 15
 wattbox:
   username: admin
   password: ''

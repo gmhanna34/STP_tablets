@@ -1384,7 +1384,8 @@ const SettingsPage = {
     container.innerHTML = logs.map((log, idx) => {
       let ts = '--';
       if (log.timestamp) {
-        const d = new Date(log.timestamp);
+        const raw = log.timestamp.endsWith('Z') ? log.timestamp : log.timestamp + 'Z';
+        const d = new Date(raw);
         if (!isNaN(d.getTime())) {
           ts = d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(',', '');
         }

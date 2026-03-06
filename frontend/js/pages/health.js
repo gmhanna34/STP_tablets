@@ -505,7 +505,8 @@ const HealthPage = {
 
   _fmtTime(ts) {
     if (!ts) return '—';
-    const d = new Date(ts);
+    const raw = typeof ts === 'string' && !ts.endsWith('Z') && /\d{4}-\d{2}-\d{2}/.test(ts) ? ts + 'Z' : ts;
+    const d = new Date(raw);
     if (isNaN(d.getTime())) return ts;
     return d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
   },
