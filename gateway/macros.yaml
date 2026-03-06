@@ -484,6 +484,10 @@ macros:
           sceneName: "Chapel_Rear"
         on_fail: skip
         message: "Setting live stream scene to Chapel Rear"
+      - type: macro
+        macro: "stream_scene_chapel"
+        on_fail: skip
+        message: "Setting audio routing and X32 scene for Chapel"
       - type: ptz_preset
         camera: "Chapel_Rear"
         preset: 1
@@ -2778,6 +2782,10 @@ macros:
           sceneName: "MainChurch_Rear"
         on_fail: skip
         message: "Setting live stream scene to Main Church Rear"
+      - type: macro
+        macro: "stream_scene_main_church"
+        on_fail: skip
+        message: "Setting audio routing and X32 scene for Main Church"
       - type: ptz_preset
         camera: "MainChurch_Rear"
         preset: 1
@@ -2838,6 +2846,10 @@ macros:
           sceneName: "SocialHall_Rear"
         on_fail: skip
         message: "Setting live stream scene to Social Hall Rear"
+      - type: macro
+        macro: "stream_scene_social_hall"
+        on_fail: skip
+        message: "Setting audio routing and X32 scene for Social Hall"
       - type: ptz_preset
         camera: "SocialHall_Rear"
         preset: 1
