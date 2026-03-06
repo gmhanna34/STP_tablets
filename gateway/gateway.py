@@ -1338,7 +1338,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
 
     @app.route("/api/gateway/restart", methods=["POST"])
     def api_gateway_restart():
-        """Trigger a clean gateway restart. The process manager will auto-restart."""
+        """Trigger a gateway restart via the build app's ops API."""
         tablet = _tablet_id()
         logger.info(f"Gateway restart requested by {tablet}")
         db.log_action(tablet, "gateway:restart", "gateway", "", "OK", 0)
@@ -1349,11 +1349,21 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
             "requested_by": tablet,
         })
 
-        # Delayed exit so the Socket.IO message has time to send
+        # Ask the build app (port 20856) to restart us properly
         def _do_restart():
             time.sleep(2)
-            logger.info("Gateway exiting for restart")
-            os._exit(0)
+            logger.info("Requesting restart from build app ops API")
+            try:
+                resp = requests.post(
+                    "http://127.0.0.1:20856/ops/api/services/tablets_gateway/restart",
+                    timeout=30,
+                )
+                logger.info(f"Build app restart response: {resp.status_code}")
+            except Exception as e:
+                logger.error(f"Failed to contact build app for restart: {e}")
+                # Fallback: exit and hope a process manager restarts us
+                logger.info("Falling back to os._exit(0)")
+                os._exit(0)
 
         eventlet.spawn(_do_restart)
         return jsonify({"success": True, "message": "Restarting..."}), 200
