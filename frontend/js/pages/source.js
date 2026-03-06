@@ -6,6 +6,8 @@ const SourcePage = {
   _activeTab: 'video',
   _announcementsLoaded: false,
   _announcements: [],
+  _previewEnabled: false,
+  _previewSwitchDelay: 1500,
 
   render(container) {
     container.innerHTML = `
@@ -35,14 +37,46 @@ const SourcePage = {
 
         <!-- VIDEO TAB -->
         <div id="source-tab-video">
-          <div class="text-center" style="margin-bottom:8px;">
+          <div class="text-center" style="margin-bottom:8px;display:flex;justify-content:center;gap:8px;">
             <button class="btn" id="btn-refresh-routing" style="display:inline-flex;max-width:200px;">
               <span class="material-icons">refresh</span>
               <span class="btn-label">Refresh</span>
             </button>
+            <button class="btn" id="btn-preview-tx" style="display:none;max-width:240px;">
+              <span class="material-icons">visibility</span>
+              <span class="btn-label">Preview Source</span>
+            </button>
           </div>
           <div id="routing-container">
             <div class="text-center" style="opacity:0.5;">Loading receiver mappings...</div>
+          </div>
+        </div>
+
+        <!-- PREVIEW MODAL (hidden by default) -->
+        <div id="moip-preview-overlay" class="moip-preview-overlay" style="display:none;">
+          <div class="moip-preview-modal">
+            <div class="moip-preview-header">
+              <span class="material-icons" style="vertical-align:middle;">visibility</span>
+              <span id="moip-preview-title">Preview</span>
+              <button class="moip-preview-close" id="btn-preview-close">
+                <span class="material-icons">close</span>
+              </button>
+            </div>
+            <div class="moip-preview-body">
+              <div id="moip-preview-loading" class="text-center" style="padding:40px;">
+                <span class="material-icons spinning" style="font-size:40px;opacity:0.5;">sync</span>
+                <div style="margin-top:8px;opacity:0.5;">Switching source...</div>
+              </div>
+              <img id="moip-preview-stream" style="display:none;width:100%;border-radius:4px;" />
+              <div id="moip-preview-error" class="text-center" style="display:none;padding:30px;color:#cc0000;"></div>
+            </div>
+            <div class="moip-preview-footer">
+              <select id="moip-preview-tx-select" class="routing-select" style="flex:1;"></select>
+              <button class="btn" id="btn-preview-switch" style="max-width:120px;">
+                <span class="material-icons">swap_horiz</span>
+                <span class="btn-label">Switch</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -122,6 +156,13 @@ const SourcePage = {
         }
       });
     });
+
+    // Check if preview is enabled
+    fetch('/api/moip/preview/config').then(r => r.json()).then(data => {
+      this._previewEnabled = data.enabled;
+      this._previewSwitchDelay = data.switch_delay_ms || 1500;
+      this._initPreview();
+    }).catch(() => {});
 
     this.loadRouting();
     this.pollTimer = setInterval(() => this.loadRouting(), 10000);
@@ -502,10 +543,13 @@ const SourcePage = {
               </span>
               RX ${rx.id} - ${rx.name}
             </div>
-            <select class="routing-select" data-rx="${rx.id}">
-              <option value="">-- Select Source --</option>
-              ${this.transmitters.map(tx => `<option value="${tx.id}" ${String(currentTx) === String(tx.id) ? 'selected' : ''}>${tx.id} - ${tx.name}</option>`).join('')}
-            </select>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <select class="routing-select" data-rx="${rx.id}" style="flex:1;">
+                <option value="">-- Select Source --</option>
+                ${this.transmitters.map(tx => `<option value="${tx.id}" ${String(currentTx) === String(tx.id) ? 'selected' : ''}>${tx.id} - ${tx.name}</option>`).join('')}
+              </select>
+              ${this._previewEnabled ? `<button class="btn moip-preview-btn" data-preview-tx="${currentTx}" title="Preview this source" style="min-width:36px;padding:6px;"><span class="material-icons" style="font-size:18px;">visibility</span></button>` : ''}
+            </div>
           </div>
         `;
       });
@@ -521,9 +565,114 @@ const SourcePage = {
         if (txId) {
           await MoIPAPI.switchSource(txId, rxId);
           App.showToast(`RX ${rxId} → TX ${txId}`);
+          // Update the adjacent preview button's data attribute
+          const previewBtn = e.target.parentElement?.querySelector('.moip-preview-btn');
+          if (previewBtn) previewBtn.dataset.previewTx = txId;
         }
       });
     });
+
+    // Attach preview button handlers
+    container.querySelectorAll('.moip-preview-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const txId = parseInt(btn.dataset.previewTx);
+        if (txId) this._openPreview(txId);
+      });
+    });
+  },
+
+  _initPreview() {
+    // Show the preview button if enabled
+    const previewBtn = document.getElementById('btn-preview-tx');
+    if (previewBtn && this._previewEnabled) {
+      previewBtn.style.display = 'inline-flex';
+      previewBtn.addEventListener('click', () => this._openPreview());
+    }
+
+    document.getElementById('btn-preview-close')?.addEventListener('click', () => this._closePreview());
+    document.getElementById('btn-preview-switch')?.addEventListener('click', () => {
+      const sel = document.getElementById('moip-preview-tx-select');
+      if (sel?.value) this._switchPreview(parseInt(sel.value));
+    });
+
+    // Close on overlay click (outside modal)
+    document.getElementById('moip-preview-overlay')?.addEventListener('click', (e) => {
+      if (e.target.id === 'moip-preview-overlay') this._closePreview();
+    });
+  },
+
+  _openPreview(txId) {
+    const overlay = document.getElementById('moip-preview-overlay');
+    if (!overlay) return;
+
+    // Populate transmitter dropdown
+    const sel = document.getElementById('moip-preview-tx-select');
+    if (sel) {
+      sel.innerHTML = this.transmitters.map(tx =>
+        `<option value="${tx.id}" ${tx.id === txId ? 'selected' : ''}>${tx.id} - ${tx.name}</option>`
+      ).join('');
+      if (!txId && this.transmitters.length) txId = this.transmitters[0].id;
+    }
+
+    overlay.style.display = 'flex';
+    if (txId) this._switchPreview(txId);
+  },
+
+  async _switchPreview(txId) {
+    const loading = document.getElementById('moip-preview-loading');
+    const stream = document.getElementById('moip-preview-stream');
+    const error = document.getElementById('moip-preview-error');
+    const title = document.getElementById('moip-preview-title');
+
+    // Show loading, hide others
+    if (loading) loading.style.display = '';
+    if (stream) { stream.style.display = 'none'; stream.src = ''; }
+    if (error) error.style.display = 'none';
+
+    try {
+      const resp = await fetch('/api/moip/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transmitter: txId }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        throw new Error(data.error || `HTTP ${resp.status}`);
+      }
+
+      if (title) title.textContent = `Preview: TX${txId} - ${data.transmitter_name}`;
+
+      // Wait for signal lock then show stream
+      await new Promise(r => setTimeout(r, data.switch_delay_ms || this._previewSwitchDelay));
+
+      if (loading) loading.style.display = 'none';
+      if (stream) {
+        stream.src = data.stream_url;
+        stream.style.display = '';
+        stream.onerror = () => {
+          stream.style.display = 'none';
+          if (error) {
+            error.textContent = 'Stream unavailable. Check encoder connection.';
+            error.style.display = '';
+          }
+        };
+      }
+    } catch (e) {
+      if (loading) loading.style.display = 'none';
+      if (error) {
+        error.textContent = e.message || 'Failed to start preview';
+        error.style.display = '';
+      }
+    }
+  },
+
+  _closePreview() {
+    const overlay = document.getElementById('moip-preview-overlay');
+    const stream = document.getElementById('moip-preview-stream');
+    if (overlay) overlay.style.display = 'none';
+    // Disconnect MJPEG stream
+    if (stream) { stream.src = ''; stream.style.display = 'none'; }
   },
 
   _showHelp() {
@@ -600,6 +749,7 @@ const SourcePage = {
   destroy() {
     if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
     if (this.mixerTimer) { clearInterval(this.mixerTimer); this.mixerTimer = null; }
+    this._closePreview();
     this._activeTab = 'video';
     this._announcementsLoaded = false;
     this._announcements = [];

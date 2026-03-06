@@ -24,7 +24,17 @@ moip:
   reboot_cooldown_minutes: 15
   keepalive_interval_normal: 30
   keepalive_interval_max: 300
-  ha_webhook_id: ''
+  # HA webhook for watchdog-triggered restarts (from old moip-flask.py)
+  ha_webhook_id: ""              # Set MOIP_HA_WEBHOOK_ID in .env
+  # Preview: dedicated receiver + HDMI encoder for on-demand transmitter preview
+  preview:
+    enabled: false                     # Set to true once encoder hardware is installed
+    encoder_ip: "192.168.1.250"        # Static IP of HDMI-to-IP encoder
+    mjpeg_url: "http://192.168.1.250:8080/mjpeg"  # Encoder's MJPEG stream URL
+    preview_receiver: 49               # MoIP receiver index dedicated to preview
+    switch_delay_ms: 1500              # Delay after switch before showing stream (signal lock time)
+
+# --- X32 mixer (direct OSC/UDP, Phase 1 consolidation) -----------------------
 x32:
   mixer_ip: 192.168.1.231
   mixer_type: X32
