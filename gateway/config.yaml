@@ -793,7 +793,7 @@ occupancy:
   communion_window_end: '12:15'
   occupancy_pacing_start: 08:30
   occupancy_pacing_end: '12:30'
-  daily_reload_time: 01:00
+  daily_reload_time: '23:48'
   csv_download_urls:
     building: https://cloud.camlytics.com/feed/report/4f82c3553002b39064ef61fc87cb8621/csv
     communion: https://cloud.camlytics.com/feed/report/b09996961a7806ed790996ff451ab2cf/csv

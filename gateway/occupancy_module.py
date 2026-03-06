@@ -27,8 +27,9 @@ import requests as http_requests
 class OccupancyModule:
     """CSV-based occupancy analytics with background scheduler."""
 
-    def __init__(self, cfg: dict, logger: logging.Logger):
+    def __init__(self, cfg: dict, logger: logging.Logger, db=None):
         self.log = logger
+        self.db = db
         occ = cfg.get("occupancy", {})
 
         # Directories
@@ -67,6 +68,14 @@ class OccupancyModule:
         self._lock = threading.Lock()
         self._data: dict = {}
         self._stop = threading.Event()
+
+    def _audit(self, action: str, target: str, result: str = ""):
+        """Write an entry to the audit log (if db is available)."""
+        if self.db:
+            try:
+                self.db.log_action("Gateway", action, target, "", result)
+            except Exception:
+                pass
 
     # ── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -194,8 +203,10 @@ class OccupancyModule:
                     self.log.info("[occupancy] Daily scheduled download + reload")
                     self.download_csvs()
                     self.refresh_data()
+                    self._audit("occupancy:download", "daily_reload", result="OK")
                 except Exception as e:
                     self.log.error(f"[occupancy] Scheduled reload failed: {e}")
+                    self._audit("occupancy:download", "daily_reload", result=f"FAIL: {e}")
 
             self._stop.wait(30)
 

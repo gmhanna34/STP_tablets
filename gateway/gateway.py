@@ -585,7 +585,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
 
     # Occupancy analytics — absorbed from STP_Occupancy (Phase 6 consolidation)
     from occupancy_module import OccupancyModule
-    occupancy = None if mock_mode else OccupancyModule(cfg, logger)
+    occupancy = None if mock_mode else OccupancyModule(cfg, logger, db=db)
 
     allowed_ips = sec_cfg.get("allowed_ips", ["127.0.0.1"])
     settings_pin = sec_cfg.get("settings_pin", "1234")
