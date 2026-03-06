@@ -3726,10 +3726,6 @@ body.compact .cam-tab {
   background: rgba(255, 255, 255, 0.15) !important;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 .spinning {
   animation: spin 1.2s linear infinite;
 /* ══════════════════════════════════════════════════════════════
