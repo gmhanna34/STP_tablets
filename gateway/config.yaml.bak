@@ -24,17 +24,7 @@ moip:
   reboot_cooldown_minutes: 15
   keepalive_interval_normal: 30
   keepalive_interval_max: 300
-  # HA webhook for watchdog-triggered restarts (from old moip-flask.py)
-  ha_webhook_id: ""              # Set MOIP_HA_WEBHOOK_ID in .env
-  # Preview: dedicated receiver + HDMI encoder for on-demand transmitter preview
-  preview:
-    enabled: false                     # Set to true once encoder hardware is installed
-    encoder_ip: "192.168.1.250"        # Static IP of HDMI-to-IP encoder
-    mjpeg_url: "http://192.168.1.250:8080/mjpeg"  # Encoder's MJPEG stream URL
-    preview_receiver: 49               # MoIP receiver index dedicated to preview
-    switch_delay_ms: 1500              # Delay after switch before showing stream (signal lock time)
-
-# --- X32 mixer (direct OSC/UDP, Phase 1 consolidation) -----------------------
+  ha_webhook_id: ''
 x32:
   mixer_ip: 192.168.1.231
   mixer_type: X32
@@ -48,37 +38,37 @@ ptz_cameras:
     name: Baptism Room
   Chapel_Rear:
     ip: 192.168.1.205
-    name: Chapel Rear
+    name: Cam1921681205
   Chapel_Side:
     ip: 192.168.1.206
-    name: Chapel Side
+    name: Cam1921681206
   Gym:
     ip: 192.168.1.210
-    name: Gym
+    name: Cam1921681210
   MainChurch_Altar:
     ip: 192.168.1.202
-    name: Main Church - Altar
+    name: Cam1921681202
   MainChurch_Left:
     ip: 192.168.1.204
-    name: Main Church - Left
+    name: Cam1921681204
   MainChurch_Rear:
     ip: 192.168.1.201
-    name: Main Church - Rear
+    name: Cam1921681201
   MainChurch_Right:
     ip: 192.168.1.203
-    name: Main Church - Right
+    name: Cam1921681203
   MainChurch_Side_Left:
     ip: 192.168.1.204
-    name: Main Church - Left
+    name: Cam1921681204
   MainChurch_Side_Right:
     ip: 192.168.1.203
-    name: Main Church - Right
+    name: Cam1921681203
   SocialHall_Rear:
     ip: 192.168.1.208
-    name: Social Hall - Rear
+    name: Cam1921681208
   SocialHall_Side:
     ip: 192.168.1.209
-    name: Social Hall - Side
+    name: Cam1921681209
 projectors:
   epson1:
     ip: 192.168.1.233
@@ -125,15 +115,14 @@ wattbox:
       outlet: 2
 security:
   allowed_ips:
-    - "192.168.1."
-    - "10.100."
-    - "10.10."
-    - "172.16."
-    - "127.0.0.1"
-    - "47.150."
-  settings_pin: ""                 # Set SETTINGS_PIN in .env
-  secure_pin: ""                   # Set SECURE_PIN in .env (protects Config tab & Security page)
-  secret_key: ""                   # Set FLASK_SECRET_KEY in .env
+  - 192.168.1.
+  - 10.100.
+  - 10.10.
+  - 172.16.
+  - 127.0.0.1
+  - 47.150.
+  settings_pin: ''
+  secret_key: ''
   session_timeout_minutes: 480
   remote_auth:
     username: ''

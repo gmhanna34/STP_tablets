@@ -17,6 +17,9 @@
        ========================================================= -->
   <header id="status-bar">
     <div id="status-left" class="status-section">
+      <button id="mobile-menu-toggle" class="mobile-only" aria-label="Menu">
+        <span class="material-icons">menu</span>
+      </button>
       <span id="version-label">v1.0.0</span>
       <div id="status-health" class="status-section">
         <span class="health-badge health-down" id="health-down-count" title="Down">0</span>
@@ -185,6 +188,52 @@
       <span class="nav-label">SETTINGS</span>
     </button>
   </nav>
+
+  <!-- =========================================================
+       MOBILE NAV DRAWER (visible only on phones)
+       ========================================================= -->
+  <div id="mobile-nav-overlay" class="mobile-only"></div>
+  <aside id="mobile-nav-drawer" class="mobile-only">
+    <div class="drawer-header">
+      <img src="assets/images/church-seal.png" alt="Church Seal" class="drawer-seal" onerror="this.style.display='none'">
+      <span class="drawer-title">Navigation</span>
+    </div>
+    <button class="drawer-item" data-page="home">
+      <span class="material-icons">home</span><span>Home</span>
+    </button>
+    <button class="drawer-item" data-page="main">
+      <span class="material-icons">account_balance</span><span>Main Church</span>
+    </button>
+    <button class="drawer-item" data-page="chapel">
+      <span class="material-icons">temple_buddhist</span><span>Chapel</span>
+    </button>
+    <button class="drawer-item" data-page="social">
+      <span class="material-icons">groups</span><span>Social Hall</span>
+    </button>
+    <button class="drawer-item" data-page="gym">
+      <span class="material-icons">fitness_center</span><span>Gym</span>
+    </button>
+    <button class="drawer-item" data-page="confroom">
+      <span class="material-icons">meeting_room</span><span>Conference Room</span>
+    </button>
+    <div class="drawer-divider"></div>
+    <button class="drawer-item" data-page="stream">
+      <span class="material-icons">cast</span><span>Stream</span>
+    </button>
+    <button class="drawer-item" data-page="source">
+      <span class="material-icons">settings_input_hdmi</span><span>Source</span>
+    </button>
+    <button class="drawer-item" data-page="security">
+      <span class="material-icons">security</span><span>Security</span>
+    </button>
+    <div class="drawer-divider"></div>
+    <button class="drawer-item" data-page="health">
+      <span class="material-icons">monitor_heart</span><span>Health</span>
+    </button>
+    <button class="drawer-item" data-page="settings">
+      <span class="material-icons">settings</span><span>Settings</span>
+    </button>
+  </aside>
 
   <!-- =========================================================
        JAVASCRIPT MODULES
