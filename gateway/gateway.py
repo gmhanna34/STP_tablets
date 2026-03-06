@@ -24,6 +24,7 @@ import copy
 import json
 import logging
 import os
+import shutil
 import sqlite3
 import threading
 import time
@@ -522,7 +523,7 @@ class MockBackend:
 # GATEWAY APPLICATION
 # =============================================================================
 
-def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
+def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.yaml") -> tuple:
     """Create and configure the Flask app + SocketIO instance."""
 
     gateway_cfg = cfg.get("gateway", {})
@@ -1189,6 +1190,173 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
         db.log_action(_tablet_id(), "settings:verbose_logging", "settings",
                       json.dumps({"enabled": _verbose_logging}), "OK", 0)
         return jsonify({"success": True, "enabled": _verbose_logging}), 200
+
+    # -------------------------------------------------------------------------
+    # CONFIG EDITOR ENDPOINTS
+    # -------------------------------------------------------------------------
+
+    # Which fields are editable from the UI (curated safe subset).
+    # "*" means the entire sub-dict is editable (for dicts like ptz_cameras).
+    _EDITABLE_SCHEMA = {
+        "gateway": ["host", "port", "debug"],
+        "obs": ["ws_url", "ping_seconds", "snapshot_seconds",
+                "offline_after_seconds", "ping_fails_to_offline", "max_scenes"],
+        "moip": ["host_internal", "port_internal", "host_external", "port_external"],
+        "x32": ["mixer_ip", "mixer_type", "ping_seconds", "snapshot_seconds",
+                "offline_after_seconds", "ping_fails_to_offline"],
+        "ptz_cameras": "*",
+        "projectors": "*",
+        "camlytics": ["communion_url", "communion_buffer_default",
+                      "occupancy_url_peak", "occupancy_url_live",
+                      "occupancy_buffer_default"],
+        "security": ["allowed_ips", "session_timeout_minutes"],
+        "fully_kiosk": ["devices"],
+    }
+
+    # Map of env vars → config paths that they override.
+    # Fields with an active env var override are shown as read-only.
+    _ENV_OVERRIDES = {
+        "OBS_WS_PASSWORD": ("obs", "ws_password"),
+        "MOIP_USERNAME": ("moip", "username"),
+        "MOIP_PASSWORD": ("moip", "password"),
+        "MOIP_HOST_INTERNAL": ("moip", "host_internal"),
+        "MOIP_HOST_EXTERNAL": ("moip", "host_external"),
+        "MOIP_HA_WEBHOOK_ID": ("moip", "ha_webhook_id"),
+        "HA_URL": ("home_assistant", "url"),
+        "HA_TOKEN": ("home_assistant", "token"),
+        "WATTBOX_USERNAME": ("wattbox", "username"),
+        "WATTBOX_PASSWORD": ("wattbox", "password"),
+        "FLASK_SECRET_KEY": ("security", "secret_key"),
+        "SETTINGS_PIN": ("security", "settings_pin"),
+        "REMOTE_AUTH_USER": ("security", "remote_auth.username"),
+        "REMOTE_AUTH_PASS": ("security", "remote_auth.password"),
+        "FULLY_KIOSK_PASSWORD": ("fully_kiosk", "password"),
+        "ANTHROPIC_API_KEY": ("anthropic", "api_key"),
+        "HEALTHDASH_WEBHOOK_URL": ("healthdash", "alerts.ha_webhook_url"),
+    }
+
+    def _get_env_overridden_fields() -> set:
+        """Return set of 'section.field' paths that are actively overridden by env vars."""
+        overridden = set()
+        for env_var, (section, field) in _ENV_OVERRIDES.items():
+            if os.environ.get(env_var):
+                overridden.add(f"{section}.{field}")
+        return overridden
+
+    @app.route("/api/config/editable")
+    def api_config_editable():
+        """Return the curated editable config subset, with env-override metadata."""
+        overridden = _get_env_overridden_fields()
+        result = {}
+        for section, fields in _EDITABLE_SCHEMA.items():
+            section_data = cfg.get(section, {})
+            if fields == "*":
+                result[section] = {"_value": copy.deepcopy(section_data), "_fields": "*"}
+            else:
+                section_out = {}
+                for field in fields:
+                    section_out[field] = section_data.get(field)
+                result[section] = {"_value": section_out, "_fields": fields}
+            # Mark which fields are overridden by env vars
+            env_flags = {}
+            if fields == "*":
+                for key in section_data:
+                    if f"{section}.{key}" in overridden:
+                        env_flags[key] = True
+            else:
+                for field in fields:
+                    if f"{section}.{field}" in overridden:
+                        env_flags[field] = True
+            if env_flags:
+                result[section]["_env"] = env_flags
+        return jsonify(result), 200
+
+    @app.route("/api/config/save", methods=["POST"])
+    def api_config_save():
+        """Save editable config changes to config.yaml (with backup)."""
+        data = request.get_json(silent=True) or {}
+        if not data:
+            return jsonify({"success": False, "error": "No data provided"}), 400
+
+        overridden = _get_env_overridden_fields()
+        config_abs = os.path.abspath(config_path)
+
+        try:
+            # Read current config from disk
+            with open(config_abs, "r") as f:
+                disk_cfg = yaml.safe_load(f) or {}
+
+            changes = []
+            for section, payload in data.items():
+                if section not in _EDITABLE_SCHEMA:
+                    continue
+                allowed = _EDITABLE_SCHEMA[section]
+                disk_section = disk_cfg.setdefault(section, {})
+
+                if allowed == "*":
+                    # Replace the entire sub-dict (ptz_cameras, projectors)
+                    if isinstance(payload, dict):
+                        disk_cfg[section] = payload
+                        cfg[section] = copy.deepcopy(payload)
+                        changes.append(section)
+                else:
+                    if not isinstance(payload, dict):
+                        continue
+                    for field, value in payload.items():
+                        if field not in allowed:
+                            continue
+                        if f"{section}.{field}" in overridden:
+                            continue  # Skip env-overridden fields
+                        old_val = disk_section.get(field)
+                        if old_val != value:
+                            disk_section[field] = value
+                            # Also update in-memory cfg
+                            cfg.setdefault(section, {})[field] = value
+                            changes.append(f"{section}.{field}")
+
+            if not changes:
+                return jsonify({"success": True, "message": "No changes detected"}), 200
+
+            # Backup before writing
+            backup_path = config_abs + ".bak"
+            shutil.copy2(config_abs, backup_path)
+
+            # Write updated config
+            with open(config_abs, "w") as f:
+                yaml.safe_dump(disk_cfg, f, default_flow_style=False,
+                               sort_keys=False, allow_unicode=True)
+
+            logger.info(f"Config saved by {_tablet_id()}: {changes}")
+            db.log_action(_tablet_id(), "config:save", "config",
+                          json.dumps(changes), "OK", 0)
+
+            return jsonify({"success": True, "changes": changes}), 200
+
+        except Exception as e:
+            logger.error(f"Config save failed: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/gateway/restart", methods=["POST"])
+    def api_gateway_restart():
+        """Trigger a clean gateway restart. The process manager will auto-restart."""
+        tablet = _tablet_id()
+        logger.info(f"Gateway restart requested by {tablet}")
+        db.log_action(tablet, "gateway:restart", "gateway", "", "OK", 0)
+
+        # Notify all connected clients
+        socketio.emit("gateway:restarting", {
+            "message": "Gateway is restarting...",
+            "requested_by": tablet,
+        })
+
+        # Delayed exit so the Socket.IO message has time to send
+        def _do_restart():
+            time.sleep(2)
+            logger.info("Gateway exiting for restart")
+            os._exit(0)
+
+        eventlet.spawn(_do_restart)
+        return jsonify({"success": True, "message": "Restarting..."}), 200
 
     # -------------------------------------------------------------------------
     # AUTH ENDPOINTS
@@ -3712,7 +3880,7 @@ def main():
     host = args.host or gateway_cfg.get("host", "0.0.0.0")
     port = args.port or gateway_cfg.get("port", 8080)
 
-    app, socketio = create_app(cfg, mock_mode=args.mock)
+    app, socketio = create_app(cfg, mock_mode=args.mock, config_path=args.config)
 
     logger.info("=" * 60)
     logger.info("STP Gateway starting")
