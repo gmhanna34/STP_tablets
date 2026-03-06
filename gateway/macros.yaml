@@ -1850,7 +1850,7 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_off"
-        data: { entity_id: "switch.sw_033_av_3spare" }
+        data: { entity_id: "switch.sw_033_av_1spare" }
         on_fail: skip
         message: "Turning off Social Hall Wireless Mics"
 
