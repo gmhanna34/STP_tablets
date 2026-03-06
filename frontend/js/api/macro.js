@@ -1942,7 +1942,6 @@ const MacroAPI = {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  ,
                 },
                 body: JSON.stringify({ entity_id: entityId }),
               });
