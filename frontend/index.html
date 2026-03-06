@@ -72,7 +72,44 @@
         <span class="pin-dot"></span>
       </div>
 
-      <div id="pin-keypad">
+      <div id="pin-keypad" class="pin-keypad">
+        <button class="pin-key" data-key="1">1</button>
+        <button class="pin-key" data-key="2">2</button>
+        <button class="pin-key" data-key="3">3</button>
+        <button class="pin-key" data-key="4">4</button>
+        <button class="pin-key" data-key="5">5</button>
+        <button class="pin-key" data-key="6">6</button>
+        <button class="pin-key" data-key="7">7</button>
+        <button class="pin-key" data-key="8">8</button>
+        <button class="pin-key" data-key="9">9</button>
+        <button class="pin-key pin-action" data-key="clear">Clear</button>
+        <button class="pin-key" data-key="0">0</button>
+        <button class="pin-key pin-action" data-key="enter">Enter</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       SECURE PIN ENTRY OVERLAY
+       ========================================================= -->
+  <div id="secure-pin-overlay" class="overlay hidden">
+    <div id="secure-pin-modal" class="modal">
+      <button id="secure-pin-close" class="modal-close" aria-label="Close">
+        <span class="material-icons">close</span>
+      </button>
+
+      <h2 id="secure-pin-title"><span class="material-icons" style="vertical-align:middle;font-size:22px;margin-right:4px;">lock</span> Secure PIN</h2>
+
+      <div id="secure-pin-display">
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+        <span class="pin-dot"></span>
+      </div>
+
+      <div id="secure-pin-keypad" class="pin-keypad">
         <button class="pin-key" data-key="1">1</button>
         <button class="pin-key" data-key="2">2</button>
         <button class="pin-key" data-key="3">3</button>

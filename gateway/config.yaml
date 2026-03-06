@@ -147,6 +147,7 @@ security:
     - "127.0.0.1"
     - "47.150."
   settings_pin: ""                 # Set SETTINGS_PIN in .env
+  secure_pin: ""                   # Set SECURE_PIN in .env (protects Config tab & Security page)
   secret_key: ""                   # Set FLASK_SECRET_KEY in .env
   session_timeout_minutes: 480
   # Login credentials for access from outside the allowed IP ranges

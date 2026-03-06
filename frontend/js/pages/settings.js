@@ -397,7 +397,15 @@ const SettingsPage = {
     this._activeTab = 'admin';
     document.querySelectorAll('[data-settings-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
-        this._switchTab(btn.dataset.settingsTab);
+        const tab = btn.dataset.settingsTab;
+        if (tab === 'config') {
+          // Config tab requires secure PIN every time
+          App.showSecurePINEntry((success) => {
+            if (success) this._switchTab(tab);
+          });
+          return;
+        }
+        this._switchTab(tab);
       });
     });
 

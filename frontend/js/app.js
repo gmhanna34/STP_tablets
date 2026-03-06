@@ -73,8 +73,9 @@ const App = {
     this.startHealthPolling();
     this.startDeviceInfoPolling();
 
-    // Setup PIN overlay
+    // Setup PIN overlays
     this.setupPINOverlay();
+    this.setupSecurePINOverlay();
 
     // Initialize Socket.IO connection
     this.initSocketIO();
@@ -594,6 +595,86 @@ const App = {
     const dots = document.querySelectorAll('.pin-dot');
     dots.forEach((dot, i) => {
       dot.classList.toggle('filled', i < this.pinBuffer.length);
+    });
+  },
+
+  // -----------------------------------------------------------------------
+  // Secure PIN Entry Overlay (always prompts — no session caching)
+  // -----------------------------------------------------------------------
+  securePinBuffer: '',
+  securePinCallback: null,
+
+  setupSecurePINOverlay() {
+    const overlay = document.getElementById('secure-pin-overlay');
+    if (!overlay) return;
+
+    overlay.querySelectorAll('.pin-key').forEach(key => {
+      key.addEventListener('click', async () => {
+        const val = key.dataset.key;
+        if (val === 'clear') {
+          this.securePinBuffer = '';
+        } else if (val === 'enter') {
+          const success = await Auth.verifySecurePIN(this.securePinBuffer);
+          if (success) {
+            const cb = this.securePinCallback;
+            this.hideSecurePINEntry();
+            if (cb) cb(true);
+          } else {
+            this.securePinBuffer = '';
+            this.showToast('Incorrect PIN');
+            const modal = document.getElementById('secure-pin-modal');
+            if (modal) {
+              modal.style.animation = 'none';
+              modal.offsetHeight;
+              modal.style.animation = 'shake 0.5s ease-in-out';
+            }
+          }
+        } else {
+          if (this.securePinBuffer.length < 6) {
+            this.securePinBuffer += val;
+          }
+        }
+        this.updateSecurePINDots();
+      });
+    });
+
+    const closeBtn = document.getElementById('secure-pin-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        const cb = this.securePinCallback;
+        this.hideSecurePINEntry();
+        if (cb) cb(false);
+      });
+    }
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        const cb = this.securePinCallback;
+        this.hideSecurePINEntry();
+        if (cb) cb(false);
+      }
+    });
+  },
+
+  showSecurePINEntry(callback) {
+    this.securePinBuffer = '';
+    this.securePinCallback = callback || null;
+    this.updateSecurePINDots();
+    const overlay = document.getElementById('secure-pin-overlay');
+    if (overlay) { overlay.classList.remove('hidden'); overlay.classList.add('visible'); }
+  },
+
+  hideSecurePINEntry() {
+    const overlay = document.getElementById('secure-pin-overlay');
+    if (overlay) { overlay.classList.remove('visible'); overlay.classList.add('hidden'); }
+    this.securePinBuffer = '';
+    this.securePinCallback = null;
+  },
+
+  updateSecurePINDots() {
+    const dots = document.querySelectorAll('#secure-pin-display .pin-dot');
+    dots.forEach((dot, i) => {
+      dot.classList.toggle('filled', i < this.securePinBuffer.length);
     });
   },
 

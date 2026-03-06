@@ -50,6 +50,18 @@ const Router = {
       return;
     }
 
+    // Secure PIN — always prompts (no session caching)
+    if (Auth.requiresSecurePIN(page)) {
+      App.showSecurePINEntry((success) => {
+        if (success) this._loadPage(page, pushState);
+      });
+      return;
+    }
+
+    this._loadPage(page, pushState);
+  },
+
+  _loadPage(page, pushState = true) {
     // Stop any polling on current page + clear registered timers
     const currentHandler = this.pages[this.currentPage];
     if (currentHandler && currentHandler.destroy) {

@@ -1721,7 +1721,8 @@ body {
 
 /* ── PIN Entry Overlay ────────────────────────────────────── */
 
-#pin-overlay {
+#pin-overlay,
+#secure-pin-overlay {
   position: fixed;
   inset: 0;
   background: var(--overlay-bg);
@@ -1730,11 +1731,13 @@ body {
   justify-content: center;
 }
 
-#pin-overlay.visible {
+#pin-overlay.visible,
+#secure-pin-overlay.visible {
   display: flex;
 }
 
-#pin-modal {
+#pin-modal,
+#secure-pin-modal {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -1745,18 +1748,21 @@ body {
   box-shadow: var(--shadow-md);
 }
 
-#pin-modal h2 {
+#pin-modal h2,
+#secure-pin-modal h2 {
   font-size: 22px;
   margin-bottom: 8px;
 }
 
-#pin-modal p {
+#pin-modal p,
+#secure-pin-modal p {
   font-size: 14px;
   color: var(--text-secondary);
   margin-bottom: 12px;
 }
 
-#pin-display {
+#pin-display,
+#secure-pin-display {
   display: flex;
   justify-content: center;
   gap: 12px;
@@ -1777,9 +1783,11 @@ body {
   border-color: var(--accent);
 }
 
-#pin-keypad {
+#pin-keypad,
+#secure-pin-keypad,
+.pin-keypad {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   max-width: 260px;
   margin: 0 auto;
@@ -1797,6 +1805,10 @@ body {
   transition: background 0.15s;
   font-family: inherit;
   -webkit-tap-highlight-color: transparent;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
 }
 
 .pin-key:hover {
@@ -1805,6 +1817,11 @@ body {
 
 .pin-key:active {
   background: var(--border);
+}
+
+.pin-key.pin-action {
+  font-size: 14px;
+  padding: 16px 4px;
 }
 
 .pin-key.pin-action[data-key="enter"] {
@@ -1828,6 +1845,7 @@ body {
 }
 
 #pin-close,
+#secure-pin-close,
 .modal-close {
   position: absolute;
   top: 10px;
@@ -1843,6 +1861,7 @@ body {
 }
 
 #pin-close:hover,
+#secure-pin-close:hover,
 .modal-close:hover {
   color: var(--text);
 }
@@ -2649,7 +2668,8 @@ body {
   .info-text            { font-size: 14px; margin: 12px auto; }
   .temp-value           { font-size: 36px; }
   .obs-status           { gap: 8px; }
-  #pin-modal            { min-width: 260px; padding: 20px; }
+  #pin-modal,
+  #secure-pin-modal     { min-width: 260px; padding: 20px; }
 
   .page-grid            { gap: 6px; }
 }
