@@ -296,6 +296,7 @@ const MacroAPI = {
     let stateClass = '';
     let confirmAttr = this._resolveConfirm(item, macros);
     let confirmSteps = item.confirm_steps ? ' data-confirm-steps="true"' : '';
+    let hasConditionals = this._resolveHasConditionals(item, macros) ? ' data-has-conditionals="true"' : '';
     let isToggle = '';
     let badgeHtml = '';
     let longPressAttr = '';
@@ -337,7 +338,7 @@ const MacroAPI = {
               data-macro-btn="${idx}"
               data-section="${this._escapeHtml(section.section || '')}"
               ${confirmAttr ? `data-confirm="${this._escapeHtml(confirmAttr)}"` : ''}
-              ${confirmSteps}${isToggle}${longPressAttr}${disabledAttr}
+              ${confirmSteps}${hasConditionals}${isToggle}${longPressAttr}${disabledAttr}
               style="${spanStyle}">
       ${icon ? `<span class="material-icons">${icon}</span>` : ''}
       <span class="btn-label">${label}</span>
@@ -470,12 +471,21 @@ const MacroAPI = {
       if (!await App.showConfirm(confirmMsg)) return;
     }
 
+    // Conditional steps: ask yes/no for each, build skip list
+    const hasConditionals = btn.dataset.hasConditionals === 'true';
+    let conditionalSkips = [];
+    if (hasConditionals && action.type === 'macro') {
+      const condResult = await this.showConditionalConfirm(action.macro);
+      if (!condResult.confirmed) return;
+      conditionalSkips = condResult.skipSteps;
+    }
+
     btn.classList.add('loading');
     btn.disabled = true;
 
     try {
       if (action.type === 'macro') {
-        const result = await this.execute(action.macro);
+        const result = await this.execute(action.macro, conditionalSkips);
         if (result && result.success) {
           App.showToast(`${displayLabel || action.macro}: Done`, 2000);
         } else if (result && result.error) {
@@ -600,6 +610,65 @@ const MacroAPI = {
     });
   },
 
+  // -----------------------------------------------------------------------
+  // Conditional confirmation — ask yes/no for steps marked "conditional"
+  // -----------------------------------------------------------------------
+
+  async showConditionalConfirm(macroKey) {
+    const expanded = await this.expandMacro(macroKey);
+    if (!expanded || !expanded.steps) return { confirmed: true, skipSteps: [] };
+
+    const skipSteps = [];
+
+    // Find steps with conditional questions (top-level only)
+    for (const step of expanded.steps) {
+      if (step.conditional) {
+        const answer = await this._showYesNoDialog(step.conditional);
+        if (!answer) {
+          skipSteps.push(String(step.index));
+        }
+      }
+    }
+
+    return { confirmed: true, skipSteps };
+  },
+
+  _showYesNoDialog(question) {
+    return new Promise((resolve) => {
+      document.getElementById('conditional-confirm-overlay')?.remove();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'conditional-confirm-overlay';
+      overlay.className = 'confirm-overlay';
+      overlay.innerHTML = `
+        <div class="confirm-modal">
+          <div class="confirm-message">${this._escapeHtml(question)}</div>
+          <div class="confirm-buttons">
+            <button class="btn confirm-cancel">No</button>
+            <button class="btn confirm-ok btn-success">Yes</button>
+          </div>
+        </div>
+      `;
+
+      overlay.querySelector('.confirm-cancel').addEventListener('click', () => {
+        overlay.remove();
+        resolve(false);
+      });
+      overlay.querySelector('.confirm-ok').addEventListener('click', () => {
+        overlay.remove();
+        resolve(true);
+      });
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          overlay.remove();
+          resolve(false);
+        }
+      });
+
+      document.body.appendChild(overlay);
+    });
+  },
+
   _renderStepTree(steps, prefix) {
     return steps.map(step => {
       const path = prefix ? `${prefix}${step.index}` : `${step.index}`;
@@ -649,6 +718,14 @@ const MacroAPI = {
       if (m && m.confirm) return m.confirm;
     }
     return '';
+  },
+
+  _resolveHasConditionals(item, macros) {
+    if (item.action?.type === 'macro' && item.action?.macro) {
+      const m = macros?.[item.action.macro];
+      return m && m.has_conditionals;
+    }
+    return false;
   },
 
   _escapeHtml(str) {

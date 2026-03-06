@@ -33,6 +33,74 @@
 macros:
 
   # ---------------------------------------------------------------------------
+  # SHARED AUDIO — common startup steps used by all zone audio macros
+  # ---------------------------------------------------------------------------
+
+  shared_audio_on:
+    label: "Shared Audio On"
+    icon: "mic"
+    description: "Turn on X32 mixer, shared amps, antennas, sub, and audio routing"
+    steps:
+      # If X32 mixer is off, load default scene after boot
+      - type: condition
+        if:
+          type: ha_check
+          entity: "switch.sw_019_2spare"
+          expect: "off"
+        then:
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.sw_019_2spare" }
+            on_fail: skip
+            message: "Turning on X32 Mixer (was off)"
+          - type: delay
+            seconds: 40
+            message: "Waiting for X32 mixer to boot up"
+          - type: x32_scene
+            scene: 0
+            message: "Loading X32 default scene"
+        else:
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.sw_019_2spare" }
+            on_fail: skip
+            message: "Turning on X32 Mixer"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_020_spare_plug1" }
+        on_fail: skip
+        message: "Turning on Antennas (W_020_AV_1Antennas)"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_033_av_2socialhallandpaamp" }
+        on_fail: skip
+        message: "Turning on Social Hall & PA Amp (Kasa)"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_020_spare_plug4" }
+        on_fail: skip
+        message: "Turning on PA Amp"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.sw_020_spare_plug5" }
+        on_fail: skip
+        message: "Turning on Main Audio Sub"
+      - type: delay
+        seconds: 5
+        message: "Waiting for shared audio to initialize"
+      # Audio routing
+      - type: moip_switch
+        tx: 13
+        rx: 24
+        message: "Setting audio routing (TX 13 → RX 24)"
+
+  # ---------------------------------------------------------------------------
   # CHAPEL
   # ---------------------------------------------------------------------------
 
@@ -164,32 +232,9 @@ macros:
     icon: "mic"
     description: "Turn on shared audio components, chapel mics, amp, and routing"
     steps:
-      # If X32 mixer is off, load default scene after boot
-      - type: condition
-        if:
-          type: ha_check
-          entity: "switch.sw_019_2spare"
-          expect: "off"
-        then:
-          - type: ha_service
-            domain: "switch"
-            service: "turn_on"
-            data: { entity_id: "switch.sw_019_2spare" }
-            on_fail: skip
-            message: "Turning on X32 Mixer (was off)"
-          - type: delay
-            seconds: 40
-            message: "Waiting for X32 mixer to boot up"
-          - type: x32_scene
-            scene: 0
-            message: "Loading X32 default scene"
-        else:
-          - type: ha_service
-            domain: "switch"
-            service: "turn_on"
-            data: { entity_id: "switch.sw_019_2spare" }
-            on_fail: skip
-            message: "Turning on X32 Mixer"
+      - type: macro
+        macro: "shared_audio_on"
+        message: "Starting shared audio components"
       # Chapel microphones
       - type: ha_service
         domain: "switch"
@@ -197,27 +242,6 @@ macros:
         data: { entity_id: "switch.sw_024_spare" }
         on_fail: skip
         message: "Turning on Chapel microphones"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_033_av_2socialhallandpaamp" }
-        on_fail: skip
-        message: "Turning on Social Hall & PA Amp (Kasa)"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_020_spare_plug4" }
-        on_fail: skip
-        message: "Turning on PA Amp"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_020_spare_plug5" }
-        on_fail: skip
-        message: "Turning on Main Audio Sub"
-      - type: delay
-        seconds: 5
-        message: "Waiting for shared audio to initialize"
       # Chapel amplifier
       - type: ha_service
         domain: "switch"
@@ -225,11 +249,6 @@ macros:
         data: { entity_id: "switch.sw_020_spare_plug3" }
         on_fail: skip
         message: "Turning on Chapel Amplifier"
-      # Audio routing
-      - type: moip_switch
-        tx: 13
-        rx: 24
-        message: "Setting audio routing (TX 13 → RX 24)"
       # WattBox IR outlets
       - type: ha_service
         domain: "switch"
@@ -479,6 +498,21 @@ macros:
             entity: "lock.main_lobby"
             minutes: 180
             on_fail: skip
+          - type: macro
+            macro: "stream_scene_chapel"
+            on_fail: skip
+            message: "Setting audio routing and X32 scene for Chapel"
+      # --- Unlock exterior doors for 3 hours ---
+      - type: door_timed_unlock
+        entity: "lock.main_church_door"
+        minutes: 180
+        on_fail: skip
+        message: "Unlocking main church door for 3 hours"
+      - type: door_timed_unlock
+        entity: "lock.main_lobby"
+        minutes: 180
+        on_fail: skip
+        message: "Unlocking lobby door for 3 hours"
 
   chapel_full_teardown:
     label: "Chapel Teardown"
@@ -708,6 +742,10 @@ macros:
             macro: "main_cryroom_on"
           - type: macro
             macro: "shared_video_on"
+      - type: macro
+        macro: "main_source_appletv_no_pages"
+        message: "Setting video source to Apple TV (No Page #s)"
+        conditional: "Set video source to AppleTV (no pages)?"
       - type: notify
         message: "Main church video system turning on"
 
@@ -758,50 +796,9 @@ macros:
     icon: "mic"
     description: "Turn on shared audio, mics, amps, and routing"
     steps:
-      # If X32 mixer is off, load default scene after boot
-      - type: condition
-        if:
-          type: ha_check
-          entity: "switch.sw_019_2spare"
-          expect: "off"
-        then:
-          - type: ha_service
-            domain: "switch"
-            service: "turn_on"
-            data: { entity_id: "switch.sw_019_2spare" }
-            on_fail: skip
-            message: "Turning on X32 Mixer (was off)"
-          - type: delay
-            seconds: 40
-            message: "Waiting for X32 mixer to boot up"
-          - type: x32_scene
-            scene: 0
-            message: "Loading X32 default scene"
-        else:
-          - type: ha_service
-            domain: "switch"
-            service: "turn_on"
-            data: { entity_id: "switch.sw_019_2spare" }
-            on_fail: skip
-            message: "Turning on X32 Mixer"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_033_av_2socialhallandpaamp" }
-        on_fail: skip
-        message: "Turning on Social Hall & PA Amp (Kasa)"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_020_spare_plug4" }
-        on_fail: skip
-        message: "Turning on PA Amp"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_020_spare_plug5" }
-        on_fail: skip
-        message: "Turning on Main Audio Sub"
+      - type: macro
+        macro: "shared_audio_on"
+        message: "Starting shared audio components"
       # Wireless mics and lapel mic
       - type: ha_service
         domain: "switch"
@@ -815,9 +812,6 @@ macros:
         data: { entity_id: "switch.sw_025_av_lapelmic" }
         on_fail: skip
         message: "Turning on lapel mic"
-      - type: delay
-        seconds: 5
-        message: "Waiting for audio components to initialize"
       # Amplifiers
       - type: ha_service
         domain: "switch"
@@ -831,11 +825,6 @@ macros:
         data: { entity_id: "switch.sw_020_spare_plug2" }
         on_fail: skip
         message: "Turning on Social Hall Amplifier"
-      # Audio routing
-      - type: moip_switch
-        tx: 13
-        rx: 24
-        message: "Setting audio routing (TX 13 → RX 24)"
 
   main_audio_off:
     label: "Audio System Off"
@@ -1812,53 +1801,9 @@ macros:
     icon: "mic"
     description: "Turn on shared audio, mics, amps, and audio routing"
     steps:
-      # If X32 mixer is off, load default scene after boot
-      - type: condition
-        if:
-          type: ha_check
-          entity: "switch.sw_019_2spare"
-          expect: "off"
-        then:
-          - type: ha_service
-            domain: "switch"
-            service: "turn_on"
-            data: { entity_id: "switch.sw_019_2spare" }
-            on_fail: skip
-            message: "Turning on X32 Mixer (was off)"
-          - type: delay
-            seconds: 40
-            message: "Waiting for X32 mixer to boot up"
-          - type: x32_scene
-            scene: 0
-            message: "Loading X32 default scene"
-        else:
-          - type: ha_service
-            domain: "switch"
-            service: "turn_on"
-            data: { entity_id: "switch.sw_019_2spare" }
-            on_fail: skip
-            message: "Turning on X32 Mixer"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_033_av_2socialhallandpaamp" }
-        on_fail: skip
-        message: "Turning on Social Hall & PA Amp (Kasa)"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_020_spare_plug4" }
-        on_fail: skip
-        message: "Turning on PA Amp"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.sw_020_spare_plug5" }
-        on_fail: skip
-        message: "Turning on Main Audio Sub"
-      - type: delay
-        seconds: 5
-        message: "Waiting for shared audio to initialize"
+      - type: macro
+        macro: "shared_audio_on"
+        message: "Starting shared audio components"
       # Social Hall specific audio
       - type: ha_service
         domain: "switch"
@@ -1875,14 +1820,15 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
+        data: { entity_id: "switch.sw_033_av_1spare" }
+        on_fail: skip
+        message: "Turning on Social Hall Wireless Mics"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
         data: { entity_id: "switch.sw_020_spare_plug2" }
         on_fail: skip
         message: "Turning on Social Hall Amplifier"
-      # Audio routing
-      - type: moip_switch
-        tx: 13
-        rx: 24
-        message: "Setting audio routing (TX 13 → RX 24)"
 
   social_audio_off:
     label: "Social Hall Audio Off"
@@ -1901,6 +1847,12 @@ macros:
         data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_6" }
         on_fail: skip
         message: "Turning off Social Hall Mics 2"
+      - type: ha_service
+        domain: "switch"
+        service: "turn_off"
+        data: { entity_id: "switch.sw_033_av_3spare" }
+        on_fail: skip
+        message: "Turning off Social Hall Wireless Mics"
 
   social_ac_on:
     label: "Social Hall A/C On"
@@ -2855,6 +2807,10 @@ macros:
             entity: "lock.rear_entry"
             minutes: 300
             on_fail: skip
+      - type: macro
+        macro: "stream_scene_main_church"
+        on_fail: skip
+        message: "Setting audio routing and X32 scene for Main Church"
 
   main_full_teardown:
     label: "Main Church Teardown"
@@ -2903,6 +2859,10 @@ macros:
             camera: "SocialHall_Rear"
             preset: 1
             on_fail: skip
+      - type: macro
+        macro: "stream_scene_social_hall"
+        on_fail: skip
+        message: "Setting audio routing and X32 scene for Social Hall"
 
   social_full_teardown:
     label: "Social Hall Teardown"
@@ -3451,6 +3411,11 @@ buttons:
           icon: "mic"
           action: { type: macro, macro: social_audio_on }
           style: "large"
+          state:
+            source: ha
+            entity: "switch.wb_005_chapel_ceilingrack_outlet_5"
+            on_value: "on"
+            on_style: "active"
         - label: "Off"
           icon: "mic_off"
           action: { type: macro, macro: social_audio_off }
