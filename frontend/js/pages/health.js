@@ -507,7 +507,7 @@ const HealthPage = {
     if (!ts) return '—';
     const d = new Date(ts);
     if (isNaN(d.getTime())) return ts;
-    return d.toLocaleString();
+    return d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' });
   },
 
   _esc(s) {
