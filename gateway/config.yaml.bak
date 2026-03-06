@@ -38,37 +38,37 @@ ptz_cameras:
     name: Baptism Room
   Chapel_Rear:
     ip: 192.168.1.205
-    name: Chapel Rear
+    name: Cam1921681205
   Chapel_Side:
     ip: 192.168.1.206
-    name: Chapel Side
+    name: Cam1921681206
   Gym:
     ip: 192.168.1.210
-    name: Gym
+    name: Cam1921681210
   MainChurch_Altar:
     ip: 192.168.1.202
-    name: Main Church - Altar
+    name: Cam1921681202
   MainChurch_Left:
     ip: 192.168.1.204
-    name: Main Church - Left
+    name: Cam1921681204
   MainChurch_Rear:
     ip: 192.168.1.201
-    name: Main Church - Rear
+    name: Cam1921681201
   MainChurch_Right:
     ip: 192.168.1.203
-    name: Main Church - Right
+    name: Cam1921681203
   MainChurch_Side_Left:
     ip: 192.168.1.204
-    name: Main Church - Left
+    name: Cam1921681204
   MainChurch_Side_Right:
     ip: 192.168.1.203
-    name: Main Church - Right
+    name: Cam1921681203
   SocialHall_Rear:
     ip: 192.168.1.208
-    name: Social Hall - Rear
+    name: Cam1921681208
   SocialHall_Side:
     ip: 192.168.1.209
-    name: Social Hall - Side
+    name: Cam1921681209
 projectors:
   epson1:
     ip: 192.168.1.233
