@@ -12,7 +12,12 @@ const MacroAPI = {
     }
   },
 
+  _socketBound: false,
+
   _bindSocketEvents(socket) {
+    if (this._socketBound) return; // Guard against double-registration
+    this._socketBound = true;
+
     socket.on('state:ha', (data) => { this._stateCache.ha = data; this._notifyListeners(); });
     socket.on('state:obs', (data) => { this._stateCache.obs = data; this._notifyListeners(); });
     socket.on('state:x32', (data) => { this._stateCache.x32 = data; this._notifyListeners(); });
@@ -39,7 +44,7 @@ const MacroAPI = {
 
   _notifyListeners() {
     for (const fn of this._stateListeners) {
-      try { fn(this._stateCache); } catch (e) { /* ignore */ }
+      try { fn(this._stateCache); } catch (e) { console.error('MacroAPI state listener error:', e); }
     }
   },
 

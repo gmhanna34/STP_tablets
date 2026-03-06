@@ -6,7 +6,7 @@ gateway:
 middleware: null
 obs:
   ws_url: ws://127.0.0.1:4455
-  ws_password: ''
+  ws_password: ''                   # Set OBS_WS_PASSWORD in .env
   ping_seconds: 3.0
   snapshot_seconds: 6.0
   offline_after_seconds: 10.0
@@ -17,8 +17,8 @@ moip:
   port_internal: 23
   host_external: external.stpauloc.org
   port_external: 2323
-  username: ''
-  password: ''
+  username: ''                       # Set MOIP_USERNAME in .env
+  password: ''                       # Set MOIP_PASSWORD in .env
   telnet_read_timeout: 5
   failure_threshold: 5
   reboot_cooldown_minutes: 15

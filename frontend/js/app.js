@@ -54,6 +54,11 @@ const App = {
     // Initialize auth/permissions (pass config to avoid duplicate /api/config fetch)
     await Auth.init(config);
 
+    // Show error banner if permissions failed to load (fail-closed — all pages denied)
+    if (Auth.permissionsLoadFailed) {
+      this.showPermissionsError();
+    }
+
     // Initialize API services (no config params needed — they use gateway-relative URLs)
     ObsAPI.init(this.settings);
     X32API.init();
@@ -256,6 +261,9 @@ const App = {
         if (!init.headers.has('X-Tablet-ID')) {
           const tabletId = (typeof Auth !== 'undefined' && Auth.getTabletId) ? Auth.getTabletId() : 'Unknown';
           init.headers.set('X-Tablet-ID', tabletId);
+        }
+        if (!init.headers.has('X-Tablet-Role') && typeof Auth !== 'undefined' && Auth.currentRole) {
+          init.headers.set('X-Tablet-Role', Auth.currentRole);
         }
       }
       return originalFetch.call(this, input, init);
@@ -698,6 +706,13 @@ const App = {
       toast.style.transition = 'opacity 0.3s';
       setTimeout(() => toast.remove(), 300);
     }, duration);
+  },
+
+  showPermissionsError() {
+    const banner = document.createElement('div');
+    banner.className = 'permissions-error-banner';
+    banner.innerHTML = '<strong>Permissions unavailable</strong> — Cannot reach gateway. All pages are locked. <button onclick="location.reload()">Reload</button>';
+    document.body.prepend(banner);
   },
 
   // -----------------------------------------------------------------------

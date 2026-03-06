@@ -261,8 +261,8 @@ class Database:
                 (tablet_id, action, target, request_data, result, latency_ms),
             )
             conn.commit()
-        except Exception:
-            pass  # Never let audit logging crash a request
+        except Exception as e:
+            logger.warning(f"Audit log write failed: {e}")  # Never let audit logging crash a request
 
     def cleanup_old_logs(self, retention_days: int = 30):
         """Delete audit log entries older than retention_days."""
@@ -273,8 +273,8 @@ class Database:
                 (f"-{retention_days} days",),
             )
             conn.commit()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Audit log cleanup failed: {e}")
 
     def upsert_session(self, tablet_id: str, display_name: str = "",
                        socket_id: str = "", current_page: str = ""):
@@ -606,8 +606,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     try:
         with open(permissions_path) as f:
             permissions_data = json.load(f)
-    except Exception:
-        logger.warning(f"Could not load permissions from {permissions_path}, using defaults")
+    except Exception as e:
+        logger.warning(f"Could not load permissions from {permissions_path}: {e}, using defaults")
         permissions_data = {"roles": {}, "locations": {}, "defaultRole": "full_access"}
 
     # Pre-compute known location slugs for catch-all route
@@ -630,8 +630,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     try:
         with open(settings_path) as f:
             settings_data = json.load(f)
-    except Exception:
-        logger.warning(f"Could not load settings from {settings_path}")
+    except Exception as e:
+        logger.warning(f"Could not load settings from {settings_path}: {e}")
         settings_data = {}
 
     # -------------------------------------------------------------------------
@@ -990,7 +990,11 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                 return jsonify({"error": "Permission denied", "page": required_page}), 403
             return None
 
-        # Unknown tablet / no role header = allow (fail open)
+        # Unknown tablet / no role header — log warning but allow to avoid
+        # blocking operators during live services.  A future hardening pass
+        # can flip this to deny once all tablets send X-Tablet-Role.
+        logger.debug(f"Permission check: no recognised role for tablet={tablet_id}, "
+                     f"role_header={role_key!r}, page={required_page} — allowing (fail-open)")
         return None
 
     # -------------------------------------------------------------------------
@@ -1037,7 +1041,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
         db_ok = True
         try:
             db._get_conn().execute("SELECT 1")
-        except Exception:
+        except Exception as e:
+            logger.warning(f"DB connectivity check failed: {e}")
             db_ok = False
 
         healthy = db_ok and not any_open
@@ -1435,8 +1440,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                 if fresh_status < 400 and fresh:
                     state_cache.set("moip", fresh)
                     socketio.emit("state:moip", fresh, room="moip")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"MoIP state refresh after command failed: {e}")
         return jsonify(result), status
 
     @app.route("/api/moip/ir", methods=["POST"])
@@ -1841,7 +1846,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                     "power": "on" if resp.status_code == 200 else "unknown",
                     "reachable": True,
                 }
-            except Exception:
+            except Exception as e:
+                logger.debug(f"Projector {key} status poll failed: {e}")
                 statuses[key] = {
                     "name": proj.get("name", key),
                     "power": "unknown",
@@ -1995,7 +2001,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                     # WattBox returns outlet state in the response body
                     body = resp.text.strip().lower()
                     entry["state"] = "on" if "1" in body or "on" in body else "off"
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"WattBox outlet {key} poll failed: {e}")
                     entry["state"] = "unknown"
             else:
                 entry["state"] = "on"
@@ -2685,8 +2692,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                 if fresh_status < 400 and fresh:
                     state_cache.set("moip", fresh)
                     socketio.emit("state:moip", fresh, room="moip")
-        except Exception:
-            pass  # Background poller will catch up
+        except Exception as e:
+            logger.debug(f"MoIP state refresh after macro failed: {e}")  # Background poller will catch up
 
         return {
             "success": True,
@@ -2796,8 +2803,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                 resp_body = ""
                 try:
                     resp_body = resp.text[:300]
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Could not read HA response body: {e}")
                 logger.warning(f"ha_service FAILED: {domain}/{service} status={resp.status_code} "
                                f"data={json.dumps(data)[:200]} response={resp_body}")
                 db.log_action(tablet, f"macro:ha:{domain}/{service}", "home_assistant",
@@ -2957,8 +2964,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
             try:
                 http_requests.get(
                     f"http://{proj['ip']}/api/v01/contentmgr/remote/power/{state}", timeout=5)
-            except Exception:
-                pass  # Best-effort for all projectors
+            except Exception as e:
+                logger.debug(f"Projector {key} power command failed: {e}")  # Best-effort for all projectors
         socketio.emit("state:projectors", {"event": "all_power", "state": state}, room="projectors")
         return {"success": True}
 
@@ -3698,7 +3705,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                 if status:
                     status.pop("age_seconds", None)
                 return status
-            except Exception:
+            except Exception as e:
+                logger.debug(f"X32 poll failed: {e}")
                 return None
 
         def poll_moip():
@@ -3707,7 +3715,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
             try:
                 result, status = moip.get_receivers()
                 return result if status < 400 else None
-            except Exception:
+            except Exception as e:
+                logger.debug(f"MoIP poll failed: {e}")
                 return None
 
         def poll_obs():
@@ -3715,7 +3724,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                 return {"streaming": True, "recording": False, "current_scene": "MainChurch_Altar"}
             try:
                 return obs.get_snapshot()
-            except Exception:
+            except Exception as e:
+                logger.debug(f"OBS poll failed: {e}")
                 return None
 
         def poll_projectors():
@@ -3730,7 +3740,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                         timeout=3,
                     )
                     statuses[key] = {"name": proj.get("name", key), "power": "on", "reachable": True}
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Projector {key} poll failed: {e}")
                     statuses[key] = {"name": proj.get("name", key), "power": "unknown", "reachable": False}
             return statuses
 
@@ -3757,7 +3768,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                         }
                     else:
                         states[entity_id] = {"state": "unavailable", "attributes": {}}
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"HA entity {entity_id} poll failed: {e}")
                     states[entity_id] = {"state": "unavailable", "attributes": {}}
             return states
 
@@ -3799,8 +3811,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                 # Format 3: fallback counter at report level
                 if report.get("counter") is not None:
                     return int(report["counter"]) or 0
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Camlytics parse failed for {url}: {e}")
             return 0
 
         def poll_camlytics():
@@ -3986,13 +3998,23 @@ def main():
             _mc = yaml.safe_load(f) or {}
         macro_count = len(_mc.get("macros", {}))
         button_pages = len(_mc.get("buttons", {}))
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Could not load macros.yaml: {e}")
         macro_count = 0
         button_pages = 0
     logger.info(f"  Macros: {macro_count} defined, {button_pages} pages with buttons")
     # Log actual Engine.IO ping settings so we can verify they took effect
     eio = socketio.server.eio
     logger.info(f"  SocketIO: ping_interval={eio.ping_interval}s, ping_timeout={eio.ping_timeout}s")
+    # Warn about missing critical secrets
+    sec = cfg.get("security", {})
+    if not sec.get("secret_key"):
+        logger.warning("FLASK_SECRET_KEY is not set — sessions will use an insecure default")
+    if not sec.get("settings_pin"):
+        logger.warning("SETTINGS_PIN is not set — settings page PIN defaults to '1234'")
+    if not cfg.get("home_assistant", {}).get("token"):
+        logger.warning("HA_TOKEN is not set — Home Assistant integration will not work")
+
     logger.info("=" * 60)
 
     # Start background pollers

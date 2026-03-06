@@ -428,8 +428,9 @@ class HealthModule:
             # to be the authority, not the HTTP status code.
             try:
                 data = resp.json()
-            except Exception:
+            except Exception as e:
                 # No JSON body — fall back to HTTP status check
+                self._logger.debug(f"Health: {name} JSON parse failed, falling back to HTTP status: {e}")
                 if resp.status_code != 200:
                     prev = self._results.get(sid)
                     return ServiceResult(
@@ -647,8 +648,8 @@ class HealthModule:
                     d2 = r2.json()
                     scene_data = d2.get("requestResult", {}).get("responseData", {})
                     details["Program Scene"] = scene_data.get("currentProgramSceneName", "?")
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.debug(f"Health: OBS scene query failed: {e}")
 
             # GetStreamStatus
             try:
@@ -657,8 +658,8 @@ class HealthModule:
                     d3 = r3.json()
                     stream_data = d3.get("requestResult", {}).get("responseData", {})
                     details["Streaming"] = "Yes" if stream_data.get("outputActive") else "No"
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.debug(f"Health: OBS stream status query failed: {e}")
 
             # GetRecordStatus
             try:
@@ -667,8 +668,8 @@ class HealthModule:
                     d4 = r4.json()
                     rec_data = d4.get("requestResult", {}).get("responseData", {})
                     details["Recording"] = "Yes" if rec_data.get("outputActive") else "No"
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.debug(f"Health: OBS recording status query failed: {e}")
 
             level = "healthy"
             msg = "OBS bridge connected"

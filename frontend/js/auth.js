@@ -4,6 +4,7 @@ const Auth = {
   currentLocation: null,   // slug from URL path, e.g. "chapel", "av-room"
   currentRole: null,        // resolved role key, e.g. "full_access", "chapel"
   isAuthenticated: false,
+  permissionsLoadFailed: false,  // true when permissions could not be loaded from any source
 
   async init(config) {
     if (config && config.permissions) {
@@ -22,7 +23,9 @@ const Auth = {
           const resp = await fetch('config/permissions.json');
           this.permissions = await resp.json();
         } catch (e2) {
+          console.error('Failed to load permissions from static file:', e2);
           this.permissions = { roles: {}, locations: {}, defaultRole: 'full_access' };
+          this.permissionsLoadFailed = true;
         }
       }
     }
@@ -111,7 +114,7 @@ const Auth = {
 
   hasPermission(page) {
     const role = this.getRoleConfig();
-    if (!role) return true; // Fail open if no config
+    if (!role) return false; // Fail closed — deny access when permissions unavailable
     return role.permissions[page] !== false;
   },
 

@@ -177,8 +177,8 @@ class OBSModule:
         if ws:
             try:
                 ws.close()
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.debug(f"OBS: WebSocket close failed: {e}")
 
     # --- Raw OBS request/response ---
 

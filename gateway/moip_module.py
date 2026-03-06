@@ -151,7 +151,8 @@ class MoIPConnection:
             self.connected = True
             return True
 
-        except Exception:
+        except Exception as e:
+            self._logger.warning(f"MoIP: Connection failed: {e}")
             self.connected = False
             self._close_socket()
 
@@ -181,8 +182,8 @@ class MoIPConnection:
             try:
                 self._sock.sendall(b"!Exit\n")
                 time.sleep(0.1)
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.debug(f"MoIP: exit command failed: {e}")
         self._close_socket()
         self.connected = False
 
@@ -191,8 +192,8 @@ class MoIPConnection:
         if self._sock:
             try:
                 self._sock.close()
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.debug(f"MoIP: socket close failed: {e}")
             self._sock = None
 
     def send_command(self, command: str) -> Optional[str]:
@@ -247,7 +248,8 @@ class MoIPConnection:
                         break
             except (ConnectionError, OSError):
                 raise
-            except Exception:
+            except Exception as e:
+                self._logger.debug(f"MoIP: read error: {e}")
                 break
         return "".join(chunks)
 

@@ -11,7 +11,7 @@ The STP gateway+frontend system is **functionally solid** — it successfully co
 
 However, the system has accumulated technical debt typical of rapid feature absorption: a 4,000-line monolith, silent exception handling in critical paths, thread-safety gaps in the gateway core, and a frontend auth model that fails open. None of these are causing outages today, but they increase the blast radius of future changes and make debugging harder than it needs to be.
 
-Additionally, the frontend has **critical memory leaks** from Socket.IO event listeners that accumulate on every reconnection — a serious issue for tablets that run 24/7 in kiosk mode.
+Initial analysis flagged frontend Socket.IO event listener leaks, but code review confirmed handlers are registered once and properly cleaned up. The real frontend gaps were fail-open permissions and missing user feedback on auth/permission failures.
 
 The recommendations below are prioritized by **operational impact** — what's most likely to cause a hard-to-diagnose outage or data loss.
 
@@ -67,21 +67,23 @@ If the gateway is down or `/api/config` fails, every page is accessible to every
 
 **Effort:** Low (one-line change + error UX)
 
-### 4. Fix Frontend Socket.IO Event Listener Leaks
+### 4. Harden Frontend Event Listener Lifecycle
 
-**Problem:** The tablets run 24/7 in kiosk mode. Every time Socket.IO reconnects (WiFi blip, gateway restart), `initSocketIO()` re-registers 11 event handlers (`state:x32`, `state:moip`, `state:obs`, etc.) and creates a new heartbeat `setInterval` — without removing the old ones. After 50 reconnections, there are 50 copies of every handler firing on each state update, plus 50 parallel heartbeat intervals.
+**Problem (revised):** Initial analysis flagged Socket.IO event listeners as leaking on every reconnection. On closer inspection, `initSocketIO()` and `MacroAPI._bindSocketEvents()` are each called exactly once — Socket.IO client preserves handlers across reconnections, so they do NOT accumulate. All five pages that register `MacroAPI.onStateChange()` properly remove their listeners in `destroy()`.
 
-Same issue in `macro.js:_bindSocketEvents()` — 7 additional handlers registered once but never cleaned up. And `MacroAPI.onStateChange()` listeners added by page renders are never removed by page `destroy()` methods, so they accumulate with each page navigation.
+However, there were still real issues addressed:
+- `MacroAPI._bindSocketEvents()` had no guard against accidental double-registration
+- `MacroAPI._notifyListeners()` silently swallowed errors in listener callbacks
+- The router's `navigate()` gave no user feedback when permission was denied
+- No visible error when permissions failed to load (fail-closed change made pages silently inaccessible)
 
-**Impact:** Progressive memory leak and CPU waste on tablets. Tablets become sluggish over days, eventually requiring a manual page reload.
+**Fix (applied in Batch 1):**
+- Added `_socketBound` guard in `MacroAPI._bindSocketEvents()` to prevent double-registration
+- Changed silent `catch` in `_notifyListeners()` to log errors to console
+- Added user-visible toast messages when navigation is denied (distinguishes "no permission" from "permissions unavailable")
+- Added red error banner when permissions fail to load, with Reload button
 
-**Fix:**
-- Call `socket.off()` for all event names before re-registering in `initSocketIO()`
-- Clear `_heartbeatInterval` before creating a new one
-- Call `MacroAPI.removeStateListener()` in every page's `destroy()` method
-- Consider registering Socket.IO listeners only once (outside of connect/reconnect flow) since the Socket.IO client re-fires them automatically on reconnection
-
-**Effort:** Low-medium
+**Effort:** Low
 
 ### 5. Implement Graceful Shutdown
 
@@ -350,10 +352,9 @@ with self._lock:
 - `_patchFetch()` auto-injects tablet ID on all API calls
 - Socket.IO CDN has a local fallback script
 
-**Critical issues:**
-- **Event listener accumulation** — `app.js:119-236` registers 11 Socket.IO handlers on every reconnection without calling `socket.off()` first. `macro.js:_bindSocketEvents()` adds 7 more. After N reconnections, N copies of each handler fire per event. On 24/7 kiosk tablets, this is a progressive memory leak.
-- **Heartbeat interval leak** — `app.js:236-245` creates a new `setInterval` on each reconnection without clearing the previous one. After 50 reconnections, 50 heartbeat intervals tick in parallel.
-- **State listener accumulation** — `MacroAPI.onStateChange()` listeners added during page renders are never removed in page `destroy()` methods. Each page navigation adds another copy.
+**Corrected findings (updated after code review):**
+- Initial analysis incorrectly flagged Socket.IO event listeners as leaking on every reconnection. Both `initSocketIO()` and `_bindSocketEvents()` are called exactly once — Socket.IO client preserves handlers across reconnections. All five pages that register `MacroAPI.onStateChange()` properly call `removeStateListener()` in their `destroy()` methods.
+- Added `_socketBound` guard in `MacroAPI._bindSocketEvents()` for defense-in-depth against future double-registration.
 - **Unhandled async errors** — Event listeners call async API methods (e.g., `ObsAPI.startStream()`) without `await` or `.catch()`. Failures are silently swallowed; user sees no feedback.
 - **Missing fetch timeouts** — Most `fetch()` calls lack `AbortSignal.timeout()` (only PIN verification uses it). If gateway is slow, UI hangs.
 - **No centralized error handling** — Each page handles API errors independently (or doesn't)

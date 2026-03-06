@@ -74,8 +74,8 @@ class OccupancyModule:
         if self.db:
             try:
                 self.db.log_action("Gateway", action, target, "", result)
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"Occupancy audit log failed: {e}")
 
     # ── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -136,8 +136,8 @@ class OccupancyModule:
                     "raw_peak": raw_peak,
                     "weekday": d.strftime("%A"),
                 })
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"Occupancy CSV parse error for date: {e}")
 
         result = {
             "weekly_summary": weekly,

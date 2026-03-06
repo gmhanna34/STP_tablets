@@ -41,6 +41,11 @@ const Router = {
     // Check permissions
     if (!Auth.hasPermission(page)) {
       console.warn(`No permission for page: ${page}`);
+      if (Auth.permissionsLoadFailed) {
+        App.showToast('Cannot navigate — permissions unavailable', 3000, 'error');
+      } else {
+        App.showToast('Access denied for this page', 2000, 'error');
+      }
       return;
     }
 

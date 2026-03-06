@@ -2558,6 +2558,31 @@ body {
   border-left: 4px solid var(--danger);
 }
 
+/* ── Permissions Error Banner ─────────────────────────────── */
+
+.permissions-error-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  background: var(--danger, #cc0000);
+  color: #fff;
+  text-align: center;
+  padding: 12px 16px;
+  font-size: 14px;
+}
+.permissions-error-banner button {
+  margin-left: 12px;
+  padding: 4px 16px;
+  border: 1px solid #fff;
+  background: transparent;
+  color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
 /* ── Status Indicators ────────────────────────────────────── */
 
 .status-connected    { color: var(--ok); }

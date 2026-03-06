@@ -45,8 +45,8 @@ class MixerOwner:
             # Clean up the socket so it doesn't leak file descriptors
             try:
                 m.__exit__(None, None, None)
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.debug(f"X32: cleanup after failed connect: {e}")
             raise
         self.mixer = m
         self.connected = True
@@ -56,8 +56,8 @@ class MixerOwner:
         if self.mixer is not None:
             try:
                 self.mixer.__exit__(None, None, None)
-            except Exception:
-                pass
+            except Exception as e:
+                self._logger.debug(f"X32: disconnect cleanup: {e}")
         self.mixer = None
         self.connected = False
 
@@ -174,7 +174,8 @@ class X32Poller:
         snap["cur_scene"] = str(cur_scene)
         try:
             snap["cur_scene_name"] = m.query(f"/-show/showfile/scene/{cur_scene:03d}/name ")[0]
-        except Exception:
+        except Exception as e:
+            self._logger.debug(f"X32 snapshot: cur_scene_name query failed: {e}")
             snap["cur_scene_name"] = ""
 
         # Channels 1-32
@@ -183,16 +184,19 @@ class X32Poller:
             try:
                 mute_val = m.query(f"/ch/{ch}/mix/on")[0]
                 snap[f"ch{i}mutestatus"] = _mute_str(mute_val)
-            except Exception:
+            except Exception as e:
+                self._logger.debug(f"X32 snapshot: ch{i} mute query failed: {e}")
                 snap[f"ch{i}mutestatus"] = "unknown"
             try:
                 snap[f"ch{i}name"] = m.strip[i - 1].config.name
-            except Exception:
+            except Exception as e:
+                self._logger.debug(f"X32 snapshot: ch{i} name query failed: {e}")
                 snap[f"ch{i}name"] = ""
             try:
                 vol = float(m.query(f"/ch/{ch}/mix/fader")[0])
                 snap[f"ch{i}vol"] = str(int(vol * 100))
-            except Exception:
+            except Exception as e:
+                self._logger.debug(f"X32 snapshot: ch{i} vol query failed: {e}")
                 snap[f"ch{i}vol"] = ""
 
         # Aux 1-8
@@ -201,16 +205,19 @@ class X32Poller:
             try:
                 mute_val = m.query(f"/auxin/{ax}/mix/on")[0]
                 snap[f"aux{i}_mutestatus"] = _mute_str(mute_val)
-            except Exception:
+            except Exception as e:
+                self._logger.debug(f"X32 snapshot: aux{i} mute query failed: {e}")
                 snap[f"aux{i}_mutestatus"] = "unknown"
             try:
                 snap[f"aux{i}_name"] = m.auxin[i - 1].config.name
-            except Exception:
+            except Exception as e:
+                self._logger.debug(f"X32 snapshot: aux{i} name query failed: {e}")
                 snap[f"aux{i}_name"] = ""
             try:
                 vol = float(m.query(f"/auxin/{ax}/mix/fader")[0])
                 snap[f"aux{i}vol"] = str(int(vol * 100))
-            except Exception:
+            except Exception as e:
+                self._logger.debug(f"X32 snapshot: aux{i} vol query failed: {e}")
                 snap[f"aux{i}vol"] = ""
 
         # Buses 1-16
@@ -219,16 +226,19 @@ class X32Poller:
             try:
                 mute_val = m.query(f"/bus/{bx}/mix/on")[0]
                 snap[f"bus{i}_mutestatus"] = _mute_str(mute_val)
-            except Exception:
+            except Exception as e:
+                self._logger.debug(f"X32 snapshot: bus{i} mute query failed: {e}")
                 snap[f"bus{i}_mutestatus"] = "unknown"
             try:
                 snap[f"bus{i}_name"] = m.bus[i - 1].config.name
-            except Exception:
+            except Exception as e:
+                self._logger.debug(f"X32 snapshot: bus{i} name query failed: {e}")
                 snap[f"bus{i}_name"] = ""
             try:
                 vol = float(m.query(f"/bus/{bx}/mix/fader")[0])
                 snap[f"bus{i}vol"] = str(int(vol * 100))
-            except Exception:
+            except Exception as e:
+                self._logger.debug(f"X32 snapshot: bus{i} vol query failed: {e}")
                 snap[f"bus{i}vol"] = ""
 
         # DCAs 1-8
@@ -236,23 +246,27 @@ class X32Poller:
             try:
                 mute_val = m.query(f"/dca/{i}/on")[0]
                 snap[f"dca{i}_mutestatus"] = _mute_str(mute_val)
-            except Exception:
+            except Exception as e:
+                self._logger.debug(f"X32 snapshot: dca{i} mute query failed: {e}")
                 snap[f"dca{i}_mutestatus"] = "unknown"
             try:
                 snap[f"dca{i}_name"] = m.dca[i - 1].config.name
-            except Exception:
+            except Exception as e:
+                self._logger.debug(f"X32 snapshot: dca{i} name query failed: {e}")
                 snap[f"dca{i}_name"] = ""
             try:
                 vol = float(m.query(f"/dca/{i}/fader")[0])
                 snap[f"dca{i}vol"] = str(int(vol * 100))
-            except Exception:
+            except Exception as e:
+                self._logger.debug(f"X32 snapshot: dca{i} vol query failed: {e}")
                 snap[f"dca{i}vol"] = ""
 
         # Scene names 0-25
         for i in range(26):
             try:
                 snap[f"scene{i}name"] = m.query(f"/-show/showfile/scene/{i:03d}/name ")[0]
-            except Exception:
+            except Exception as e:
+                self._logger.debug(f"X32 snapshot: scene{i} name query failed: {e}")
                 snap[f"scene{i}name"] = ""
 
         return snap
