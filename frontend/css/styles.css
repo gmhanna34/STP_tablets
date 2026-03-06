@@ -3631,3 +3631,152 @@ body.compact .cam-tab {
   color: var(--text-secondary);
   white-space: nowrap;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   MOBILE NAV — Hamburger menu + slide-out drawer (phones only)
+   ══════════════════════════════════════════════════════════════ */
+
+/* Hidden by default on tablets/desktop */
+.mobile-only {
+  display: none !important;
+}
+
+@media (max-width: 599px) {
+  /* Show mobile elements */
+  .mobile-only {
+    display: block !important;
+  }
+
+  /* Hide bottom nav bar on phones */
+  #nav-bar {
+    display: none !important;
+  }
+
+  /* ── Hamburger button in status bar ──────────────────────── */
+  #mobile-menu-toggle {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--text-on-nav);
+    cursor: pointer;
+    padding: 2px;
+    margin-right: 4px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #mobile-menu-toggle .material-icons {
+    font-size: 22px;
+  }
+
+  /* ── Overlay behind drawer ──────────────────────────────── */
+  #mobile-nav-overlay {
+    display: none !important;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+
+  #mobile-nav-overlay.open {
+    display: block !important;
+    opacity: 1;
+  }
+
+  /* ── Slide-out drawer ──────────────────────────────────── */
+  #mobile-nav-drawer {
+    display: flex !important;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 260px;
+    max-width: 80vw;
+    background: var(--card-bg);
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-shadow: var(--shadow-lg, 4px 0 16px rgba(0,0,0,0.3));
+  }
+
+  #mobile-nav-drawer.open {
+    transform: translateX(0);
+  }
+
+  /* ── Drawer header ─────────────────────────────────────── */
+  .drawer-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--nav-bg);
+    color: var(--text-on-nav);
+  }
+
+  .drawer-seal {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+  }
+
+  .drawer-title {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  /* ── Drawer nav items ──────────────────────────────────── */
+  .drawer-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    background: none;
+    border: none;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--text);
+    cursor: pointer;
+    transition: background 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .drawer-item:hover,
+  .drawer-item:active {
+    background: var(--hover-bg, rgba(128, 128, 128, 0.15));
+  }
+
+  .drawer-item.active {
+    color: var(--accent);
+    background: var(--hover-bg, rgba(128, 128, 128, 0.1));
+  }
+
+  .drawer-item .material-icons {
+    font-size: 22px;
+    opacity: 0.8;
+    width: 24px;
+    text-align: center;
+  }
+
+  .drawer-item.active .material-icons {
+    opacity: 1;
+  }
+
+  .drawer-item.hidden {
+    display: none;
+  }
+
+  .drawer-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+}

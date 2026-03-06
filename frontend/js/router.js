@@ -59,10 +59,16 @@ const Router = {
 
     this.currentPage = page;
 
-    // Update nav bar active state
+    // Update nav bar active state (bottom bar + mobile drawer)
     document.querySelectorAll('#nav-bar .nav-item').forEach(item => {
       item.classList.toggle('active', item.dataset.page === page);
     });
+    document.querySelectorAll('#mobile-nav-drawer .drawer-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.page === page);
+    });
+
+    // Close mobile drawer if open
+    if (App.closeMobileNav) App.closeMobileNav();
 
     // Render page content
     const content = document.getElementById('page-content');
@@ -96,6 +102,13 @@ const Router = {
 
   updateNavVisibility() {
     document.querySelectorAll('#nav-bar .nav-item').forEach(item => {
+      const page = item.dataset.page;
+      if (page) {
+        item.classList.toggle('hidden', !Auth.hasPermission(page));
+      }
+    });
+    // Also update mobile drawer visibility
+    document.querySelectorAll('#mobile-nav-drawer .drawer-item').forEach(item => {
       const page = item.dataset.page;
       if (page) {
         item.classList.toggle('hidden', !Auth.hasPermission(page));
