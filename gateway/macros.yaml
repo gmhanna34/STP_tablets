@@ -3403,6 +3403,11 @@ buttons:
           icon: "mic"
           action: { type: macro, macro: social_audio_on }
           style: "large"
+          state:
+            source: ha
+            entity: "switch.wb_005_chapel_ceilingrack_outlet_5"
+            on_value: "on"
+            on_style: "active"
         - label: "Off"
           icon: "mic_off"
           action: { type: macro, macro: social_audio_off }
