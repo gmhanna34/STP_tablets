@@ -2620,8 +2620,24 @@ body {
   .page-header .subtitle { font-size: 12px; }
   .section-title     { font-size: 14px; }
 
+  /* Tab bar: wrap + scroll horizontally as fallback */
+  .cam-tab-bar {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .cam-tab {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .cam-tab .material-icons {
+    font-size: 16px;
+  }
+
+  /* Override inline grid-template-columns set by macro renderer */
   .control-grid {
-    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)) !important;
     gap: 6px;
   }
 
