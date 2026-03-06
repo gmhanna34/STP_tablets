@@ -19,6 +19,7 @@ import eventlet
 eventlet.monkey_patch()
 
 import argparse
+import concurrent.futures
 import copy
 import json
 import logging
@@ -2481,6 +2482,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                 return _step_obs_emit(step, tablet)
             elif step_type == "ptz_preset":
                 return _step_ptz_preset(step, tablet)
+            elif step_type == "parallel":
+                return _step_parallel(step, tablet, depth)
             elif step_type == "delay":
                 secs = step.get("seconds", 1)
                 time.sleep(secs)
@@ -2814,6 +2817,40 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                           json.dumps({"camera": cam_key, "preset": preset}),
                           f"FAILED: {e}", 0)
             return {"success": False, "error": str(e)}
+
+    def _step_parallel(step: dict, tablet: str, depth: int) -> dict:
+        """Run sub-steps concurrently. Succeeds only if ALL sub-steps succeed.
+        on_fail on each sub-step is respected individually.
+        """
+        sub_steps = step.get("steps", [])
+        if not sub_steps:
+            return {"success": True}
+
+        on_fail = step.get("on_fail", "abort")
+
+        def run_sub(sub_step):
+            sub_type = sub_step.get("type", "")
+            if sub_type == "macro":
+                child_key = sub_step.get("macro", "")
+                return _execute_macro(child_key, tablet, depth + 1)
+            return _execute_step(sub_step, tablet, depth)
+
+        errors = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(sub_steps)) as pool:
+            futures = {pool.submit(run_sub, s): s for s in sub_steps}
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                if not result["success"]:
+                    sub = futures[future]
+                    sub_on_fail = sub.get("on_fail", on_fail)
+                    if sub_on_fail == "skip":
+                        logger.warning(f"Parallel sub-step skipped: {result.get('error', '')}")
+                    else:
+                        errors.append(result.get("error", "unknown error"))
+
+        if errors:
+            return {"success": False, "error": f"Parallel failures: {'; '.join(errors)}"}
+        return {"success": True}
 
     def _step_condition(step: dict, tablet: str, depth: int) -> dict:
         check = step.get("if", {})
