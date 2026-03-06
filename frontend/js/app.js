@@ -67,6 +67,9 @@ const App = {
     Router.init();
     Router.updateNavVisibility();
 
+    // Setup mobile nav drawer (phones only)
+    this.initMobileNav();
+
     // Setup status bar
     this.updateStatusBar();
     this.startClock();
@@ -654,6 +657,46 @@ const App = {
   _updateDensityIcon(mode) {
     const icon = document.querySelector('#density-toggle .material-icons');
     if (icon) icon.textContent = mode === 'compact' ? 'density_small' : 'density_medium';
+  },
+
+  // -----------------------------------------------------------------------
+  // Mobile nav drawer (phones only)
+  // -----------------------------------------------------------------------
+
+  initMobileNav() {
+    const toggle = document.getElementById('mobile-menu-toggle');
+    const drawer = document.getElementById('mobile-nav-drawer');
+    const overlay = document.getElementById('mobile-nav-overlay');
+    if (!toggle || !drawer) return;
+
+    const openDrawer = () => {
+      drawer.classList.add('open');
+      overlay?.classList.add('open');
+    };
+
+    const closeDrawer = () => {
+      drawer.classList.remove('open');
+      overlay?.classList.remove('open');
+    };
+
+    toggle.addEventListener('click', () => {
+      drawer.classList.contains('open') ? closeDrawer() : openDrawer();
+    });
+
+    // Close when tapping overlay
+    overlay?.addEventListener('click', closeDrawer);
+
+    // Wire up drawer nav items
+    drawer.querySelectorAll('.drawer-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const page = item.dataset.page;
+        if (page) Router.navigate(page);
+        closeDrawer();
+      });
+    });
+
+    // Expose close method for Router to call on navigation
+    this.closeMobileNav = closeDrawer;
   },
 
   // -----------------------------------------------------------------------
