@@ -123,10 +123,28 @@ const MacroAPI = {
 
   resolveState(stateBinding) {
     if (!stateBinding) return null;
-    const { source, entity, field, on_value, off_value } = stateBinding;
+    const { source, entity, entities, mode, field, on_value, off_value } = stateBinding;
 
     if (source === 'ha') {
       const haStates = this._stateCache.ha || {};
+
+      // Multi-entity support: entities[] with mode "any" (default) or "all"
+      if (entities && Array.isArray(entities) && entities.length > 0) {
+        const check = (eid) => {
+          const es = haStates[eid];
+          if (!es) return null;
+          const cur = String(es.state);
+          if (off_value !== undefined) return cur !== String(off_value);
+          return cur === String(on_value);
+        };
+        const results = entities.map(check);
+        // If all entities are unknown, return null
+        if (results.every(r => r === null)) return null;
+        if (mode === 'all') return results.every(r => r === true);
+        return results.some(r => r === true);  // default: "any"
+      }
+
+      // Single entity (original behavior)
       const entityState = haStates[entity];
       if (!entityState) return null;
       const current = String(entityState.state);
