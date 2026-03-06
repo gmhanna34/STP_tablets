@@ -1374,7 +1374,13 @@ const SettingsPage = {
     }
 
     container.innerHTML = logs.map((log, idx) => {
-      const ts = log.timestamp ? log.timestamp.replace('T', ' ').substring(5, 19) : '--';
+      let ts = '--';
+      if (log.timestamp) {
+        const d = new Date(log.timestamp);
+        if (!isNaN(d.getTime())) {
+          ts = d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(',', '');
+        }
+      }
       const tablet = (log.tablet_id || '').replace('Tablet_', '');
       const latency = log.latency_ms ? `${Math.round(log.latency_ms)}ms` : '';
       const resultFull = log.result || '';
