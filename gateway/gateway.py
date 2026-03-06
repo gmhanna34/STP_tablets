@@ -1354,7 +1354,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
             time.sleep(2)
             logger.info("Requesting restart from build app ops API")
             try:
-                resp = requests.post(
+                resp = http_requests.post(
                     "http://127.0.0.1:20856/ops/api/services/tablets_gateway/restart",
                     timeout=30,
                 )
