@@ -3108,6 +3108,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
             "macros": {k: {"label": v.get("label", k), "icon": v.get("icon", ""),
                            "description": v.get("description", ""),
                            "confirm": v.get("confirm", ""),
+                           "has_conditionals": any(s.get("conditional") for s in v.get("steps", [])),
                            "steps": len(v.get("steps", []))}
                        for k, v in macro_defs.items()},
         }
@@ -3237,6 +3238,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                     "type": step_type,
                     "label": step_label,
                 }
+                if step.get("conditional"):
+                    entry["conditional"] = step["conditional"]
                 if step_type == "macro":
                     child_key = step.get("macro", "")
                     child = _expand(child_key, depth + 1)
@@ -3279,6 +3282,10 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                 return f"Notify: {step.get('message', '')}"
             elif t == "condition":
                 return f"Condition: check {step.get('check', {}).get('entity', '')}"
+            elif t == "macro":
+                nested = step.get("macro", "")
+                nested_label = macro_defs.get(nested, {}).get("label", nested)
+                return f"Run macro: {nested_label}"
             return f"{t}"
 
         return jsonify(_expand(macro_key)), 200

@@ -59,10 +59,16 @@ const Router = {
 
     this.currentPage = page;
 
-    // Update nav bar active state
+    // Update nav bar active state (bottom bar + mobile drawer)
     document.querySelectorAll('#nav-bar .nav-item').forEach(item => {
       item.classList.toggle('active', item.dataset.page === page);
     });
+    document.querySelectorAll('#mobile-nav-drawer .drawer-item').forEach(item => {
+      item.classList.toggle('active', item.dataset.page === page);
+    });
+
+    // Close mobile drawer if open
+    if (App.closeMobileNav) App.closeMobileNav();
 
     // Render page content
     const content = document.getElementById('page-content');
@@ -72,7 +78,15 @@ const Router = {
     const handler = this.pages[page];
     if (handler && handler.render) {
       handler.render(content);
-      if (handler.init) handler.init();
+      if (handler.init) {
+        Promise.resolve(handler.init()).catch(e => {
+          console.error(`Page ${page} init error:`, e);
+          content.innerHTML += `<div style="color:#ff6b6b;padding:1em;text-align:center;">
+            <p>Error loading page: ${e.message || e}</p>
+            <p style="font-size:0.8em;opacity:0.7;">Check browser console for details</p>
+          </div>`;
+        });
+      }
     } else {
       content.innerHTML = '<div class="info-text">Page not found</div>';
     }
@@ -88,6 +102,13 @@ const Router = {
 
   updateNavVisibility() {
     document.querySelectorAll('#nav-bar .nav-item').forEach(item => {
+      const page = item.dataset.page;
+      if (page) {
+        item.classList.toggle('hidden', !Auth.hasPermission(page));
+      }
+    });
+    // Also update mobile drawer visibility
+    document.querySelectorAll('#mobile-nav-drawer .drawer-item').forEach(item => {
       const page = item.dataset.page;
       if (page) {
         item.classList.toggle('hidden', !Auth.hasPermission(page));
