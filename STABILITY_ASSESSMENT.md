@@ -11,6 +11,8 @@ The STP gateway+frontend system is **functionally solid** — it successfully co
 
 However, the system has accumulated technical debt typical of rapid feature absorption: a 4,000-line monolith, silent exception handling in critical paths, thread-safety gaps in the gateway core, and a frontend auth model that fails open. None of these are causing outages today, but they increase the blast radius of future changes and make debugging harder than it needs to be.
 
+Additionally, the frontend has **critical memory leaks** from Socket.IO event listeners that accumulate on every reconnection — a serious issue for tablets that run 24/7 in kiosk mode.
+
 The recommendations below are prioritized by **operational impact** — what's most likely to cause a hard-to-diagnose outage or data loss.
 
 ---
@@ -65,7 +67,23 @@ If the gateway is down or `/api/config` fails, every page is accessible to every
 
 **Effort:** Low (one-line change + error UX)
 
-### 4. Implement Graceful Shutdown
+### 4. Fix Frontend Socket.IO Event Listener Leaks
+
+**Problem:** The tablets run 24/7 in kiosk mode. Every time Socket.IO reconnects (WiFi blip, gateway restart), `initSocketIO()` re-registers 11 event handlers (`state:x32`, `state:moip`, `state:obs`, etc.) and creates a new heartbeat `setInterval` — without removing the old ones. After 50 reconnections, there are 50 copies of every handler firing on each state update, plus 50 parallel heartbeat intervals.
+
+Same issue in `macro.js:_bindSocketEvents()` — 7 additional handlers registered once but never cleaned up. And `MacroAPI.onStateChange()` listeners added by page renders are never removed by page `destroy()` methods, so they accumulate with each page navigation.
+
+**Impact:** Progressive memory leak and CPU waste on tablets. Tablets become sluggish over days, eventually requiring a manual page reload.
+
+**Fix:**
+- Call `socket.off()` for all event names before re-registering in `initSocketIO()`
+- Clear `_heartbeatInterval` before creating a new one
+- Call `MacroAPI.removeStateListener()` in every page's `destroy()` method
+- Consider registering Socket.IO listeners only once (outside of connect/reconnect flow) since the Socket.IO client re-fires them automatically on reconnection
+
+**Effort:** Low-medium
+
+### 5. Implement Graceful Shutdown
 
 **Problem:** `gateway.py` has no signal handlers. When the process is stopped (SIGTERM from systemd/launchd, Ctrl+C), all daemon threads are killed instantly. This can corrupt:
 - In-flight macro executions (partial device state)
@@ -86,7 +104,7 @@ Additionally, `gateway.py:1369` falls back to `os._exit(0)` which bypasses all c
 
 ## P1 — Should Fix (Maintainability & Reliability)
 
-### 5. Add Thread Synchronization to Gateway Shared State
+### 6. Add Thread Synchronization to Gateway Shared State
 
 **Problem:** Several mutable globals in `gateway.py` are read/written from multiple threads without locks:
 - `_verbose_logging` (line 659) — toggled from HTTP handler, read from all threads
@@ -99,7 +117,7 @@ The modules themselves are well-synchronized (all use `threading.Lock`), but the
 
 **Effort:** Low-medium
 
-### 6. Split `gateway.py` into Modules
+### 7. Split `gateway.py` into Modules
 
 *Aligned with Codex P1 recommendation.*
 
@@ -124,7 +142,7 @@ The modules themselves are well-synchronized (all use `threading.Lock`), but the
 
 **Effort:** High (but zero-risk if done as pure move + import changes)
 
-### 7. Optimize Home Assistant Entity Polling
+### 8. Optimize Home Assistant Entity Polling
 
 **Problem:** `gateway.py:3745-3762` fetches each HA entity individually:
 ```python
@@ -137,7 +155,7 @@ If monitoring 100 entities, this makes 100 HTTP calls every 15 seconds. The bulk
 
 **Effort:** Low
 
-### 8. Fix State Broadcasting Noise
+### 9. Fix State Broadcasting Noise
 
 **Problem:** `gateway.py:3675` broadcasts state to all connected tablets whenever polled data changes:
 ```python
@@ -151,7 +169,7 @@ The X32 snapshot includes `age_seconds` which changes every poll cycle (5s), cau
 
 **Effort:** Low
 
-### 9. Add Automated Test Scaffold
+### 10. Add Automated Test Scaffold
 
 *Aligned with Codex P1 recommendation.*
 
@@ -168,7 +186,7 @@ The X32 snapshot includes `age_seconds` which changes every poll cycle (5s), cau
 
 **Effort:** Medium (scaffold + 20-30 initial tests)
 
-### 10. Add Poller Auto-Recovery
+### 11. Add Poller Auto-Recovery
 
 **Problem:** If a poller thread dies (unhandled exception escaping the try/except), it stays dead. The watchdog tracks heartbeat staleness but doesn't restart failed pollers. The operator sees stale data but no alert.
 
@@ -179,7 +197,7 @@ The X32 snapshot includes `age_seconds` which changes every poll cycle (5s), cau
 
 **Effort:** Medium
 
-### 11. Make Deployment Reproducible
+### 12. Make Deployment Reproducible
 
 *Aligned with Codex P1 recommendation.*
 
@@ -195,7 +213,7 @@ The X32 snapshot includes `age_seconds` which changes every poll cycle (5s), cau
 
 ## P2 — Nice to Have (Hardening & Polish)
 
-### 12. Add Request Retry/Timeout Consistency
+### 13. Add Request Retry/Timeout Consistency
 
 **Problem:** Timeouts are hardcoded inconsistently across the codebase:
 - PTZ cameras: `timeout=3` (hardcoded)
@@ -211,7 +229,7 @@ The X32 snapshot includes `age_seconds` which changes every poll cycle (5s), cau
 
 **Effort:** Low-medium
 
-### 13. Improve Frontend Offline Resilience
+### 14. Improve Frontend Offline Resilience
 
 **Problem:** When the gateway is unreachable:
 - Config fallback loads static JSON files (good)
@@ -226,7 +244,7 @@ The X32 snapshot includes `age_seconds` which changes every poll cycle (5s), cau
 
 **Effort:** Low
 
-### 14. Add CSRF Protection for Login Form
+### 15. Add CSRF Protection for Login Form
 
 **Problem:** The login form (`gateway.py:789-931`) uses a plain HTML form POST without CSRF tokens. On the local network this is low-risk, but it's a defense-in-depth gap.
 
@@ -234,7 +252,7 @@ The X32 snapshot includes `age_seconds` which changes every poll cycle (5s), cau
 
 **Effort:** Low
 
-### 15. Harden Session Management
+### 16. Harden Session Management
 
 **Problem:**
 - `auth.js:181` — Session token is just `Date.now().toString()` stored in `sessionStorage`. It's not cryptographically signed or validated server-side.
@@ -247,7 +265,7 @@ The X32 snapshot includes `age_seconds` which changes every poll cycle (5s), cau
 
 **Effort:** Medium
 
-### 16. Add Rate Limiting on Auth Endpoints
+### 17. Add Rate Limiting on Auth Endpoints
 
 *Aligned with Codex P0 recommendation (downgraded to P2 for LAN-only deployment).*
 
@@ -257,7 +275,7 @@ The X32 snapshot includes `age_seconds` which changes every poll cycle (5s), cau
 
 **Effort:** Low
 
-### 17. Memory Safeguards for Long-Running Process
+### 18. Memory Safeguards for Long-Running Process
 
 **Problem areas:**
 - `occupancy_module.py:126-141` — `all_daily_peaks` list grows unbounded with years of CSV data
@@ -271,7 +289,7 @@ The X32 snapshot includes `age_seconds` which changes every poll cycle (5s), cau
 
 **Effort:** Low
 
-### 18. Snapshot Consistency Under Concurrency
+### 19. Snapshot Consistency Under Concurrency
 
 **Problem:** `x32_module.py` and `health_module.py` return state snapshots without holding the lock during serialization. A poller thread could update the dict between when the Flask handler reads field A and field B, resulting in a half-old/half-new response.
 
@@ -323,18 +341,24 @@ with self._lock:
 - `occupancy_module.py:36` — Hardcoded Windows path `r"C:\Users\info\Box\Reports"` will fail on Mac migration (Phase 8). Should move to config or environment variable.
 - CSV column matching is fragile — if Camlytics changes column names, data silently becomes zero instead of raising an alert
 
-### Frontend — Good UX Patterns, Weak on Error Boundaries
+### Frontend — Good UX Patterns, Critical Memory Leak Issues
 
 **Strengths:**
 - Socket.IO reconnection with jitter (avoids thundering herd)
 - 3-second grace period hides brief WiFi blips from users
 - Centralized timer registry (`_timers[]`) for leak prevention
 - `_patchFetch()` auto-injects tablet ID on all API calls
+- Socket.IO CDN has a local fallback script
 
-**Improvement areas:**
-- Most API modules don't use `AbortSignal.timeout()` (only PIN verification does)
-- No centralized error handling for API failures — each page handles errors independently (or doesn't)
-- `settings.json` references stale external health dashboard URL
+**Critical issues:**
+- **Event listener accumulation** — `app.js:119-236` registers 11 Socket.IO handlers on every reconnection without calling `socket.off()` first. `macro.js:_bindSocketEvents()` adds 7 more. After N reconnections, N copies of each handler fire per event. On 24/7 kiosk tablets, this is a progressive memory leak.
+- **Heartbeat interval leak** — `app.js:236-245` creates a new `setInterval` on each reconnection without clearing the previous one. After 50 reconnections, 50 heartbeat intervals tick in parallel.
+- **State listener accumulation** — `MacroAPI.onStateChange()` listeners added during page renders are never removed in page `destroy()` methods. Each page navigation adds another copy.
+- **Unhandled async errors** — Event listeners call async API methods (e.g., `ObsAPI.startStream()`) without `await` or `.catch()`. Failures are silently swallowed; user sees no feedback.
+- **Missing fetch timeouts** — Most `fetch()` calls lack `AbortSignal.timeout()` (only PIN verification uses it). If gateway is slow, UI hangs.
+- **No centralized error handling** — Each page handles API errors independently (or doesn't)
+- **`settings.json`** references stale external health dashboard URL (`external.stpauloc.org:20855`)
+- **Chart.js CDN** has no local fallback (Socket.IO CDN does)
 
 ---
 
@@ -342,10 +366,10 @@ with self._lock:
 
 | Batch | Items | Effort | Impact |
 |-------|-------|--------|--------|
-| **Batch 1** | #1 (logging), #2 (secrets), #3 (fail-closed auth) | 1-2 sessions | Eliminates blind spots and security gaps |
-| **Batch 2** | #4 (shutdown), #5 (thread safety), #7 (HA polling), #8 (broadcast noise) | 1-2 sessions | Operational stability |
-| **Batch 3** | #6 (split gateway.py), #9 (tests) | 2-3 sessions | Maintainability foundation |
-| **Batch 4** | #10-18 (hardening) | 2-3 sessions | Defense in depth |
+| **Batch 1** | #1 (logging), #2 (secrets), #3 (fail-closed auth), #4 (Socket.IO leaks) | 1-2 sessions | Eliminates blind spots, security gaps, and tablet memory leaks |
+| **Batch 2** | #5 (shutdown), #6 (thread safety), #8 (HA polling), #9 (broadcast noise) | 1-2 sessions | Operational stability |
+| **Batch 3** | #7 (split gateway.py), #10 (tests) | 2-3 sessions | Maintainability foundation |
+| **Batch 4** | #11-19 (hardening) | 2-3 sessions | Defense in depth |
 
 ---
 
@@ -354,18 +378,20 @@ with self._lock:
 | Codex Recommendation | This Assessment | Alignment |
 |---------------------|-----------------|-----------|
 | P0: Externalize secrets | P0 #2 | Fully aligned |
-| P0: Tighten auth model | P0 #3 (fail-closed) + P2 #15-16 (sessions, rate limit) | Aligned; auth tightening deprioritized slightly for LAN-only context |
-| P1: Split gateway.py + tests | P1 #6 + #9 | Fully aligned |
-| P1: Reproducible deployment | P1 #11 | Fully aligned |
-| P2: Frontend resilience | P0 #3 + P2 #12-13 | Elevated fail-open to P0; rest aligned |
+| P0: Tighten auth model | P0 #3 (fail-closed) + P2 #16-17 (sessions, rate limit) | Aligned; auth tightening deprioritized slightly for LAN-only context |
+| P1: Split gateway.py + tests | P1 #7 + #10 | Fully aligned |
+| P1: Reproducible deployment | P1 #12 | Fully aligned |
+| P2: Frontend resilience | P0 #3-4 + P2 #13-14 | Elevated fail-open and Socket.IO leaks to P0; rest aligned |
 
 **Additional findings not in Codex review:**
 - Silent exception handling (P0 #1) — highest operational impact finding
-- Graceful shutdown (P0 #4) — data corruption risk
-- Thread safety in gateway core (P1 #5)
-- HA polling inefficiency (P1 #7)
-- State broadcasting noise (P1 #8)
-- Poller auto-recovery (P1 #10)
-- Memory safeguards (P2 #17)
-- Snapshot consistency (P2 #18)
+- Frontend Socket.IO event listener memory leaks (P0 #4) — critical for 24/7 kiosk tablets
+- Graceful shutdown (P0 #5) — data corruption risk
+- Thread safety in gateway core (P1 #6)
+- HA polling inefficiency (P1 #8)
+- State broadcasting noise (P1 #9)
+- Poller auto-recovery (P1 #11)
+- Memory safeguards (P2 #18)
+- Snapshot consistency (P2 #19)
 - Hardcoded Windows path in occupancy module (needs fixing before Phase 8 Mac migration)
+- Frontend: unhandled async errors in event listeners, missing fetch timeouts, Chart.js CDN without fallback
