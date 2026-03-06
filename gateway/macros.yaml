@@ -2898,7 +2898,11 @@ macros:
 #   confirm_steps — Show expanded step list as checkboxes before executing
 #   state    — Optional live state binding:
 #                source   — "ha", "obs", "x32", "moip", "projectors"
-#                entity   — HA entity_id (for ha source)
+#                entity   — HA entity_id (for ha source, single entity)
+#                entities — List of HA entity_ids (for ha source, multi-entity)
+#                mode     — "any" (default) or "all" (used with entities[])
+#                            "any"  = active if ANY entity matches on_value
+#                            "all"  = active only if ALL entities match on_value
 #                field    — Dot-path into cached state (for other sources)
 #                on_value — Value that means "active"
 #                off_value — Value that means "inactive" (alternative to on_value)
@@ -2911,6 +2915,16 @@ macros:
 #         source: ha
 #         entity: "switch.chapel_audio_power"
 #         on_value: "on"                         # active when entity state == "on"
+#         on_style: "active"
+#
+#     "ha" — Multi-entity (active when ANY entity is on)
+#       state:
+#         source: ha
+#         entities:
+#           - "switch.sw_020_spare_plug3"
+#           - "switch.sw_024_spare"
+#         mode: any                                # "any" (default) or "all"
+#         on_value: "on"
 #         on_style: "active"
 #
 #     "ha" — Climate (active when NOT off)
