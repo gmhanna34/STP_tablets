@@ -1467,6 +1467,58 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
         result, status = moip.send_osd(text=text, clear=bool(clear))
         return jsonify(result), status
 
+    @app.route("/api/moip/preview", methods=["POST"])
+    def moip_preview():
+        """Switch the dedicated preview receiver to a transmitter and return the stream URL."""
+        preview_cfg = cfg.get("moip", {}).get("preview", {})
+        if not preview_cfg.get("enabled"):
+            return jsonify({"error": "Preview not configured. Set moip.preview.enabled in config.yaml."}), 404
+
+        data = request.get_json(silent=True) or {}
+        tx = data.get("transmitter")
+        if tx is None:
+            return jsonify({"error": "Missing 'transmitter' field"}), 400
+
+        preview_rx = str(preview_cfg["preview_receiver"])
+        tablet = _tablet_id()
+
+        if mock_mode:
+            return jsonify({
+                "success": True, "mock": True,
+                "stream_url": preview_cfg.get("mjpeg_url", ""),
+                "switch_delay_ms": preview_cfg.get("switch_delay_ms", 1500),
+            }), 200
+
+        result, status = moip.switch(str(tx), preview_rx)
+        if status >= 400:
+            return jsonify(result), status
+
+        # Find transmitter name from devices config
+        tx_name = str(tx)
+        for t in devices_data.get("moip", {}).get("transmitters", []):
+            if str(t.get("id")) == str(tx):
+                tx_name = t.get("name", tx_name)
+                break
+
+        db.log_action(tablet, "moip:preview", f"TX{tx}", tx_name, "OK", 0)
+
+        return jsonify({
+            "success": True,
+            "stream_url": preview_cfg.get("mjpeg_url", ""),
+            "switch_delay_ms": preview_cfg.get("switch_delay_ms", 1500),
+            "transmitter": tx,
+            "transmitter_name": tx_name,
+        }), 200
+
+    @app.route("/api/moip/preview/config")
+    def moip_preview_config():
+        """Return preview configuration for the frontend."""
+        preview_cfg = cfg.get("moip", {}).get("preview", {})
+        return jsonify({
+            "enabled": preview_cfg.get("enabled", False),
+            "switch_delay_ms": preview_cfg.get("switch_delay_ms", 1500),
+        }), 200
+
     # -------------------------------------------------------------------------
     # X32 PROXY
     # -------------------------------------------------------------------------
