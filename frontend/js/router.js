@@ -72,7 +72,15 @@ const Router = {
     const handler = this.pages[page];
     if (handler && handler.render) {
       handler.render(content);
-      if (handler.init) handler.init();
+      if (handler.init) {
+        Promise.resolve(handler.init()).catch(e => {
+          console.error(`Page ${page} init error:`, e);
+          content.innerHTML += `<div style="color:#ff6b6b;padding:1em;text-align:center;">
+            <p>Error loading page: ${e.message || e}</p>
+            <p style="font-size:0.8em;opacity:0.7;">Check browser console for details</p>
+          </div>`;
+        });
+      }
     } else {
       content.innerHTML = '<div class="info-text">Page not found</div>';
     }
