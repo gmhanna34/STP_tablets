@@ -3014,7 +3014,10 @@ buttons:
           action: { type: macro, macro: chapel_audio_on }
           state:
             source: ha
-            entity: "switch.sw_020_spare_plug3"
+            entities: 
+              - "switch.sw_020_spare_plug3"
+              - "switch.sw_024_spare"
+            mode: any
             on_value: "on"
             on_style: "active"
         - label: "Audio Off"
