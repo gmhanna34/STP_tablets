@@ -90,7 +90,17 @@ const SecurityPage = {
 
     // Tab switching
     document.querySelectorAll('.cam-tab').forEach(tab => {
-      tab.addEventListener('click', () => this._switchTab(tab.dataset.tab));
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.tab;
+        if (target === 'security') {
+          // Security Cameras tab requires secure PIN every time
+          App.showSecurePINEntry((success) => {
+            if (success) this._switchTab(target);
+          });
+          return;
+        }
+        this._switchTab(target);
+      });
     });
 
     // Render PTZ cameras

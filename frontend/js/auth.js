@@ -193,10 +193,6 @@ const Auth = {
     return page === 'settings';
   },
 
-  requiresSecurePIN(page) {
-    return page === 'security';
-  },
-
   async verifySecurePIN(pin) {
     try {
       const resp = await fetch('/api/auth/verify-secure-pin', {

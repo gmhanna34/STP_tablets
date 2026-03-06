@@ -50,14 +50,6 @@ const Router = {
       return;
     }
 
-    // Secure PIN — always prompts (no session caching)
-    if (Auth.requiresSecurePIN(page)) {
-      App.showSecurePINEntry((success) => {
-        if (success) this._loadPage(page, pushState);
-      });
-      return;
-    }
-
     this._loadPage(page, pushState);
   },
 
