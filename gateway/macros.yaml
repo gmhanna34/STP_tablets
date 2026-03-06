@@ -730,6 +730,10 @@ macros:
       - type: macro
         macro: "shared_video_on"
         message: "Starting shared video components"
+      - type: macro
+        macro: "main_source_appletv_no_pages"
+        message: "Setting video source to Apple TV (No Page #s)"
+        conditional: "Set video source to AppleTV (no pages)?"
       - type: notify
         message: "Main church video system turning on"
 

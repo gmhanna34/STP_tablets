@@ -2841,6 +2841,7 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
             "macros": {k: {"label": v.get("label", k), "icon": v.get("icon", ""),
                            "description": v.get("description", ""),
                            "confirm": v.get("confirm", ""),
+                           "has_conditionals": any(s.get("conditional") for s in v.get("steps", [])),
                            "steps": len(v.get("steps", []))}
                        for k, v in macro_defs.items()},
         }
@@ -2970,6 +2971,8 @@ def create_app(cfg: dict, mock_mode: bool = False) -> tuple:
                     "type": step_type,
                     "label": step_label,
                 }
+                if step.get("conditional"):
+                    entry["conditional"] = step["conditional"]
                 if step_type == "macro":
                     child_key = step.get("macro", "")
                     child = _expand(child_key, depth + 1)
