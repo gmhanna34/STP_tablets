@@ -224,6 +224,12 @@ const SettingsPage = {
           <div class="control-section">
             <div class="section-title">Audit Log</div>
             <div class="text-center" style="margin-bottom:8px;">
+              <select id="audit-limit" style="padding:6px;border-radius:4px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;margin-right:8px;">
+                <option value="500">500 entries</option>
+                <option value="1000">1,000 entries</option>
+                <option value="2500">2,500 entries</option>
+                <option value="5000">5,000 entries</option>
+              </select>
               <button class="btn" id="btn-load-audit" style="display:inline-flex;max-width:300px;">
                 <span class="material-icons">history</span>
                 <span class="btn-label">Load Recent Activity</span>
@@ -242,6 +248,7 @@ const SettingsPage = {
                   <option value="ha:">Home Assistant</option>
                   <option value="x32:">X32 Mixer</option>
                   <option value="fully:">Fully Kiosk</option>
+                  <option value="occupancy:">Occupancy</option>
                   <option value="settings:">Settings</option>
                   <option value="__errors__">Errors Only</option>
                 </select>
@@ -1345,8 +1352,9 @@ const SettingsPage = {
   async loadAuditLog() {
     try {
       const tabletId = localStorage.getItem('tabletId') || 'WebApp';
+      const limit = document.getElementById('audit-limit')?.value || '500';
       const [logsResp, sessionsResp] = await Promise.all([
-        fetch('/api/audit/logs?limit=500', {}),
+        fetch(`/api/audit/logs?limit=${limit}`, {}),
         fetch('/api/audit/sessions', {}),
       ]);
       this._auditData = await logsResp.json();
