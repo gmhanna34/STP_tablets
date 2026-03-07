@@ -88,6 +88,9 @@ const App = {
     // Initialize Socket.IO connection
     this.initSocketIO();
 
+    // Initialize notification center (before macro API so it's available for events)
+    if (typeof NotificationCenter !== 'undefined') NotificationCenter.init();
+
     // Initialize macro API (after socket is ready)
     MacroAPI.init();
 
@@ -760,6 +763,14 @@ const App = {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = message;
+    // Warning and error toasts are tappable — opens notification center
+    if ((type === 'warning' || type === 'error') && typeof NotificationCenter !== 'undefined') {
+      toast.style.cursor = 'pointer';
+      toast.addEventListener('click', () => {
+        toast.remove();
+        NotificationCenter.open();
+      });
+    }
     document.body.appendChild(toast);
     setTimeout(() => {
       toast.style.opacity = '0';

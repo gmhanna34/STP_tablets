@@ -277,6 +277,53 @@ const SettingsPage = {
         <div class="page-grid" id="config-editor-grid">
           <div class="text-center" style="opacity:0.5;padding:30px;">Loading configuration...</div>
         </div>
+        <!-- Entity Find & Replace -->
+        <div class="page-grid" style="margin-top:12px;">
+          <div class="control-section" style="grid-column:1/-1;">
+            <div class="section-title">
+              <span class="material-icons" style="font-size:18px;vertical-align:middle;margin-right:4px;">find_replace</span>
+              Entity Find &amp; Replace
+            </div>
+            <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+              Search for entity IDs in macros.yaml and replace them individually or in bulk.
+              A backup is created automatically before any changes.
+            </div>
+            <div class="entity-fr-search">
+              <input type="text" id="entity-fr-query" class="text-input" placeholder="Search entity ID (e.g. switch.sw_001)" autocomplete="off">
+              <button class="btn" id="entity-fr-search-btn">
+                <span class="material-icons">search</span>
+                <span class="btn-label">Search</span>
+              </button>
+            </div>
+            <div id="entity-fr-results"></div>
+            <div id="entity-fr-replace" class="entity-fr-replace-section" style="display:none;">
+              <div class="entity-fr-replace-row">
+                <input type="text" id="entity-fr-new" class="text-input" placeholder="New entity ID (e.g. switch.sw_100)">
+                <button class="btn" id="entity-fr-replace-btn">
+                  <span class="material-icons">find_replace</span>
+                  <span class="btn-label">Replace All</span>
+                </button>
+              </div>
+              <div id="entity-fr-status"></div>
+            </div>
+            <!-- Bulk mode -->
+            <details class="entity-fr-bulk-details" style="margin-top:12px;">
+              <summary class="entity-fr-bulk-summary">Bulk Replace (multiple entities)</summary>
+              <div class="info-text" style="margin:8px 0;font-size:13px;">
+                Enter one replacement per line: <code>old_entity &gt; new_entity</code>
+              </div>
+              <textarea id="entity-fr-bulk" class="text-input" rows="5" placeholder="switch.sw_001 > switch.sw_100&#10;switch.sw_002 > switch.sw_200"></textarea>
+              <div style="margin-top:8px;display:flex;gap:8px;">
+                <button class="btn" id="entity-fr-bulk-btn">
+                  <span class="material-icons">find_replace</span>
+                  <span class="btn-label">Bulk Replace</span>
+                </button>
+              </div>
+              <div id="entity-fr-bulk-status"></div>
+            </details>
+          </div>
+        </div>
+
         <div class="page-grid" style="margin-top:12px;">
           <div class="control-section" style="grid-column:1/-1;">
             <div class="section-title">Apply Changes</div>
@@ -455,6 +502,14 @@ const SettingsPage = {
     this._loadConfigEditor();
     document.getElementById('btn-config-save')?.addEventListener('click', () => this._saveConfig());
     document.getElementById('btn-gateway-restart')?.addEventListener('click', () => this._restartGateway());
+
+    // Entity find & replace
+    document.getElementById('entity-fr-search-btn')?.addEventListener('click', () => this._entitySearch());
+    document.getElementById('entity-fr-query')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this._entitySearch();
+    });
+    document.getElementById('entity-fr-replace-btn')?.addEventListener('click', () => this._entityReplace());
+    document.getElementById('entity-fr-bulk-btn')?.addEventListener('click', () => this._entityBulkReplace());
 
     // ── Admin tab ──────────────────────────────────────────────────
     // Role selection
@@ -2423,6 +2478,102 @@ const SettingsPage = {
       });
     } catch (e) {
       // Expected — server dies before response completes
+    }
+  },
+
+  // ── Entity Find & Replace ──────────────────────────────────────
+
+  _entityFrLastQuery: '',
+
+  async _entitySearch() {
+    const q = document.getElementById('entity-fr-query')?.value.trim();
+    if (!q) { App.showToast('Enter an entity ID to search', 2000); return; }
+    this._entityFrLastQuery = q;
+    const results = document.getElementById('entity-fr-results');
+    const replaceSection = document.getElementById('entity-fr-replace');
+    if (results) results.innerHTML = '<div style="opacity:0.5;padding:8px;">Searching...</div>';
+    if (replaceSection) replaceSection.style.display = 'none';
+    try {
+      const resp = await fetch(`/api/entities/search?q=${encodeURIComponent(q)}`, {signal: AbortSignal.timeout(5000)});
+      const data = await resp.json();
+      if (!data.matches || data.matches.length === 0) {
+        results.innerHTML = '<div class="info-text" style="margin:8px 0;">No occurrences found in macros.yaml</div>';
+        return;
+      }
+      results.innerHTML =
+        `<div class="info-text" style="margin:8px 0;"><strong>${data.total}</strong> occurrence(s) found:</div>` +
+        '<div class="entity-fr-match-list">' +
+        data.matches.map(m => {
+          const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const highlighted = esc(m.text).replace(
+            new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+            `<mark>${esc(q)}</mark>`
+          );
+          return `<div class="entity-fr-match"><span class="entity-fr-line">L${m.line}</span>${highlighted}</div>`;
+        }).join('') +
+        '</div>';
+      if (replaceSection) replaceSection.style.display = 'block';
+    } catch (e) {
+      if (results) results.innerHTML = `<div class="info-text" style="color:var(--danger);">Search failed: ${e.message}</div>`;
+    }
+  },
+
+  async _entityReplace() {
+    const oldEntity = this._entityFrLastQuery;
+    const newEntity = document.getElementById('entity-fr-new')?.value.trim();
+    if (!oldEntity || !newEntity) { App.showToast('Enter a new entity ID', 2000); return; }
+    if (oldEntity === newEntity) { App.showToast('Old and new are the same', 2000); return; }
+    if (!confirm(`Replace all occurrences of "${oldEntity}" with "${newEntity}" in macros.yaml?`)) return;
+    await this._doReplace([{old: oldEntity, new: newEntity}], 'entity-fr-status');
+  },
+
+  async _entityBulkReplace() {
+    const text = document.getElementById('entity-fr-bulk')?.value.trim();
+    if (!text) { App.showToast('Enter replacement pairs', 2000); return; }
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const replacements = [];
+    for (const line of lines) {
+      const parts = line.split('>').map(s => s.trim());
+      if (parts.length !== 2 || !parts[0] || !parts[1]) {
+        App.showToast(`Invalid line: "${line}" — use "old > new" format`, 4000, 'error');
+        return;
+      }
+      replacements.push({old: parts[0], new: parts[1]});
+    }
+    if (!confirm(`Replace ${replacements.length} entity ID(s) in macros.yaml?`)) return;
+    await this._doReplace(replacements, 'entity-fr-bulk-status');
+  },
+
+  async _doReplace(replacements, statusElId) {
+    const statusEl = document.getElementById(statusElId);
+    if (statusEl) statusEl.innerHTML = '<div style="opacity:0.5;padding:8px;">Replacing...</div>';
+    try {
+      const resp = await fetch('/api/entities/replace', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({replacements}),
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        const lines = data.results.map(r => {
+          if (r.warning) return `<div class="info-text">${r.old}: not found</div>`;
+          return `<div class="info-text">${r.old} → ${r.new}: <strong>${r.count}</strong> replacement(s)</div>`;
+        });
+        if (statusEl) statusEl.innerHTML =
+          `<div style="margin:8px 0;padding:8px;background:var(--surface,rgba(255,255,255,0.03));border-radius:6px;">` +
+          `<div class="info-text" style="color:var(--success,#4caf50);margin-bottom:4px;">` +
+          `<strong>${data.total_replaced}</strong> total replacement(s). Backup: ${data.backup || 'created'}</div>` +
+          lines.join('') + '</div>';
+        App.showToast(`Replaced ${data.total_replaced} occurrence(s)`, 3000);
+        // Re-run search to show updated results
+        if (this._entityFrLastQuery) this._entitySearch();
+      } else {
+        if (statusEl) statusEl.innerHTML = `<div class="info-text" style="color:var(--danger);">${data.error || 'Replace failed'}</div>`;
+        App.showToast(data.error || 'Replace failed', 4000, 'error');
+      }
+    } catch (e) {
+      if (statusEl) statusEl.innerHTML = `<div class="info-text" style="color:var(--danger);">Error: ${e.message}</div>`;
     }
   },
 

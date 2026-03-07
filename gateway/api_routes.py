@@ -1611,3 +1611,102 @@ def register_api_routes(ctx):
             logger.warning(f"Chat API error: {e}")
             db.log_action(tablet, "chat:message", page, message[:200], f"ERROR: {e}", 0)
             return jsonify({"error": "Chat service unavailable. Please try again."}), 503
+
+    # ---- Entity Find & Replace ----
+
+    @app.route("/api/entities/search")
+    def api_entities_search():
+        """Search for entity ID occurrences in macros.yaml."""
+        q = request.args.get("q", "").strip()
+        if not q:
+            return jsonify({"error": "q parameter required"}), 400
+        macros_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "macros.yaml")
+        try:
+            with open(macros_path, "r") as f:
+                lines = f.readlines()
+        except Exception as e:
+            return jsonify({"error": f"Cannot read macros.yaml: {e}"}), 500
+        matches = []
+        for i, line in enumerate(lines, 1):
+            if q in line:
+                matches.append({"line": i, "text": line.rstrip()})
+        return jsonify({"query": q, "matches": matches, "total": len(matches)}), 200
+
+    @app.route("/api/entities/replace", methods=["POST"])
+    def api_entities_replace():
+        """Replace entity IDs in macros.yaml (text-level, preserves formatting)."""
+        data = request.get_json(silent=True) or {}
+        tablet = get_tablet_id()
+        replacements = data.get("replacements", [])
+        # Each replacement: {old: "old_entity", new: "new_entity"}
+        if not replacements:
+            return jsonify({"error": "replacements list required"}), 400
+        # Validate: no empty strings, old != new
+        for r in replacements:
+            old, new = r.get("old", "").strip(), r.get("new", "").strip()
+            if not old or not new:
+                return jsonify({"error": f"Invalid replacement: old and new required"}), 400
+            if old == new:
+                return jsonify({"error": f"old and new are identical: {old}"}), 400
+        macros_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "macros.yaml")
+        try:
+            with open(macros_path, "r") as f:
+                content = f.read()
+        except Exception as e:
+            return jsonify({"error": f"Cannot read macros.yaml: {e}"}), 500
+        # Create timestamped backup
+        backup_path = macros_path + f".backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        try:
+            shutil.copy2(macros_path, backup_path)
+        except Exception as e:
+            return jsonify({"error": f"Backup failed: {e}"}), 500
+        # Apply replacements
+        results = []
+        for r in replacements:
+            old, new = r["old"].strip(), r["new"].strip()
+            count = content.count(old)
+            if count > 0:
+                content = content.replace(old, new)
+                results.append({"old": old, "new": new, "count": count})
+            else:
+                results.append({"old": old, "new": new, "count": 0, "warning": "not found"})
+        total_replaced = sum(r["count"] for r in results)
+        if total_replaced == 0:
+            # Remove backup since no changes
+            try:
+                os.remove(backup_path)
+            except Exception:
+                pass
+            return jsonify({"success": True, "results": results, "total_replaced": 0,
+                            "message": "No occurrences found — no changes made"}), 200
+        # Write updated file
+        try:
+            with open(macros_path, "w") as f:
+                f.write(content)
+        except Exception as e:
+            # Restore from backup
+            try:
+                shutil.copy2(backup_path, macros_path)
+            except Exception:
+                pass
+            return jsonify({"error": f"Write failed: {e}"}), 500
+        # Reload macros in memory
+        from macro_engine import load_macros
+        try:
+            macros_cfg, new_macro_defs, new_button_defs, new_ha_entities = load_macros(cfg, logger)
+            ctx.macros_cfg = macros_cfg
+            ctx.macro_defs = new_macro_defs
+            ctx.button_defs = new_button_defs
+            ctx.ha_state_entities = new_ha_entities
+        except Exception as e:
+            logger.warning(f"Macro reload after entity replace failed: {e}")
+        db.log_action(tablet, "entities:replace", f"{len(replacements)} replacement(s)",
+                      json.dumps(results)[:500], f"OK, {total_replaced} occurrence(s) replaced", 0)
+        logger.info(f"[{tablet}] Entity replace: {total_replaced} occurrence(s) across "
+                    f"{len(replacements)} replacement(s), backup={backup_path}")
+        return jsonify({
+            "success": True,
+            "results": results,
+            "total_replaced": total_replaced,
+            "backup": os.path.basename(backup_path),
+        }), 200
