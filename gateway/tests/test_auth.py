@@ -286,16 +286,30 @@ class TestAuthMiddleware:
     def test_login_with_correct_password(self, remote_auth_app):
         app, ctx = remote_auth_app
         with app.test_client() as client:
+            # GET login page first to obtain CSRF token
+            get_resp = client.get("/login",
+                                  environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            import re as _re
+            m = _re.search(r'name="csrf_token" value="([^"]+)"', get_resp.data.decode())
+            csrf = m.group(1) if m else ""
             resp = client.post("/login",
-                               data={"username": "admin", "password": "secret123"},
+                               data={"username": "admin", "password": "secret123",
+                                     "csrf_token": csrf},
                                environ_base={"REMOTE_ADDR": "10.0.0.1"})
             assert resp.status_code == 302  # Redirect to /
 
     def test_login_with_wrong_password(self, remote_auth_app):
         app, ctx = remote_auth_app
         with app.test_client() as client:
+            # GET login page first to obtain CSRF token
+            get_resp = client.get("/login",
+                                  environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            import re as _re
+            m = _re.search(r'name="csrf_token" value="([^"]+)"', get_resp.data.decode())
+            csrf = m.group(1) if m else ""
             resp = client.post("/login",
-                               data={"username": "admin", "password": "wrong"},
+                               data={"username": "admin", "password": "wrong",
+                                     "csrf_token": csrf},
                                environ_base={"REMOTE_ADDR": "10.0.0.1"})
             assert resp.status_code == 200  # Re-renders login page
             assert b"Invalid password" in resp.data
@@ -303,9 +317,15 @@ class TestAuthMiddleware:
     def test_logout_clears_session(self, remote_auth_app):
         app, ctx = remote_auth_app
         with app.test_client() as client:
-            # Login first
+            # Login first (with CSRF token)
+            import re as _re
+            get_resp = client.get("/login",
+                                  environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            m = _re.search(r'name="csrf_token" value="([^"]+)"', get_resp.data.decode())
+            csrf = m.group(1) if m else ""
             client.post("/login",
-                         data={"username": "admin", "password": "secret123"},
+                         data={"username": "admin", "password": "secret123",
+                               "csrf_token": csrf},
                          environ_base={"REMOTE_ADDR": "10.0.0.1"})
             # Logout
             resp = client.get("/logout",

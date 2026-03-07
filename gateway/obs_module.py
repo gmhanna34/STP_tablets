@@ -17,6 +17,7 @@ Key design:
 from __future__ import annotations
 
 import base64
+import copy
 import hashlib
 import json
 import logging
@@ -282,9 +283,10 @@ class OBSModule:
 
     def get_snapshot(self) -> Optional[dict]:
         """Return cached snapshot for the polling loop. None if offline."""
-        if not self._online:
-            return None
-        return self._snapshot
+        with self._lock:
+            if not self._online:
+                return None
+            return copy.deepcopy(self._snapshot)
 
     # --- Poll internals ---
 

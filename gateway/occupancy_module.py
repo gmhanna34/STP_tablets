@@ -124,7 +124,10 @@ class OccupancyModule:
         weekly = self._build_weekly_summary(occupancy, communion)
 
         all_daily_peaks = []
+        cutoff_date = date.today() - __import__('datetime').timedelta(days=365)
         for d, path in sorted(building_files.items()):
+            if d < cutoff_date:
+                continue
             try:
                 df = self._parse_building_file(path)
                 raw_peak = int(df["occupancy"].max())

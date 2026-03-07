@@ -153,6 +153,15 @@ polling:
   x32: 5
   obs: 3
   projectors: 30
+timeouts:
+  ptz_cameras: 3
+  projectors: 5
+  camlytics: 2
+  ha_proxy: 10
+  ha_stream: 30
+  epson: 5
+  fully_kiosk: 5
+  occupancy_download: 30
 healthdash:
   app:
     refresh_seconds: 5

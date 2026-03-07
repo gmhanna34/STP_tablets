@@ -14,6 +14,7 @@ Key design:
 
 from __future__ import annotations
 
+import copy
 import logging
 import threading
 import time
@@ -124,9 +125,10 @@ class X32Poller:
         return self._online, age_ok, self._last_error
 
     def snapshot(self) -> Tuple[Optional[Dict[str, Any]], float, bool, str]:
-        snap_ts = self._snapshot_ts
-        snap_age = (time.time() - snap_ts) if snap_ts else float("inf")
-        return self._snapshot, snap_age, self._online, self._last_error
+        with self._lock:
+            snap_ts = self._snapshot_ts
+            snap_age = (time.time() - snap_ts) if snap_ts else float("inf")
+            return copy.deepcopy(self._snapshot), snap_age, self._online, self._last_error
 
     def command(self, func: Callable[[Any], Any]) -> Tuple[Optional[Any], Optional[str]]:
         """Execute a command against the mixer. If it fails, flip offline + disconnect."""

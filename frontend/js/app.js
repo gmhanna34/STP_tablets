@@ -126,6 +126,7 @@ const App = {
       this._reconnectAttempt = 0;
       clearTimeout(this._disconnectBannerTimer);
       this._hideDisconnectBanner();
+      document.getElementById('gateway-reload-overlay')?.remove();
       this.setConnectionStatus('Connected', true);
 
       // Report previous disconnect reason to server for diagnostics
@@ -176,6 +177,10 @@ const App = {
       // Only show reconnecting UI after the grace period
       if (this._disconnectedAt && Date.now() - this._disconnectedAt > 3000) {
         this.setConnectionStatus(`Reconnecting (${attempt})...`, false);
+      }
+      // After 30 failed attempts (~5 min), show reload overlay
+      if (attempt >= 30 && !document.getElementById('gateway-reload-overlay')) {
+        this._showReloadOverlay();
       }
     });
 
@@ -340,6 +345,20 @@ const App = {
 
   _hideDisconnectBanner() {
     document.getElementById('disconnect-banner')?.remove();
+  },
+
+  _showReloadOverlay() {
+    if (document.getElementById('gateway-reload-overlay')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'gateway-reload-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-size:18px;gap:16px;';
+    overlay.innerHTML = `
+      <span class="material-icons" style="font-size:48px;color:#ff9800;">cloud_off</span>
+      <div>Gateway unreachable</div>
+      <div style="font-size:14px;opacity:0.7;">Unable to reconnect after multiple attempts</div>
+      <button onclick="location.reload()" style="margin-top:12px;padding:12px 32px;font-size:16px;font-weight:600;background:#ff9800;color:#fff;border:none;border-radius:6px;cursor:pointer;">Reload Page</button>
+    `;
+    document.body.appendChild(overlay);
   },
 
   refreshCurrentPage(subsystem) {

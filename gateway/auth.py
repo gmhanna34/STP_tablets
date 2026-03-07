@@ -1,9 +1,11 @@
-"""IP allowlist, PIN verification, sessions, and permission enforcement."""
+"""IP allowlist, PIN verification, sessions, CSRF, rate limiting, and permission enforcement."""
 
 from __future__ import annotations
 
 import logging
+import os
 import time
+from collections import defaultdict
 
 from flask import Response, jsonify, redirect, request, session, url_for
 
@@ -61,6 +63,59 @@ def check_permission(tablet_id: str, required_page: str, permissions_data: dict)
                  f"role_header={role_key!r}, page={required_page} — allowing (fail-open)")
     return None
 
+
+
+
+# ---------------------------------------------------------------------------
+# CSRF token helpers
+# ---------------------------------------------------------------------------
+
+def _generate_csrf_token() -> str:
+    """Generate and store a CSRF token in the session."""
+    token = os.urandom(32).hex()
+    session["csrf_token"] = token
+    return token
+
+
+def _validate_csrf_token() -> bool:
+    """Check if the submitted CSRF token matches the session token."""
+    expected = session.get("csrf_token", "")
+    submitted = request.form.get("csrf_token", "")
+    if not expected or not submitted:
+        return False
+    return expected == submitted
+
+
+# ---------------------------------------------------------------------------
+# Rate limiter (in-memory, per-IP)
+# ---------------------------------------------------------------------------
+
+class _RateLimiter:
+    """Simple in-memory sliding-window rate limiter."""
+
+    def __init__(self, max_attempts: int = 5, window_seconds: int = 60):
+        self._max = max_attempts
+        self._window = window_seconds
+        self._attempts: dict = defaultdict(list)
+
+    def is_allowed(self, key: str) -> bool:
+        now = time.time()
+        cutoff = now - self._window
+        self._attempts[key] = [t for t in self._attempts[key] if t > cutoff]
+        if len(self._attempts[key]) >= self._max:
+            return False
+        self._attempts[key].append(now)
+        return True
+
+    def remaining(self, key: str) -> int:
+        now = time.time()
+        cutoff = now - self._window
+        recent = [t for t in self._attempts.get(key, []) if t > cutoff]
+        return max(0, self._max - len(recent))
+
+
+# Shared rate limiter for auth endpoints (5 attempts per 60s per IP)
+_auth_limiter = _RateLimiter(max_attempts=5, window_seconds=60)
 
 # ---------------------------------------------------------------------------
 # LOGIN HTML
@@ -193,6 +248,7 @@ LOGIN_HTML = """<!DOCTYPE html>
       </p>
       {{ERROR}}
       <form method="post" autocomplete="on">
+        <input type="hidden" name="csrf_token" value="{{CSRF_TOKEN}}">
         <label for="username">Username</label>
         <input type="text" id="username" name="username"
                autocomplete="username" autocapitalize="none" required>
@@ -236,6 +292,8 @@ def register_auth(ctx):
         if time.time() > float(exp):
             session.clear()
             return False
+        # Refresh expiry on activity (idle timeout)
+        session["auth_exp"] = time.time() + session_timeout * 60
         return bool(session.get("authed"))
 
     def _is_authed() -> bool:
@@ -250,6 +308,9 @@ def register_auth(ctx):
         if request.path.startswith("/socket.io"):
             return None
         if request.path in ("/login", "/logout"):
+            return None
+        # Allow readiness probe without auth
+        if request.path == "/api/readiness":
             return None
 
         if _is_authed():
@@ -290,20 +351,41 @@ def register_auth(ctx):
 
         error_html = ""
         if request.method == "POST":
+            client_ip = request.remote_addr or "unknown"
+            # Rate limiting
+            if not _auth_limiter.is_allowed(client_ip):
+                logger.warning(f"LOGIN_RATE_LIMITED ip={client_ip}")
+                error_html = '<div class="alert">Too many attempts. Try again in a minute.</div>'
+                csrf_token = _generate_csrf_token()
+                return Response(
+                    LOGIN_HTML.replace("{{ERROR}}", error_html).replace("{{CSRF_TOKEN}}", csrf_token),
+                    content_type="text/html",
+                )
+            # CSRF validation
+            if not _validate_csrf_token():
+                logger.warning(f"LOGIN_CSRF_FAIL ip={client_ip}")
+                error_html = '<div class="alert">Session expired. Please try again.</div>'
+                csrf_token = _generate_csrf_token()
+                return Response(
+                    LOGIN_HTML.replace("{{ERROR}}", error_html).replace("{{CSRF_TOKEN}}", csrf_token),
+                    content_type="text/html",
+                )
+
             pw = request.form.get("password", "")
             configured_pw = remote_auth.get("password", "")
 
             if pw and pw == configured_pw:
                 session["authed"] = True
                 session["auth_exp"] = time.time() + session_timeout * 60
-                logger.info(f"LOGIN_OK ip={request.remote_addr}")
+                logger.info(f"LOGIN_OK ip={client_ip}")
                 return redirect(request.args.get("next") or "/")
 
-            logger.warning(f"LOGIN_FAIL ip={request.remote_addr}")
+            logger.warning(f"LOGIN_FAIL ip={client_ip}")
             error_html = '<div class="alert">Invalid password</div>'
 
+        csrf_token = _generate_csrf_token()
         return Response(
-            LOGIN_HTML.replace("{{ERROR}}", error_html),
+            LOGIN_HTML.replace("{{ERROR}}", error_html).replace("{{CSRF_TOKEN}}", csrf_token),
             content_type="text/html",
         )
 
@@ -316,6 +398,9 @@ def register_auth(ctx):
 
     @app.route("/api/auth/verify-pin", methods=["POST"])
     def verify_pin():
+        client_ip = request.remote_addr or "unknown"
+        if not _auth_limiter.is_allowed(f"pin:{client_ip}"):
+            return jsonify({"success": False, "error": "Too many attempts"}), 429
         data = request.get_json(silent=True) or {}
         pin = data.get("pin", "")
         if pin == settings_pin:
@@ -324,6 +409,9 @@ def register_auth(ctx):
 
     @app.route("/api/auth/verify-secure-pin", methods=["POST"])
     def verify_secure_pin():
+        client_ip = request.remote_addr or "unknown"
+        if not _auth_limiter.is_allowed(f"secure_pin:{client_ip}"):
+            return jsonify({"success": False, "error": "Too many attempts"}), 429
         data = request.get_json(silent=True) or {}
         pin = data.get("pin", "")
         if not secure_pin:

@@ -6,7 +6,6 @@
     "idleTimeout": 60
   },
   "healthCheck": {
-    "url": "external.stpauloc.org:20855",
     "pollingInterval": 30000
   }
 }

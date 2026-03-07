@@ -44,6 +44,7 @@ def register_api_routes(ctx):
 
     mw_cfg = cfg.get("middleware", {})
     config_path = ctx.config_path
+    timeouts = cfg.get("timeouts", {})
 
     # ---- Static file serving ----
 
@@ -161,6 +162,53 @@ def register_api_routes(ctx):
             "db_ok": db_ok,
             "pollers": poller_status,
         }), status_code
+
+    @app.route("/api/readiness")
+    def api_readiness():
+        """Deployment readiness probe — returns 200 only when all modules are connected."""
+        checks = {}
+        all_ok = True
+
+        # Database
+        try:
+            db._get_conn().execute("SELECT 1")
+            checks["database"] = "ok"
+        except Exception:
+            checks["database"] = "fail"
+            all_ok = False
+
+        # Device modules (None in mock mode = ok)
+        for name, mod in [("x32", ctx.x32), ("moip", ctx.moip), ("obs", ctx.obs)]:
+            if mod is None:
+                checks[name] = "mock" if mock_mode else "disabled"
+            elif hasattr(mod, "get_status"):
+                try:
+                    status = mod.get_status()
+                    ok = status.get("healthy", False) if isinstance(status, dict) else False
+                    checks[name] = "ok" if ok else "degraded"
+                    if not ok:
+                        all_ok = False
+                except Exception:
+                    checks[name] = "fail"
+                    all_ok = False
+            else:
+                checks[name] = "ok"
+
+        # Health module
+        if ctx.health is not None:
+            checks["health_module"] = "ok" if ctx.health._running else "fail"
+            if not ctx.health._running:
+                all_ok = False
+        else:
+            checks["health_module"] = "mock" if mock_mode else "disabled"
+
+        # Pollers
+        poller_status = watchdog.status()
+        any_stale = any(p.get("stale") for p in poller_status.values())
+        checks["pollers"] = "degraded" if any_stale else "ok"
+
+        status_code = 200 if all_ok else 503
+        return jsonify({"ready": all_ok, "checks": checks}), status_code
 
     @app.route("/api/healthdash/summary")
     def api_healthdash_summary():
@@ -781,7 +829,8 @@ def register_api_routes(ctx):
         tablet = get_tablet_id()
         start = time.time()
         try:
-            resp = http_requests.get(url, timeout=3)
+            ptz_timeout = timeouts.get("ptz_cameras", 3)
+            resp = http_requests.get(url, timeout=ptz_timeout)
             latency = (time.time() - start) * 1000
             success = resp.status_code == 200
             db.log_action(tablet, "ptz:command", camera_key, command,
@@ -791,7 +840,7 @@ def register_api_routes(ctx):
                 "status_code": resp.status_code, "latency_ms": round(latency, 1),
             }), 200
         except http_requests.Timeout:
-            db.log_action(tablet, "ptz:command", camera_key, command, "timeout", 3000)
+            db.log_action(tablet, "ptz:command", camera_key, command, "timeout", timeouts.get("ptz_cameras", 3) * 1000)
             return jsonify({"error": "Camera timeout", "camera": camera_key}), 504
         except http_requests.ConnectionError:
             db.log_action(tablet, "ptz:command", camera_key, command, "unreachable", 0)
@@ -809,7 +858,7 @@ def register_api_routes(ctx):
         tablet = get_tablet_id()
         start = time.time()
         try:
-            resp = http_requests.get(url, timeout=3)
+            resp = http_requests.get(url, timeout=timeouts.get("ptz_cameras", 3))
             latency = (time.time() - start) * 1000
             db.log_action(tablet, "ptz:preset", camera_key, str(preset_num),
                           f"status={resp.status_code}", latency)
@@ -833,7 +882,7 @@ def register_api_routes(ctx):
         snapshot_path = cam.get("snapshot_path", "/snapshot.jpg")
         url = f"http://{cam['ip']}{snapshot_path}"
         try:
-            resp = http_requests.get(url, timeout=3)
+            resp = http_requests.get(url, timeout=timeouts.get("ptz_cameras", 3))
             if resp.status_code != 200:
                 return "Camera returned non-200", 502
             ct = resp.headers.get("Content-Type", "image/jpeg")
@@ -859,7 +908,7 @@ def register_api_routes(ctx):
             try:
                 resp = http_requests.get(
                     f"http://{proj['ip']}/api/v01/contentmgr/remote/power/",
-                    timeout=3,
+                    timeout=timeouts.get("projectors", 5),
                 )
                 statuses[key] = {"name": proj.get("name", key), "power": "on" if resp.status_code == 200 else "unknown", "reachable": True}
             except Exception as e:
@@ -884,7 +933,7 @@ def register_api_routes(ctx):
         tablet = get_tablet_id()
         start = time.time()
         try:
-            resp = http_requests.get(url, timeout=5)
+            resp = http_requests.get(url, timeout=timeouts.get("projectors", 5))
             latency = (time.time() - start) * 1000
             db.log_action(tablet, "projector:power", projector_key, state,
                           f"status={resp.status_code}", latency)
@@ -914,7 +963,7 @@ def register_api_routes(ctx):
                 continue
             url = f"http://{proj['ip']}/api/v01/contentmgr/remote/power/{state}"
             try:
-                resp = http_requests.get(url, timeout=5)
+                resp = http_requests.get(url, timeout=timeouts.get("projectors", 5))
                 results[key] = {"success": resp.status_code == 200}
             except Exception as e:
                 results[key] = {"success": False, "error": str(e)}
@@ -941,12 +990,13 @@ def register_api_routes(ctx):
         base_url = f"http://127.0.0.1:{port}/?password={password}"
         start = time.time()
         try:
+            fk_timeout = timeouts.get("fully_kiosk", 5)
             http_requests.get(
                 f"{base_url}&cmd=setStringSetting&key=timeToScreensaverV2&value={timeout_val}",
-                timeout=5,
+                timeout=fk_timeout,
             )
             if timeout_val > fk.get("screensaver_default", 20):
-                http_requests.get(f"{base_url}&cmd=stopScreensaver", timeout=5)
+                http_requests.get(f"{base_url}&cmd=stopScreensaver", timeout=fk_timeout)
             latency = (time.time() - start) * 1000
             db.log_action(tablet, "fully:screensaver", "127.0.0.1", str(timeout_val),
                           f"timeout={timeout_val}s", latency)
@@ -1189,7 +1239,7 @@ def register_api_routes(ctx):
         url = f"{ha_cfg['url']}/api/camera_proxy/{entity_id}"
         headers = {"Authorization": f"Bearer {ha_cfg['token']}"}
         try:
-            resp = http_requests.get(url, headers=headers, timeout=10)
+            resp = http_requests.get(url, headers=headers, timeout=timeouts.get("ha_proxy", 10))
             if resp.status_code != 200:
                 return f"HA returned {resp.status_code}", resp.status_code
             ct = resp.headers.get("Content-Type", "image/jpeg")
@@ -1210,7 +1260,7 @@ def register_api_routes(ctx):
         url = f"{ha_cfg['url']}/api/camera_proxy_stream/{entity_id}"
         headers = {"Authorization": f"Bearer {ha_cfg['token']}"}
         try:
-            resp = http_requests.get(url, headers=headers, timeout=30, stream=True)
+            resp = http_requests.get(url, headers=headers, timeout=timeouts.get("ha_stream", 30), stream=True)
             if resp.status_code != 200:
                 return f"HA returned {resp.status_code}", resp.status_code
             ct = resp.headers.get("Content-Type", "multipart/x-mixed-replace")

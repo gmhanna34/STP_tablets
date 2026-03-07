@@ -331,27 +331,40 @@ def start_pollers(ctx):
     def poll_loop(name, interval, poll_fn):
         logger.info(f"Poller started: {name} (every {interval}s)")
         watchdog.register(name, interval)
+        crash_count = 0
         while True:
-            cb = watchdog.breaker(name)
-            if cb and not cb.allow_request():
-                logger.debug(f"Poller {name}: circuit open, skipping poll")
-                time.sleep(interval)
-                continue
             try:
-                data = poll_fn()
-                watchdog.heartbeat(name)
-                if cb:
-                    if data is not None:
-                        cb.record_success()
-                    else:
+                cb = watchdog.breaker(name)
+                if cb and not cb.allow_request():
+                    logger.debug(f"Poller {name}: circuit open, skipping poll")
+                    time.sleep(interval)
+                    continue
+                try:
+                    data = poll_fn()
+                    watchdog.heartbeat(name)
+                    if cb:
+                        if data is not None:
+                            cb.record_success()
+                        else:
+                            cb.record_failure()
+                    if data is not None and state_cache.set(name, data):
+                        socketio.emit(f"state:{name}", data, room=name)
+                except Exception as e:
+                    logger.warning(f"Poller {name} error: {e}")
+                    if cb:
                         cb.record_failure()
-                if data is not None and state_cache.set(name, data):
-                    socketio.emit(f"state:{name}", data, room=name)
+                time.sleep(interval)
             except Exception as e:
-                logger.warning(f"Poller {name} error: {e}")
-                if cb:
-                    cb.record_failure()
-            time.sleep(interval)
+                # Top-level catch: thread would die without this
+                crash_count += 1
+                logger.error(f"Poller {name} CRASHED (#{crash_count}): {e}", exc_info=True)
+                try:
+                    socketio.emit("poller_died", {"poller": name, "error": str(e), "crash_count": crash_count})
+                except Exception:
+                    pass
+                # Back off before restarting: 5s, 10s, 20s, capped at 60s
+                backoff = min(5 * (2 ** (crash_count - 1)), 60)
+                time.sleep(backoff)
 
     # Fail-streak counters for poller logging
     _poll_fail_streaks = {}
@@ -413,9 +426,10 @@ def start_pollers(ctx):
         statuses = {}
         for key, proj in projectors.items():
             try:
+                proj_timeout = cfg.get("timeouts", {}).get("projectors", 5)
                 resp = http_requests.get(
                     f"http://{proj['ip']}/api/v01/contentmgr/remote/power/",
-                    timeout=3,
+                    timeout=proj_timeout,
                 )
                 statuses[key] = {"name": proj.get("name", key), "power": "on", "reachable": True}
             except Exception as e:
@@ -430,7 +444,7 @@ def start_pollers(ctx):
         if not url:
             return 0
         try:
-            resp = http_requests.get(url, timeout=2)
+            resp = http_requests.get(url, timeout=cfg.get("timeouts", {}).get("camlytics", 2))
             body = resp.json()
             report = body.get("report", {}) if isinstance(body, dict) else {}
             data = report.get("data", {}) if isinstance(report, dict) else {}
@@ -501,9 +515,17 @@ def start_pollers(ctx):
     def _ha_cache_loop():
         logger.info("HA device cache: initial load...")
         build_ha_device_cache(ctx)
+        crash_count = 0
         while True:
-            time.sleep(300)
-            build_ha_device_cache(ctx)
+            try:
+                time.sleep(300)
+                build_ha_device_cache(ctx)
+                crash_count = 0
+            except Exception as e:
+                crash_count += 1
+                logger.error(f"HA cache loop CRASHED (#{crash_count}): {e}", exc_info=True)
+                backoff = min(5 * (2 ** (crash_count - 1)), 60)
+                time.sleep(backoff)
 
     ha_cache_thread = threading.Thread(target=_ha_cache_loop, daemon=True)
     ha_cache_thread.start()

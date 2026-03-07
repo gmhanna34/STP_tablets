@@ -35,6 +35,16 @@ def start_scheduler(ctx):
                     _last_cleanup_date = today_str
                     db.cleanup_old_logs(30)
                     logger.info("Audit log cleanup complete (>30 days deleted)")
+                    # Clean stale Socket.IO session entries (>24h old)
+                    stale_cutoff = time.time() - 86400
+                    with ctx.sid_lock:
+                        stale_sids = [sid for sid, t in ctx.sid_connect_time.items()
+                                      if t < stale_cutoff]
+                        for sid in stale_sids:
+                            ctx.sid_to_tablet.pop(sid, None)
+                            ctx.sid_connect_time.pop(sid, None)
+                    if stale_sids:
+                        logger.info(f"Cleaned {len(stale_sids)} stale Socket.IO sessions")
 
                 for sched in db.get_schedules():
                     if not sched.get("enabled"):
