@@ -352,6 +352,16 @@ class Database:
 # =============================================================================
 
 class StateCache:
+    # Fields that change every poll cycle but don't represent actionable
+    # state changes.  Stripped before comparing old vs new to avoid
+    # broadcasting identical payloads to every tablet.
+    VOLATILE_KEYS = frozenset({
+        "age_seconds",       # X32 — seconds since last snapshot
+        "stream_timecode",   # OBS — HH:MM:SS.mmm while streaming
+        "record_timecode",   # OBS — HH:MM:SS.mmm while recording
+        "stream_bytes",      # OBS — bytes sent (increments every cycle)
+    })
+
     def __init__(self):
         self._lock = threading.Lock()
         self._state: Dict[str, Any] = {}
@@ -360,12 +370,20 @@ class StateCache:
         with self._lock:
             return self._state.get(key)
 
+    @staticmethod
+    def _strip_volatile(value: Any) -> Any:
+        """Return a copy with volatile keys removed (for comparison only)."""
+        if isinstance(value, dict):
+            return {k: v for k, v in value.items()
+                    if k not in StateCache.VOLATILE_KEYS}
+        return value
+
     def set(self, key: str, value: Any) -> bool:
-        """Set value. Returns True if value changed."""
+        """Set value. Returns True if non-volatile fields changed."""
         with self._lock:
             old = self._state.get(key)
             self._state[key] = value
-            return old != value
+            return self._strip_volatile(old) != self._strip_volatile(value)
 
     def get_all(self) -> dict:
         with self._lock:
@@ -3795,32 +3813,37 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
             return statuses
 
         def poll_ha_states():
-            """Poll HA entity states for button state bindings (per-entity)."""
+            """Poll HA entity states for button state bindings (bulk fetch).
+
+            Uses the single /api/states endpoint and filters client-side,
+            instead of making N individual requests per entity.
+            """
             if not ha_state_entities:
                 return None
-            ha_cfg = cfg.get("home_assistant", {})
             if mock_mode:
                 return {e: {"state": "on", "attributes": {}} for e in ha_state_entities}
-            states = {}
-            for entity_id in ha_state_entities:
-                try:
-                    resp = http_requests.get(
-                        f"{ha_cfg['url']}/api/states/{entity_id}",
-                        headers={"Authorization": f"Bearer {ha_cfg['token']}"},
-                        timeout=5,
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        states[entity_id] = {
-                            "state": data.get("state", "unknown"),
-                            "attributes": data.get("attributes", {}),
+            try:
+                all_entities, err = _fetch_all_ha_entities()
+                if err:
+                    logger.debug(f"HA bulk poll failed: {err}")
+                    return {e: {"state": "unavailable", "attributes": {}} for e in ha_state_entities}
+                # Build lookup from bulk response, filtering to only tracked entities
+                states = {}
+                for entity in all_entities:
+                    eid = entity.get("entity_id", "")
+                    if eid in ha_state_entities:
+                        states[eid] = {
+                            "state": entity.get("state", "unknown"),
+                            "attributes": entity.get("attributes", {}),
                         }
-                    else:
-                        states[entity_id] = {"state": "unavailable", "attributes": {}}
-                except Exception as e:
-                    logger.debug(f"HA entity {entity_id} poll failed: {e}")
-                    states[entity_id] = {"state": "unavailable", "attributes": {}}
-            return states
+                # Fill any missing entities (removed from HA, etc.)
+                for eid in ha_state_entities:
+                    if eid not in states:
+                        states[eid] = {"state": "unavailable", "attributes": {}}
+                return states
+            except Exception as e:
+                logger.debug(f"HA bulk poll error: {e}")
+                return {e: {"state": "unavailable", "attributes": {}} for e in ha_state_entities}
 
         def _get_camlytics_raw(url):
             """Fetch a raw counter value from a Camlytics cloud report URL.
