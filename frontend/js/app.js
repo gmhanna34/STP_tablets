@@ -141,6 +141,7 @@ const App = {
       this.socket.emit('join', { room: 'projectors' });
       this.socket.emit('join', { room: 'camlytics' });
       this.socket.emit('join', { room: 'ha' });
+      this.socket.emit('join', { room: 'health' });
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -221,6 +222,17 @@ const App = {
 
     this.socket.on('state:camlytics', (data) => {
       this.refreshCurrentPage('camlytics');
+    });
+
+    this.socket.on('state:health', (data) => {
+      if (data && data.counts) {
+        HealthAPI.state.downCount = data.counts.down || 0;
+        HealthAPI.state.warningCount = data.counts.warning || 0;
+        HealthAPI.state.healthyCount = data.counts.healthy || 0;
+        HealthAPI.state.totalCount = data.total || 0;
+        HealthAPI.state.stale = false;
+        this._updateHealthPills(HealthAPI.state);
+      }
     });
 
     // Scene progress — show real-time feedback during server-side scene execution
@@ -337,7 +349,7 @@ const App = {
 
     // Map subsystems to pages that display their data
     const subsystemPages = {
-      x32: ['settings', 'main'],
+      x32: ['settings', 'main', 'source'],
       moip: ['source', 'main', 'chapel', 'social', 'gym', 'confroom'],
       obs: ['stream'],
       projectors: ['main'],
@@ -388,45 +400,44 @@ const App = {
   },
 
   startHealthPolling() {
-    const update = async () => {
-      const state = await HealthAPI.poll();
-      const downEl = document.getElementById('health-down-count');
-      const warnEl = document.getElementById('health-warning-count');
-      const healthyEl = document.getElementById('health-healthy-count');
-      const healthSection = document.getElementById('status-health');
-
-      if (downEl) {
-        downEl.textContent = state.downCount;
-        downEl.style.display = state.downCount > 0 ? 'inline-flex' : 'none';
-      }
-      if (warnEl) {
-        warnEl.textContent = state.warningCount;
-        warnEl.style.display = state.warningCount > 0 ? 'inline-flex' : 'none';
-      }
-      if (healthyEl) {
-        healthyEl.textContent = state.healthyCount;
-        healthyEl.style.display = state.healthyCount > 0 ? 'inline-flex' : 'none';
-      }
-
-      // Stale data indicator
-      if (healthSection) {
-        if (state.stale) {
-          healthSection.style.opacity = '0.4';
-          healthSection.title = 'Health data is stale — dashboard may be unreachable';
-        } else {
-          healthSection.style.opacity = '';
-          healthSection.title = '';
-        }
-      }
-    };
-    update();
-    this.healthTimer = setInterval(update, 30000);
+    // Initial fetch — subsequent updates come via Socket.IO (state:health)
+    HealthAPI.poll().then(state => this._updateHealthPills(state));
 
     // Make health pills clickable — navigate to built-in health page
     const healthSection = document.getElementById('status-health');
     if (healthSection) {
       healthSection.style.cursor = 'pointer';
       healthSection.addEventListener('click', () => Router.navigate('health'));
+    }
+  },
+
+  _updateHealthPills(state) {
+    const downEl = document.getElementById('health-down-count');
+    const warnEl = document.getElementById('health-warning-count');
+    const healthyEl = document.getElementById('health-healthy-count');
+    const healthSection = document.getElementById('status-health');
+
+    if (downEl) {
+      downEl.textContent = state.downCount;
+      downEl.style.display = state.downCount > 0 ? 'inline-flex' : 'none';
+    }
+    if (warnEl) {
+      warnEl.textContent = state.warningCount;
+      warnEl.style.display = state.warningCount > 0 ? 'inline-flex' : 'none';
+    }
+    if (healthyEl) {
+      healthyEl.textContent = state.healthyCount;
+      healthyEl.style.display = state.healthyCount > 0 ? 'inline-flex' : 'none';
+    }
+
+    if (healthSection) {
+      if (state.stale) {
+        healthSection.style.opacity = '0.4';
+        healthSection.title = 'Health data is stale — dashboard may be unreachable';
+      } else {
+        healthSection.style.opacity = '';
+        healthSection.title = '';
+      }
     }
   },
 

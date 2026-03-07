@@ -165,19 +165,30 @@ const SourcePage = {
     }).catch(() => {});
 
     this.loadRouting();
-    this.pollTimer = setInterval(() => this.loadRouting(), 10000);
 
     document.getElementById('btn-refresh-routing')?.addEventListener('click', () => this.loadRouting());
   },
 
   _initAudio() {
     this.loadMixer();
-    this.mixerTimer = setInterval(() => this.loadMixer(), 5000);
     this._wireX32QuickActions();
+  },
+
+  // UI-only refresh — reads from cached API state without HTTP calls.
+  // Called by Socket.IO state push (via App.refreshCurrentPage).
+  updateStatus() {
+    this._renderRouting(MoIPAPI.state);
+    if (this._activeTab === 'audio') {
+      this._renderMixer(X32API.state);
+    }
   },
 
   async loadMixer() {
     const state = await X32API.poll();
+    this._renderMixer(state);
+  },
+
+  _renderMixer(state) {
     const container = document.getElementById('mixer-container');
     if (!container) return;
 
@@ -513,6 +524,10 @@ const SourcePage = {
 
   async loadRouting() {
     const state = await MoIPAPI.poll();
+    this._renderRouting(state);
+  },
+
+  _renderRouting(state) {
     const container = document.getElementById('routing-container');
     if (!container) return;
 
@@ -747,8 +762,6 @@ const SourcePage = {
   },
 
   destroy() {
-    if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
-    if (this.mixerTimer) { clearInterval(this.mixerTimer); this.mixerTimer = null; }
     this._closePreview();
     this._activeTab = 'video';
     this._announcementsLoaded = false;

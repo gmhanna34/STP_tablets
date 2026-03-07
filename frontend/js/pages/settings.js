@@ -430,7 +430,6 @@ const SettingsPage = {
 
     // ── Audio tab ──────────────────────────────────────────────────
     this.loadMixer();
-    this.pollTimer = setInterval(() => this.loadMixer(), 5000);
     this._wireX32QuickActions();
 
     // ── Schedule tab ───────────────────────────────────────────────
@@ -1483,8 +1482,18 @@ const SettingsPage = {
     </div>`;
   },
 
+  // UI-only refresh — reads from cached API state without HTTP calls.
+  // Called by Socket.IO state push (via App.refreshCurrentPage).
+  updateStatus() {
+    this._renderMixer(X32API.state);
+  },
+
   async loadMixer() {
     const state = await X32API.poll();
+    this._renderMixer(state);
+  },
+
+  _renderMixer(state) {
     const container = document.getElementById('mixer-container');
     if (!container) return;
 
@@ -2418,7 +2427,6 @@ const SettingsPage = {
   },
 
   destroy() {
-    if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
     if (this._switchPanelTimer) { clearInterval(this._switchPanelTimer); this._switchPanelTimer = null; }
     if (this._ecoFlowTimer) { clearInterval(this._ecoFlowTimer); this._ecoFlowTimer = null; }
     this._thermostatTimers.forEach(t => clearInterval(t));

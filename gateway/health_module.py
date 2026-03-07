@@ -94,6 +94,7 @@ class HealthModule:
         self._alert_state: Dict[str, dict] = {}
         self._next_due: Dict[str, float] = {}
         self._force_check = threading.Event()
+        self._on_summary_change = None  # Optional callback(summary_dict)
 
         self._running = False
 
@@ -287,6 +288,13 @@ class HealthModule:
                         with self._lock:
                             self._results[sid] = result
                         self._maybe_fire_alert(svc, result)
+
+            # Broadcast summary to connected tablets via Socket.IO
+            if ran_any_leaf and self._on_summary_change:
+                try:
+                    self._on_summary_change(self.get_summary())
+                except Exception as e:
+                    self._logger.debug(f"Health summary broadcast failed: {e}")
 
             # Periodic log heartbeat
             heartbeat_counter += 1

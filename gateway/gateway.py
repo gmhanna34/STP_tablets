@@ -582,6 +582,11 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     # Health monitoring — absorbed from STP_healthdash (Phase 4 consolidation)
     from health_module import HealthModule
     health = None if mock_mode else HealthModule(cfg, logger)
+    if health:
+        def _broadcast_health(summary):
+            state_cache.set("health", summary)
+            socketio.emit("state:health", summary, room="health")
+        health._on_summary_change = _broadcast_health
 
     # Occupancy analytics — absorbed from STP_Occupancy (Phase 6 consolidation)
     from occupancy_module import OccupancyModule
