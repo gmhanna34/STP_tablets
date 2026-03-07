@@ -111,6 +111,10 @@ class HealthModule:
         t.start()
         self._logger.info(f"Health module started: {len(self._services_cfg)} services configured")
 
+    def stop(self):
+        """Stop the background checker thread."""
+        self._running = False
+
     def get_all_results(self) -> Dict[str, dict]:
         """Return all service results as dicts."""
         with self._lock:

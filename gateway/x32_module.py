@@ -379,6 +379,10 @@ class X32Module:
         self._logger.info(f"X32 module starting: {self._mixer_type} @ {self._mixer_ip}")
         self._poller.start()
 
+    def stop(self) -> None:
+        self._poller._stop.set()
+        self._poller._owner.disconnect()
+
     # --- Status / Health ---
 
     def get_status(self) -> dict:

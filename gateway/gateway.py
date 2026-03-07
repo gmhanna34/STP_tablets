@@ -24,8 +24,10 @@ import copy
 import json
 import logging
 import os
+import signal
 import shutil
 import sqlite3
+import sys
 import threading
 import time
 from datetime import datetime, timedelta
@@ -263,6 +265,14 @@ class Database:
             conn.commit()
         except Exception as e:
             logger.warning(f"Audit log write failed: {e}")  # Never let audit logging crash a request
+
+    def flush(self):
+        """Flush WAL to main database file for clean shutdown."""
+        try:
+            conn = self._get_conn()
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            pass  # Best-effort on shutdown
 
     def cleanup_old_logs(self, retention_days: int = 30):
         """Delete audit log entries older than retention_days."""
@@ -661,7 +671,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
         return any(ip.startswith(pfx) for pfx in allowed_ips)
 
     # Runtime verbose logging flag (toggled via Settings page)
-    _verbose_logging = False
+    # Uses threading.Event for thread-safe reads/writes from multiple threads
+    _verbose_logging = threading.Event()
 
     def _proxy_request(service: str, path: str, method: str = "GET",
                        json_data: dict = None, timeout: float = 5,
@@ -687,8 +698,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                 tablet = "System"
         headers["X-Tablet-ID"] = tablet
 
-        nonlocal _verbose_logging
-        if _verbose_logging:
+        if _verbose_logging.is_set():
             logger.debug(f"[VERBOSE] proxy >> {method} {service}{path} "
                          f"body={json.dumps(json_data)[:200] if json_data else 'none'}")
 
@@ -703,7 +713,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
             latency = (time.time() - start) * 1000
             result = resp.json()
 
-            if _verbose_logging:
+            if _verbose_logging.is_set():
                 logger.debug(f"[VERBOSE] proxy << {service}{path} "
                              f"status={resp.status_code} latency={latency:.0f}ms "
                              f"result={json.dumps(result)[:200]}")
@@ -1188,20 +1198,23 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     @app.route("/api/settings/verbose-logging", methods=["GET"])
     def get_verbose_logging():
         """Return current verbose logging state."""
-        return jsonify({"enabled": _verbose_logging}), 200
+        return jsonify({"enabled": _verbose_logging.is_set()}), 200
 
     @app.route("/api/settings/verbose-logging", methods=["POST"])
     def set_verbose_logging():
         """Toggle verbose logging at runtime."""
-        nonlocal _verbose_logging
         data = request.get_json(silent=True) or {}
-        _verbose_logging = bool(data.get("enabled", False))
-        level_name = "DEBUG" if _verbose_logging else cfg.get("logging", {}).get("level", "INFO")
+        if bool(data.get("enabled", False)):
+            _verbose_logging.set()
+        else:
+            _verbose_logging.clear()
+        enabled = _verbose_logging.is_set()
+        level_name = "DEBUG" if enabled else cfg.get("logging", {}).get("level", "INFO")
         logger.setLevel(getattr(logging, level_name))
-        logger.info(f"Verbose logging {'ENABLED' if _verbose_logging else 'DISABLED'} by {_tablet_id()}")
+        logger.info(f"Verbose logging {'ENABLED' if enabled else 'DISABLED'} by {_tablet_id()}")
         db.log_action(_tablet_id(), "settings:verbose_logging", "settings",
-                      json.dumps({"enabled": _verbose_logging}), "OK", 0)
-        return jsonify({"success": True, "enabled": _verbose_logging}), 200
+                      json.dumps({"enabled": enabled}), "OK", 0)
+        return jsonify({"success": True, "enabled": enabled}), 200
 
     # -------------------------------------------------------------------------
     # CONFIG EDITOR ENDPOINTS
@@ -1375,8 +1388,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
             except Exception as e:
                 logger.error(f"Failed to contact build app for restart: {e}")
                 # Fallback: exit and hope a process manager restarts us
-                logger.info("Falling back to os._exit(0)")
-                os._exit(0)
+                logger.info("Falling back to sys.exit(0)")
+                sys.exit(0)
 
         eventlet.spawn(_do_restart)
         return jsonify({"success": True, "message": "Restarting..."}), 200
@@ -2128,11 +2141,13 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     # ---- HA device cache (cameras + locks, built at startup) ----------------
 
     _ha_device_cache = {"cameras": [], "locks": [], "ready": False}
+    _ha_cache_lock = threading.Lock()
 
     def _build_ha_device_cache():
         """Build the cameras and locks lists from a single HA states fetch."""
         if mock_mode:
-            _ha_device_cache["ready"] = True
+            with _ha_cache_lock:
+                _ha_device_cache["ready"] = True
             return
 
         try:
@@ -2247,9 +2262,10 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
             })
         locks.sort(key=lambda l: l["friendly_name"])
 
-        _ha_device_cache["cameras"] = cameras
-        _ha_device_cache["locks"] = locks
-        _ha_device_cache["ready"] = True
+        with _ha_cache_lock:
+            _ha_device_cache["cameras"] = cameras
+            _ha_device_cache["locks"] = locks
+            _ha_device_cache["ready"] = True
         logger.info(f"HA device cache refreshed: {len(cameras)} cameras, {len(locks)} locks")
 
     @app.route("/api/ha/entities")
@@ -2411,9 +2427,10 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
         """Return cached camera entities (refreshed every 5 min)."""
         if mock_mode:
             return jsonify({"cameras": []}), 200
-        if not _ha_device_cache["ready"]:
-            return jsonify({"cameras": [], "warming": True}), 200
-        return jsonify({"cameras": _ha_device_cache["cameras"]}), 200
+        with _ha_cache_lock:
+            if not _ha_device_cache["ready"]:
+                return jsonify({"cameras": [], "warming": True}), 200
+            return jsonify({"cameras": _ha_device_cache["cameras"]}), 200
 
     @app.route("/api/ha/camera/<path:entity_id>/snapshot")
     def ha_camera_snapshot(entity_id: str):
@@ -2476,9 +2493,10 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
         """Return cached lock entities (refreshed every 5 min)."""
         if mock_mode:
             return jsonify({"locks": []}), 200
-        if not _ha_device_cache["ready"]:
-            return jsonify({"locks": [], "warming": True}), 200
-        return jsonify({"locks": _ha_device_cache["locks"]}), 200
+        with _ha_cache_lock:
+            if not _ha_device_cache["ready"]:
+                return jsonify({"locks": [], "warming": True}), 200
+            return jsonify({"locks": _ha_device_cache["locks"]}), 200
 
     # -------------------------------------------------------------------------
     # AUDIT LOG ENDPOINT (admin only)
@@ -2616,7 +2634,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
             else:
                 result = _execute_step(step, tablet, depth)
 
-            if _verbose_logging:
+            if _verbose_logging.is_set():
                 status_str = "OK" if result["success"] else f"FAIL: {result.get('error', '')}"
                 logger.debug(f"[VERBOSE] Macro {macro_key} step {i+1}/{len(steps)} "
                              f"type={step_type} {status_str}")
@@ -2784,7 +2802,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
         service = step.get("service", "")
         data = step.get("data", {})
         ha_cfg = cfg.get("home_assistant", {})
-        if _verbose_logging:
+        if _verbose_logging.is_set():
             logger.debug(f"[VERBOSE] ha_service: {domain}/{service}, data={json.dumps(data)[:200]}")
         if mock_mode:
             return {"success": True}
@@ -2799,7 +2817,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                 timeout=ha_cfg.get("timeout", 10),
             )
             ok = resp.status_code < 400
-            if _verbose_logging:
+            if _verbose_logging.is_set():
                 logger.debug(f"[VERBOSE] ha_service result: {domain}/{service} status={resp.status_code}")
             if ok:
                 db.log_action(tablet, f"macro:ha:{domain}/{service}", "home_assistant",
@@ -2828,7 +2846,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
             return {"success": True}
 
         # Find the lock in the HA device cache
-        locks = _ha_device_cache.get("locks", [])
+        with _ha_cache_lock:
+            locks = list(_ha_device_cache.get("locks", []))
         lock = next((l for l in locks if l["entity_id"] == lock_entity), None)
         if not lock:
             return {"success": False, "error": f"Lock entity {lock_entity} not found in HA cache"}
@@ -2889,7 +2908,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     def _step_moip_switch(step: dict, tablet: str) -> dict:
         tx = str(step.get("tx", ""))
         rx = str(step.get("rx", ""))
-        if _verbose_logging:
+        if _verbose_logging.is_set():
             logger.debug(f"[VERBOSE] moip_switch: tx={tx}, rx={rx}, tablet={tablet}")
         if mock_mode:
             return {"success": True}
@@ -2897,7 +2916,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
         result, status = moip.switch(tx, rx)
         latency = (time.time() - start) * 1000
         ok = status < 400
-        if _verbose_logging:
+        if _verbose_logging.is_set():
             logger.debug(f"[VERBOSE] moip_switch result: tx={tx}->rx={rx} status={status}")
         db.log_action(tablet, "macro:moip_switch", f"TX{tx}->RX{rx}",
                       json.dumps({"tx": tx, "rx": rx}),
@@ -2914,7 +2933,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
         code = ir_codes.get(code_name, code_name)
         if code_name not in ir_codes:
             logger.warning(f"IR code name '{code_name}' not found in devices.json irCodes")
-        if _verbose_logging:
+        if _verbose_logging.is_set():
             logger.debug(f"[VERBOSE] moip_ir: receiver={rx}, code_name={code_name}, tablet={tablet}")
         if mock_mode:
             return {"success": True}
@@ -2922,7 +2941,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
         result, status = moip.send_ir("0", rx, code)
         latency = (time.time() - start) * 1000
         ok = status < 400
-        if _verbose_logging:
+        if _verbose_logging.is_set():
             logger.debug(f"[VERBOSE] moip_ir result: receiver={rx}, code={code}, "
                          f"status={status}, response={json.dumps(result)[:200]}")
         db.log_action(tablet, "macro:moip_ir", f"RX{rx}:{code_name}",
@@ -3568,30 +3587,33 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     # -------------------------------------------------------------------------
 
     _sid_to_tablet: dict = {}   # sid → tablet name for disconnect logging
-
     _sid_connect_time: dict = {}  # sid → connect timestamp for uptime tracking
+    _sid_lock = threading.Lock()  # protects both _sid_to_tablet and _sid_connect_time
 
     @socketio.on("connect")
     def on_connect():
         import time as _time
         tablet = request.args.get("tablet", "Unknown")
-        _sid_to_tablet[request.sid] = tablet
-        _sid_connect_time[request.sid] = _time.time()
+        with _sid_lock:
+            _sid_to_tablet[request.sid] = tablet
+            _sid_connect_time[request.sid] = _time.time()
         logger.info(f"SocketIO connect: tablet={tablet} sid={request.sid}")
         db.upsert_session(tablet, socket_id=request.sid)
 
     @socketio.on("disconnect")
     def on_disconnect():
         import time as _time
-        tablet = _sid_to_tablet.pop(request.sid, "Unknown")
-        connected_at = _sid_connect_time.pop(request.sid, None)
+        with _sid_lock:
+            tablet = _sid_to_tablet.pop(request.sid, "Unknown")
+            connected_at = _sid_connect_time.pop(request.sid, None)
         uptime = f"{_time.time() - connected_at:.1f}s" if connected_at else "?"
         logger.info(f"SocketIO disconnect: tablet={tablet} sid={request.sid} uptime={uptime}")
 
     @socketio.on("diag")
     def on_diag(data):
         """Receive diagnostic info from client (e.g., previous disconnect reason)."""
-        tablet = _sid_to_tablet.get(request.sid, "Unknown")
+        with _sid_lock:
+            tablet = _sid_to_tablet.get(request.sid, "Unknown")
         prev = data.get("prev_disconnect", "?")
         logger.info(f"SocketIO diag: tablet={tablet} sid={request.sid} prev_disconnect={prev}")
 
@@ -3973,11 +3995,12 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
         sched_thread = threading.Thread(target=schedule_loop, daemon=True)
         sched_thread.start()
 
-    # Store references for use in main
+    # Store references for use in main and shutdown
     app._start_pollers = _start_pollers
     app._db = db
     app._state_cache = state_cache
     app._watchdog = watchdog
+    app._modules = {"x32": x32, "moip": moip, "obs": obs, "health": health, "occupancy": occupancy}
 
     return app, socketio
 
@@ -4043,6 +4066,59 @@ def main():
         logger.warning("HA_TOKEN is not set — Home Assistant integration will not work")
 
     logger.info("=" * 60)
+
+    # ---- Graceful shutdown ----
+    _shutting_down = threading.Event()
+
+    def _graceful_shutdown(signum, frame):
+        sig_name = signal.Signals(signum).name if hasattr(signal, "Signals") else str(signum)
+        if _shutting_down.is_set():
+            logger.warning(f"Received {sig_name} again during shutdown — forcing exit")
+            sys.exit(1)
+        _shutting_down.set()
+        logger.info(f"Received {sig_name} — starting graceful shutdown...")
+
+        # 1. Stop modules (each sets its _stop event / _running flag)
+        modules = app._modules
+        for name, mod in modules.items():
+            if mod is None:
+                continue
+            try:
+                if hasattr(mod, "stop"):
+                    mod.stop()
+                    logger.info(f"  Stopped {name} module")
+                elif hasattr(mod, "_running"):
+                    mod._running = False
+                    logger.info(f"  Stopped {name} module (set _running=False)")
+                elif hasattr(mod, "disconnect"):
+                    mod.disconnect()
+                    logger.info(f"  Disconnected {name} module")
+            except Exception as e:
+                logger.warning(f"  Error stopping {name}: {e}")
+
+        # 2. Stop MoIP watchdog
+        watchdog = app._watchdog
+        if watchdog and hasattr(watchdog, "_stop"):
+            try:
+                watchdog._stop.set()
+                logger.info("  Stopped MoIP watchdog")
+            except Exception as e:
+                logger.warning(f"  Error stopping watchdog: {e}")
+
+        # 3. Flush SQLite WAL
+        db = app._db
+        if db:
+            try:
+                db.flush()
+                logger.info("  Flushed SQLite WAL")
+            except Exception as e:
+                logger.warning(f"  SQLite flush failed: {e}")
+
+        logger.info("Graceful shutdown complete")
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, _graceful_shutdown)
+    signal.signal(signal.SIGINT, _graceful_shutdown)
 
     # Start background pollers
     app._start_pollers()

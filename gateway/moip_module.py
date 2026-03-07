@@ -310,6 +310,10 @@ class MoIPModule:
         )
         self._keepalive_thread.start()
 
+    def stop(self) -> None:
+        self._stop.set()
+        self._client.disconnect()
+
     # --- Thread-safe command send ---
 
     def _send(self, command: str) -> Optional[str]:
