@@ -293,6 +293,10 @@ const App = {
         if (!init.headers.has('X-Tablet-Role') && typeof Auth !== 'undefined' && Auth.currentRole) {
           init.headers.set('X-Tablet-Role', Auth.currentRole);
         }
+        // Default 10s timeout on all API fetches that don't already have a signal
+        if (!init.signal) {
+          init.signal = AbortSignal.timeout(10000);
+        }
       }
       return originalFetch.call(this, input, init);
     };
