@@ -35,6 +35,10 @@
     </div>
 
     <div id="status-right" class="status-section">
+      <button id="notif-bell" title="Notifications" class="notif-bell-btn">
+        <span class="material-icons">notifications</span>
+        <span id="notif-badge" class="notif-badge hidden">0</span>
+      </button>
       <button id="density-toggle" title="Toggle compact mode">
         <span class="material-icons">density_medium</span>
       </button>
@@ -51,6 +55,22 @@
       <span id="clock"></span>
     </div>
   </header>
+
+  <!-- =========================================================
+       NOTIFICATION PANEL
+       ========================================================= -->
+  <div id="notif-overlay" class="notif-overlay hidden"></div>
+  <aside id="notif-panel" class="notif-panel">
+    <div class="notif-panel-header">
+      <h3>Notifications</h3>
+      <button id="notif-clear" class="notif-clear-btn" title="Clear all">
+        <span class="material-icons">delete_sweep</span>
+      </button>
+    </div>
+    <div id="notif-list" class="notif-list">
+      <div class="notif-empty">No notifications</div>
+    </div>
+  </aside>
 
   <!-- =========================================================
        MAIN CONTENT AREA
@@ -254,6 +274,7 @@
   <script src="js/api/ptz.js?v=26012"></script>
   <script src="js/api/epson.js?v=26012"></script>
   <script src="js/api/health.js?v=26012"></script>
+  <script src="js/api/notifications.js?v=26012"></script>
   <script src="js/api/macro.js?v=26012"></script>
 
   <!-- Core -->

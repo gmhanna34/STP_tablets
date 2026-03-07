@@ -164,6 +164,7 @@ def execute_macro(ctx, macro_key: str, tablet: str, depth: int = 0,
 
     completed = 0
     ran_ha_service = False
+    issues = []  # Track skipped/failed-then-skipped steps for warning toasts
     overall_start = time.time()
 
     for i, step in enumerate(steps):
@@ -210,7 +211,9 @@ def execute_macro(ctx, macro_key: str, tablet: str, depth: int = 0,
         else:
             # Handle on_fail
             if on_fail == "skip":
-                logger.warning(f"Macro {macro_key} step {i+1} skipped: {result.get('error', '')}")
+                step_error = result.get("error", "unknown")
+                logger.warning(f"Macro {macro_key} step {i+1} skipped: {step_error}")
+                issues.append(f"Step {i+1} skipped: {step_msg or step_type} — {step_error}")
                 completed += 1
                 continue
             elif on_fail.startswith("retry:"):
@@ -264,14 +267,18 @@ def execute_macro(ctx, macro_key: str, tablet: str, depth: int = 0,
     # All steps completed
     overall_ms = (time.time() - overall_start) * 1000
 
-    socketio.emit("macro:progress", {
+    progress_data = {
         "macro": macro_key,
         "label": label,
         "status": "completed",
         "tablet": tablet,
         "steps_total": len(steps),
         "steps_completed": completed,
-    })
+    }
+    if issues:
+        progress_data["issues"] = issues
+        progress_data["issue_count"] = len(issues)
+    socketio.emit("macro:progress", progress_data)
 
     db.log_action(tablet, "macro:execute", macro_key,
                   json.dumps({"label": label, "steps": len(steps)}),
@@ -291,7 +298,7 @@ def execute_macro(ctx, macro_key: str, tablet: str, depth: int = 0,
     if ran_ha_service:
         _refresh_ha_state(ctx)
 
-    return {
+    result = {
         "success": True,
         "macro": macro_key,
         "label": label,
@@ -299,6 +306,10 @@ def execute_macro(ctx, macro_key: str, tablet: str, depth: int = 0,
         "steps_total": len(steps),
         "latency_ms": round(overall_ms, 1),
     }
+    if issues:
+        result["issues"] = issues
+        result["issue_count"] = len(issues)
+    return result
 
 
 def _refresh_ha_state(ctx):

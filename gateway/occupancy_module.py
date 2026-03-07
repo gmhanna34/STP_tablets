@@ -63,6 +63,8 @@ class OccupancyModule:
 
         # Scheduler config
         self.daily_reload_time = str(occ.get("daily_reload_time", "01:00"))
+        # Days of week to run downloads (0=Mon..6=Sun).  Default: Monday only.
+        self.download_days: list[int] = occ.get("download_days", [0])
 
         # Cached data
         self._lock = threading.Lock()
@@ -75,7 +77,7 @@ class OccupancyModule:
             try:
                 self.db.log_action("Gateway", action, target, "", result)
             except Exception as e:
-                self.logger.debug(f"Occupancy audit log failed: {e}")
+                self.log.debug(f"Occupancy audit log failed: {e}")
 
     # ── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -118,29 +120,8 @@ class OccupancyModule:
             return
 
         building_files, communion_files = self._scan_data_dir()
-        service_dates = set(communion_files.keys())
-        occupancy = self._service_peak_occupancy(building_files, service_dates)
-        communion = self._service_communion_totals(communion_files)
-        weekly = self._build_weekly_summary(occupancy, communion)
-
-        all_daily_peaks = []
-        cutoff_date = date.today() - __import__('datetime').timedelta(days=365)
-        for d, path in sorted(building_files.items()):
-            if d < cutoff_date:
-                continue
-            try:
-                df = self._parse_building_file(path)
-                raw_peak = int(df["occupancy"].max())
-                occ_buf, _ = self._get_buffer_for_date(d)
-                peak = self._apply_buffer(raw_peak, occ_buf)
-                all_daily_peaks.append({
-                    "date": d.isoformat(),
-                    "peak": peak,
-                    "raw_peak": raw_peak,
-                    "weekday": d.strftime("%A"),
-                })
-            except Exception as e:
-                self.logger.debug(f"Occupancy CSV parse error for date: {e}")
+        weekly, occupancy = self._compute_service_analytics(building_files, communion_files)
+        all_daily_peaks = self._compute_daily_peaks(building_files)
 
         result = {
             "weekly_summary": weekly,
@@ -165,6 +146,40 @@ class OccupancyModule:
         self.log.info(f"[occupancy] Data refreshed: {len(weekly)} service(s), "
                       f"{len(all_daily_peaks)} daily peak(s)")
 
+    def _compute_service_analytics(self, building_files: dict, communion_files: dict):
+        """Compute service-specific occupancy peaks, communion totals, and weekly summary.
+
+        Returns (weekly_summary, occupancy_trend).
+        """
+        service_dates = set(communion_files.keys())
+        occupancy = self._service_peak_occupancy(building_files, service_dates)
+        communion = self._service_communion_totals(communion_files)
+        weekly = self._build_weekly_summary(occupancy, communion)
+        return weekly, occupancy
+
+    def _compute_daily_peaks(self, building_files: dict) -> list:
+        """Compute peak occupancy for every day in the last 365 days."""
+        from datetime import timedelta
+        all_daily_peaks = []
+        cutoff_date = date.today() - timedelta(days=365)
+        for d, path in sorted(building_files.items()):
+            if d < cutoff_date:
+                continue
+            try:
+                df = self._parse_building_file(path)
+                raw_peak = int(df["occupancy"].max())
+                occ_buf, _ = self._get_buffer_for_date(d)
+                peak = self._apply_buffer(raw_peak, occ_buf)
+                all_daily_peaks.append({
+                    "date": d.isoformat(),
+                    "peak": peak,
+                    "raw_peak": raw_peak,
+                    "weekday": d.strftime("%A"),
+                })
+            except Exception as e:
+                self.log.debug(f"Occupancy CSV parse error for {d}: {e}")
+        return all_daily_peaks
+
     def download_csvs(self):
         """Download CSVs from Camlytics cloud and save to data directory."""
         today = datetime.now().strftime("%Y-%m-%d")
@@ -184,6 +199,18 @@ class OccupancyModule:
 
     # ── Background scheduler ─────────────────────────────────────────────────
 
+    def _should_download_today(self, today: date) -> bool:
+        """Check if today is a configured download day or the day after a special service."""
+        from datetime import timedelta
+        # Configured download days (0=Mon..6=Sun)
+        if today.weekday() in self.download_days:
+            return True
+        # Day after a special service date
+        yesterday = today - timedelta(days=1)
+        if yesterday in self.special_services:
+            return True
+        return False
+
     def _scheduler_loop(self):
         reload_h, reload_m = [int(x) for x in self.daily_reload_time.split(":")]
         last_reload_date = None
@@ -202,14 +229,24 @@ class OccupancyModule:
             if (now.hour == reload_h and now.minute == reload_m
                     and last_reload_date != today):
                 last_reload_date = today
-                try:
-                    self.log.info("[occupancy] Daily scheduled download + reload")
-                    self.download_csvs()
-                    self.refresh_data()
-                    self._audit("occupancy:download", "daily_reload", result="OK")
-                except Exception as e:
-                    self.log.error(f"[occupancy] Scheduled reload failed: {e}")
-                    self._audit("occupancy:download", "daily_reload", result=f"FAIL: {e}")
+
+                if self._should_download_today(today):
+                    try:
+                        self.log.info("[occupancy] Scheduled download + reload "
+                                      f"(day={today.strftime('%A')})")
+                        self.download_csvs()
+                        self.refresh_data()
+                        self._audit("occupancy:download", "scheduled_reload", result="OK")
+                    except Exception as e:
+                        self.log.error(f"[occupancy] Scheduled reload failed: {e}")
+                        self._audit("occupancy:download", "scheduled_reload", result=f"FAIL: {e}")
+                else:
+                    # Still refresh cached data from existing files (no download)
+                    try:
+                        self.refresh_data()
+                        self.log.debug(f"[occupancy] Data refresh only (no download on {today.strftime('%A')})")
+                    except Exception as e:
+                        self.log.error(f"[occupancy] Data refresh failed: {e}")
 
             self._stop.wait(30)
 

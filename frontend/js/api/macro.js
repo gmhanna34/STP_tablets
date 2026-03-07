@@ -28,11 +28,28 @@ const MacroAPI = {
     // Macro progress events
     socket.on('macro:progress', (data) => {
       if (!data) return;
-      const { label, status, steps_completed, steps_total, error, current_step } = data;
+      const { label, status, steps_completed, steps_total, error, current_step,
+              issue_count, issues } = data;
       if (status === 'completed') {
-        App.showToast(`${label}: Complete`, 2000);
+        if (issue_count > 0) {
+          // Partial success — warning toast (longer duration, tappable)
+          const issueText = `${issue_count} issue${issue_count !== 1 ? 's' : ''}`;
+          App.showToast(`${label}: ${issueText}`, 6000, 'warning');
+          if (typeof NotificationCenter !== 'undefined') {
+            NotificationCenter.addMacroWarning(label, issue_count,
+              (issues || []).join('\n'));
+          }
+        } else {
+          App.showToast(`${label}: Complete`, 2000);
+          if (typeof NotificationCenter !== 'undefined') {
+            NotificationCenter.addMacroResult(data);
+          }
+        }
       } else if (status === 'failed') {
-        App.showToast(`${label}: FAILED — ${error || 'unknown error'}`, 4000, 'error');
+        App.showToast(`${label}: FAILED — ${error || 'unknown error'}`, 6000, 'error');
+        if (typeof NotificationCenter !== 'undefined') {
+          NotificationCenter.addMacroResult(data);
+        }
       } else if (status === 'in_progress' && current_step) {
         App.showToast(`${label}: ${current_step}`, 1500);
       }
