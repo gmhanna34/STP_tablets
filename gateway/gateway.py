@@ -3694,6 +3694,22 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                 h["X-API-Key"] = key
             return h
 
+        # Fail-streak counters for poller logging (log 1st + every 5th failure at WARNING)
+        _poll_fail_streaks = {}
+
+        def _poll_log_fail(name, e):
+            streak = _poll_fail_streaks.get(name, 0) + 1
+            _poll_fail_streaks[name] = streak
+            if streak == 1 or streak % 5 == 0:
+                logger.warning(f"{name} poll failed (streak {streak}): {e}")
+            else:
+                logger.debug(f"{name} poll failed (streak {streak}): {e}")
+
+        def _poll_log_ok(name):
+            if _poll_fail_streaks.get(name, 0) > 0:
+                logger.info(f"{name} poll recovered after {_poll_fail_streaks[name]} failures")
+                _poll_fail_streaks[name] = 0
+
         def poll_x32():
             if mock_mode:
                 return MockBackend.X32_STATUS
@@ -3704,9 +3720,10 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                 # causes ~10 KB broadcasts to every tablet every 5 s.
                 if status:
                     status.pop("age_seconds", None)
+                _poll_log_ok("X32")
                 return status
             except Exception as e:
-                logger.debug(f"X32 poll failed: {e}")
+                _poll_log_fail("X32", e)
                 return None
 
         def poll_moip():
@@ -3714,18 +3731,23 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                 return MockBackend.MOIP_RECEIVERS
             try:
                 result, status = moip.get_receivers()
-                return result if status < 400 else None
+                if status < 400:
+                    _poll_log_ok("MoIP")
+                    return result
+                return None
             except Exception as e:
-                logger.debug(f"MoIP poll failed: {e}")
+                _poll_log_fail("MoIP", e)
                 return None
 
         def poll_obs():
             if mock_mode:
                 return {"streaming": True, "recording": False, "current_scene": "MainChurch_Altar"}
             try:
-                return obs.get_snapshot()
+                snap = obs.get_snapshot()
+                _poll_log_ok("OBS")
+                return snap
             except Exception as e:
-                logger.debug(f"OBS poll failed: {e}")
+                _poll_log_fail("OBS", e)
                 return None
 
         def poll_projectors():
