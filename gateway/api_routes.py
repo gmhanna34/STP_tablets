@@ -361,6 +361,15 @@ def register_api_routes(ctx):
                       "occupancy_buffer_default"],
         "security": ["allowed_ips", "session_timeout_minutes"],
         "fully_kiosk": ["devices"],
+        "polling": ["moip", "x32", "obs", "projectors"],
+        "timeouts": ["ptz_cameras", "projectors", "camlytics", "ha_proxy",
+                     "ha_stream", "epson", "fully_kiosk", "occupancy_download"],
+        "occupancy": ["data_dir", "building_subdir", "communion_subdir",
+                      "service_hour_start", "service_hour_end",
+                      "communion_window_start", "communion_window_end",
+                      "occupancy_pacing_start", "occupancy_pacing_end",
+                      "daily_reload_time", "download_days"],
+        "anthropic": ["model", "max_tokens"],
     }
 
     _ENV_OVERRIDES = {
@@ -1613,6 +1622,20 @@ def register_api_routes(ctx):
             return jsonify({"error": "Chat service unavailable. Please try again."}), 503
 
     # ---- Entity Find & Replace ----
+
+    @app.route("/api/entities/switches")
+    def api_entities_switches():
+        """Return all unique switch entity IDs referenced in macros.yaml."""
+        macros_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "macros.yaml")
+        try:
+            with open(macros_path, "r") as f:
+                content = f.read()
+        except Exception as e:
+            return jsonify({"error": f"Cannot read macros.yaml: {e}"}), 500
+        import re
+        pattern = re.compile(r'switch\.\w+')
+        matches = sorted(set(pattern.findall(content)))
+        return jsonify({"switches": matches, "total": len(matches)}), 200
 
     @app.route("/api/entities/search")
     def api_entities_search():

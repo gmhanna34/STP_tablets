@@ -285,42 +285,12 @@ const SettingsPage = {
               Entity Find &amp; Replace
             </div>
             <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
-              Search for entity IDs in macros.yaml and replace them individually or in bulk.
-              A backup is created automatically before any changes.
+              Replace switch entity IDs in macros.yaml. A backup is created automatically.
             </div>
-            <div class="entity-fr-search">
-              <input type="text" id="entity-fr-query" class="text-input" placeholder="Search entity ID (e.g. switch.sw_001)" autocomplete="off">
-              <button class="btn" id="entity-fr-search-btn">
-                <span class="material-icons">search</span>
-                <span class="btn-label">Search</span>
-              </button>
-            </div>
-            <div id="entity-fr-results"></div>
-            <div id="entity-fr-replace" class="entity-fr-replace-section" style="display:none;">
-              <div class="entity-fr-replace-row">
-                <input type="text" id="entity-fr-new" class="text-input" placeholder="New entity ID (e.g. switch.sw_100)">
-                <button class="btn" id="entity-fr-replace-btn">
-                  <span class="material-icons">find_replace</span>
-                  <span class="btn-label">Replace All</span>
-                </button>
-              </div>
-              <div id="entity-fr-status"></div>
-            </div>
-            <!-- Bulk mode -->
-            <details class="entity-fr-bulk-details" style="margin-top:12px;">
-              <summary class="entity-fr-bulk-summary">Bulk Replace (multiple entities)</summary>
-              <div class="info-text" style="margin:8px 0;font-size:13px;">
-                Enter one replacement per line: <code>old_entity &gt; new_entity</code>
-              </div>
-              <textarea id="entity-fr-bulk" class="text-input" rows="5" placeholder="switch.sw_001 > switch.sw_100&#10;switch.sw_002 > switch.sw_200"></textarea>
-              <div style="margin-top:8px;display:flex;gap:8px;">
-                <button class="btn" id="entity-fr-bulk-btn">
-                  <span class="material-icons">find_replace</span>
-                  <span class="btn-label">Bulk Replace</span>
-                </button>
-              </div>
-              <div id="entity-fr-bulk-status"></div>
-            </details>
+            <button class="btn" id="btn-open-entity-fr">
+              <span class="material-icons">find_replace</span>
+              <span class="btn-label">Open Entity Replace Tool</span>
+            </button>
           </div>
         </div>
 
@@ -503,13 +473,8 @@ const SettingsPage = {
     document.getElementById('btn-config-save')?.addEventListener('click', () => this._saveConfig());
     document.getElementById('btn-gateway-restart')?.addEventListener('click', () => this._restartGateway());
 
-    // Entity find & replace
-    document.getElementById('entity-fr-search-btn')?.addEventListener('click', () => this._entitySearch());
-    document.getElementById('entity-fr-query')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') this._entitySearch();
-    });
-    document.getElementById('entity-fr-replace-btn')?.addEventListener('click', () => this._entityReplace());
-    document.getElementById('entity-fr-bulk-btn')?.addEventListener('click', () => this._entityBulkReplace());
+    // Entity find & replace panel
+    document.getElementById('btn-open-entity-fr')?.addEventListener('click', () => this._openEntityFRPanel());
 
     // ── Admin tab ──────────────────────────────────────────────────
     // Role selection
@@ -2481,99 +2446,296 @@ const SettingsPage = {
     }
   },
 
-  // ── Entity Find & Replace ──────────────────────────────────────
+  // ── Entity Find & Replace Panel ─────────────────────────────────
 
-  _entityFrLastQuery: '',
+  _frMacroSwitches: [],  // All switch entities in macros.yaml
+  _frHaSwitches: [],     // All switch entities from HA
+  _frSelectedFind: null,
+  _frSelectedReplace: null,
+  _frPairs: [],          // [{old, new}]
 
-  async _entitySearch() {
-    const q = document.getElementById('entity-fr-query')?.value.trim();
-    if (!q) { App.showToast('Enter an entity ID to search', 2000); return; }
-    this._entityFrLastQuery = q;
-    const results = document.getElementById('entity-fr-results');
-    const replaceSection = document.getElementById('entity-fr-replace');
-    if (results) results.innerHTML = '<div style="opacity:0.5;padding:8px;">Searching...</div>';
-    if (replaceSection) replaceSection.style.display = 'none';
-    try {
-      const resp = await fetch(`/api/entities/search?q=${encodeURIComponent(q)}`, {signal: AbortSignal.timeout(5000)});
-      const data = await resp.json();
-      if (!data.matches || data.matches.length === 0) {
-        results.innerHTML = '<div class="info-text" style="margin:8px 0;">No occurrences found in macros.yaml</div>';
+  async _openEntityFRPanel() {
+    this._frSelectedFind = null;
+    this._frSelectedReplace = null;
+    this._frPairs = [];
+
+    App.showPanel('Entity Find & Replace', async (body) => {
+      body.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.5;">Loading entity data...</div>';
+
+      // Fetch both data sources in parallel
+      try {
+        const [macroResp, haResp] = await Promise.all([
+          fetch('/api/entities/switches', {signal: AbortSignal.timeout(5000)}),
+          fetch('/api/ha/entities?domain=switch', {signal: AbortSignal.timeout(10000)}),
+        ]);
+        const macroData = await macroResp.json();
+        const haData = await haResp.json();
+
+        this._frMacroSwitches = (macroData.switches || []).map(id => ({
+          entity_id: id,
+          label: id.replace('switch.', ''),
+        }));
+        const haEntities = (haData.domains?.switch?.entities || []);
+        this._frHaSwitches = haEntities.map(e => ({
+          entity_id: e.entity_id,
+          label: e.entity_id.replace('switch.', ''),
+          friendly_name: e.friendly_name || '',
+        }));
+      } catch (e) {
+        body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--danger);">
+          Failed to load entity data: ${e.message}</div>`;
         return;
       }
-      results.innerHTML =
-        `<div class="info-text" style="margin:8px 0;"><strong>${data.total}</strong> occurrence(s) found:</div>` +
-        '<div class="entity-fr-match-list">' +
-        data.matches.map(m => {
-          const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          const highlighted = esc(m.text).replace(
-            new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
-            `<mark>${esc(q)}</mark>`
-          );
-          return `<div class="entity-fr-match"><span class="entity-fr-line">L${m.line}</span>${highlighted}</div>`;
-        }).join('') +
-        '</div>';
-      if (replaceSection) replaceSection.style.display = 'block';
-    } catch (e) {
-      if (results) results.innerHTML = `<div class="info-text" style="color:var(--danger);">Search failed: ${e.message}</div>`;
+
+      body.innerHTML = this._frRenderPanel();
+      this._frBindEvents(body);
+    });
+  },
+
+  _frRenderPanel() {
+    return `
+      <div class="efr-panel">
+        <div class="efr-columns">
+          <div class="efr-col">
+            <div class="efr-col-title">Find (in macros.yaml)</div>
+            <div class="efr-search-row">
+              <span class="efr-prefix">switch.</span>
+              <input type="text" class="text-input efr-input" id="efr-find-input" placeholder="Start typing... e.g. SW_" autocomplete="off">
+            </div>
+            <div class="efr-selected" id="efr-find-selected"></div>
+            <div class="efr-results" id="efr-find-results"></div>
+          </div>
+          <div class="efr-col">
+            <div class="efr-col-title">Replace with (from Home Assistant)</div>
+            <div class="efr-search-row">
+              <span class="efr-prefix">switch.</span>
+              <input type="text" class="text-input efr-input" id="efr-replace-input" placeholder="Start typing... e.g. SW_" autocomplete="off">
+            </div>
+            <div class="efr-selected" id="efr-replace-selected"></div>
+            <div class="efr-results" id="efr-replace-results"></div>
+          </div>
+        </div>
+        <div class="efr-add-row">
+          <button class="btn" id="efr-add-btn" disabled>
+            <span class="material-icons">add</span>
+            <span class="btn-label">Add to List</span>
+          </button>
+        </div>
+        <div class="efr-pairs-section">
+          <div class="efr-pairs-title">Replacement Queue</div>
+          <div class="efr-pairs-list" id="efr-pairs-list">
+            <div class="efr-pairs-empty">No replacements queued</div>
+          </div>
+          <div class="efr-actions">
+            <button class="btn" id="efr-replace-all-btn" disabled>
+              <span class="material-icons">find_replace</span>
+              <span class="btn-label">Replace All</span>
+            </button>
+          </div>
+          <div id="efr-status"></div>
+        </div>
+      </div>
+    `;
+  },
+
+  _frBindEvents(body) {
+    const findInput = body.querySelector('#efr-find-input');
+    const replaceInput = body.querySelector('#efr-replace-input');
+
+    let findTimer, replaceTimer;
+    findInput?.addEventListener('input', () => {
+      clearTimeout(findTimer);
+      findTimer = setTimeout(() => this._frSearchFind(findInput.value), 150);
+    });
+    replaceInput?.addEventListener('input', () => {
+      clearTimeout(replaceTimer);
+      replaceTimer = setTimeout(() => this._frSearchReplace(replaceInput.value), 150);
+    });
+
+    body.querySelector('#efr-find-results')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.efr-select-btn');
+      if (btn) this._frSelectFind(btn.dataset.entityId);
+    });
+    body.querySelector('#efr-replace-results')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.efr-select-btn');
+      if (btn) this._frSelectReplace(btn.dataset.entityId);
+    });
+
+    body.querySelector('#efr-add-btn')?.addEventListener('click', () => this._frAddPair());
+    body.querySelector('#efr-replace-all-btn')?.addEventListener('click', () => this._frReplaceAll());
+    body.querySelector('#efr-pairs-list')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.efr-delete-btn');
+      if (btn) this._frDeletePair(parseInt(btn.dataset.idx));
+    });
+  },
+
+  _frSearchFind(query) {
+    const q = query.trim().toLowerCase();
+    const results = document.getElementById('efr-find-results');
+    if (!results) return;
+    if (!q) { results.innerHTML = ''; return; }
+    const matches = this._frMacroSwitches.filter(s =>
+      s.label.toLowerCase().includes(q)
+    ).slice(0, 15);
+    results.innerHTML = matches.length
+      ? matches.map(s => this._frResultRow(s.entity_id, s.label, '')).join('')
+      : '<div class="efr-no-results">No matches</div>';
+  },
+
+  _frSearchReplace(query) {
+    const q = query.trim().toLowerCase();
+    const results = document.getElementById('efr-replace-results');
+    if (!results) return;
+    if (!q) { results.innerHTML = ''; return; }
+    const matches = this._frHaSwitches.filter(s =>
+      s.label.toLowerCase().includes(q) || s.friendly_name.toLowerCase().includes(q)
+    ).slice(0, 15);
+    results.innerHTML = matches.length
+      ? matches.map(s => this._frResultRow(s.entity_id, s.label, s.friendly_name)).join('')
+      : '<div class="efr-no-results">No matches</div>';
+  },
+
+  _frResultRow(entityId, label, friendlyName) {
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    const sub = friendlyName ? `<span class="efr-friendly">${esc(friendlyName)}</span>` : '';
+    return `<div class="efr-result-row">
+      <div class="efr-result-info">
+        <span class="efr-entity-name">${esc(label)}</span>${sub}
+      </div>
+      <button class="btn efr-select-btn" data-entity-id="${esc(entityId)}">Select</button>
+    </div>`;
+  },
+
+  _frSelectFind(entityId) {
+    this._frSelectedFind = entityId;
+    const el = document.getElementById('efr-find-selected');
+    if (el) el.innerHTML = `<span class="efr-chip">${entityId} <button class="efr-chip-x" onclick="SettingsPage._frClearFind()">×</button></span>`;
+    document.getElementById('efr-find-results').innerHTML = '';
+    document.getElementById('efr-find-input').value = '';
+    this._frUpdateAddBtn();
+  },
+
+  _frSelectReplace(entityId) {
+    this._frSelectedReplace = entityId;
+    const el = document.getElementById('efr-replace-selected');
+    if (el) el.innerHTML = `<span class="efr-chip">${entityId} <button class="efr-chip-x" onclick="SettingsPage._frClearReplace()">×</button></span>`;
+    document.getElementById('efr-replace-results').innerHTML = '';
+    document.getElementById('efr-replace-input').value = '';
+    this._frUpdateAddBtn();
+  },
+
+  _frClearFind() {
+    this._frSelectedFind = null;
+    const el = document.getElementById('efr-find-selected');
+    if (el) el.innerHTML = '';
+    this._frUpdateAddBtn();
+  },
+
+  _frClearReplace() {
+    this._frSelectedReplace = null;
+    const el = document.getElementById('efr-replace-selected');
+    if (el) el.innerHTML = '';
+    this._frUpdateAddBtn();
+  },
+
+  _frUpdateAddBtn() {
+    const btn = document.getElementById('efr-add-btn');
+    if (btn) btn.disabled = !(this._frSelectedFind && this._frSelectedReplace);
+  },
+
+  _frAddPair() {
+    if (!this._frSelectedFind || !this._frSelectedReplace) return;
+    if (this._frSelectedFind === this._frSelectedReplace) {
+      App.showToast('Find and Replace are the same entity', 2000);
+      return;
     }
-  },
-
-  async _entityReplace() {
-    const oldEntity = this._entityFrLastQuery;
-    const newEntity = document.getElementById('entity-fr-new')?.value.trim();
-    if (!oldEntity || !newEntity) { App.showToast('Enter a new entity ID', 2000); return; }
-    if (oldEntity === newEntity) { App.showToast('Old and new are the same', 2000); return; }
-    if (!confirm(`Replace all occurrences of "${oldEntity}" with "${newEntity}" in macros.yaml?`)) return;
-    await this._doReplace([{old: oldEntity, new: newEntity}], 'entity-fr-status');
-  },
-
-  async _entityBulkReplace() {
-    const text = document.getElementById('entity-fr-bulk')?.value.trim();
-    if (!text) { App.showToast('Enter replacement pairs', 2000); return; }
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-    const replacements = [];
-    for (const line of lines) {
-      const parts = line.split('>').map(s => s.trim());
-      if (parts.length !== 2 || !parts[0] || !parts[1]) {
-        App.showToast(`Invalid line: "${line}" — use "old > new" format`, 4000, 'error');
-        return;
-      }
-      replacements.push({old: parts[0], new: parts[1]});
+    // Check for duplicates
+    if (this._frPairs.some(p => p.old === this._frSelectedFind)) {
+      App.showToast('That find entity is already in the list', 2000);
+      return;
     }
-    if (!confirm(`Replace ${replacements.length} entity ID(s) in macros.yaml?`)) return;
-    await this._doReplace(replacements, 'entity-fr-bulk-status');
+    this._frPairs.push({old: this._frSelectedFind, new: this._frSelectedReplace});
+    this._frSelectedFind = null;
+    this._frSelectedReplace = null;
+    document.getElementById('efr-find-selected').innerHTML = '';
+    document.getElementById('efr-replace-selected').innerHTML = '';
+    this._frUpdateAddBtn();
+    this._frRenderPairs();
   },
 
-  async _doReplace(replacements, statusElId) {
-    const statusEl = document.getElementById(statusElId);
-    if (statusEl) statusEl.innerHTML = '<div style="opacity:0.5;padding:8px;">Replacing...</div>';
+  _frDeletePair(idx) {
+    this._frPairs.splice(idx, 1);
+    this._frRenderPairs();
+  },
+
+  _frRenderPairs() {
+    const list = document.getElementById('efr-pairs-list');
+    const replaceBtn = document.getElementById('efr-replace-all-btn');
+    if (!list) return;
+    if (!this._frPairs.length) {
+      list.innerHTML = '<div class="efr-pairs-empty">No replacements queued</div>';
+      if (replaceBtn) replaceBtn.disabled = true;
+      return;
+    }
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    list.innerHTML = this._frPairs.map((p, i) =>
+      `<div class="efr-pair-row">
+        <span class="efr-pair-old">${esc(p.old)}</span>
+        <span class="material-icons efr-pair-arrow">arrow_forward</span>
+        <span class="efr-pair-new">${esc(p.new)}</span>
+        <button class="btn efr-delete-btn" data-idx="${i}" title="Remove">
+          <span class="material-icons">close</span>
+        </button>
+      </div>`
+    ).join('');
+    if (replaceBtn) replaceBtn.disabled = false;
+  },
+
+  async _frReplaceAll() {
+    if (!this._frPairs.length) return;
+    if (!confirm(`Replace ${this._frPairs.length} entity ID(s) in macros.yaml?\nA backup will be created.`)) return;
+    const statusEl = document.getElementById('efr-status');
+    const btn = document.getElementById('efr-replace-all-btn');
+    if (btn) { btn.disabled = true; btn.querySelector('.btn-label').textContent = 'Replacing...'; }
+    if (statusEl) statusEl.innerHTML = '';
     try {
       const resp = await fetch('/api/entities/replace', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({replacements}),
+        body: JSON.stringify({replacements: this._frPairs}),
         signal: AbortSignal.timeout(10000),
       });
       const data = await resp.json();
-      if (data.success) {
+      if (data.success && data.total_replaced > 0) {
         const lines = data.results.map(r => {
-          if (r.warning) return `<div class="info-text">${r.old}: not found</div>`;
-          return `<div class="info-text">${r.old} → ${r.new}: <strong>${r.count}</strong> replacement(s)</div>`;
-        });
+          const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+          if (r.warning) return `<div class="efr-result-line efr-result-warn">${esc(r.old)}: not found</div>`;
+          return `<div class="efr-result-line">${esc(r.old)} → ${esc(r.new)}: <strong>${r.count}</strong> occurrence(s)</div>`;
+        }).join('');
         if (statusEl) statusEl.innerHTML =
-          `<div style="margin:8px 0;padding:8px;background:var(--surface,rgba(255,255,255,0.03));border-radius:6px;">` +
-          `<div class="info-text" style="color:var(--success,#4caf50);margin-bottom:4px;">` +
-          `<strong>${data.total_replaced}</strong> total replacement(s). Backup: ${data.backup || 'created'}</div>` +
-          lines.join('') + '</div>';
+          `<div class="efr-status-box efr-status-ok">
+            <strong>${data.total_replaced}</strong> total replacement(s) made. Backup: ${data.backup || 'created'}
+            ${lines}
+          </div>`;
         App.showToast(`Replaced ${data.total_replaced} occurrence(s)`, 3000);
-        // Re-run search to show updated results
-        if (this._entityFrLastQuery) this._entitySearch();
+        this._frPairs = [];
+        this._frRenderPairs();
+        // Refresh the macro switches list
+        try {
+          const refreshResp = await fetch('/api/entities/switches', {signal: AbortSignal.timeout(5000)});
+          const refreshData = await refreshResp.json();
+          this._frMacroSwitches = (refreshData.switches || []).map(id => ({entity_id: id, label: id.replace('switch.', '')}));
+        } catch {}
+      } else if (data.success && data.total_replaced === 0) {
+        if (statusEl) statusEl.innerHTML = '<div class="efr-status-box efr-status-warn">No occurrences found — no changes made</div>';
       } else {
-        if (statusEl) statusEl.innerHTML = `<div class="info-text" style="color:var(--danger);">${data.error || 'Replace failed'}</div>`;
+        if (statusEl) statusEl.innerHTML = `<div class="efr-status-box efr-status-err">${data.error || 'Replace failed'}</div>`;
         App.showToast(data.error || 'Replace failed', 4000, 'error');
       }
     } catch (e) {
-      if (statusEl) statusEl.innerHTML = `<div class="info-text" style="color:var(--danger);">Error: ${e.message}</div>`;
+      if (statusEl) statusEl.innerHTML = `<div class="efr-status-box efr-status-err">Error: ${e.message}</div>`;
+    } finally {
+      if (btn) { btn.disabled = this._frPairs.length === 0; btn.querySelector('.btn-label').textContent = 'Replace All'; }
     }
   },
 
