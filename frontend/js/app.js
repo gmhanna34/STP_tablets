@@ -124,6 +124,8 @@ const App = {
     this.socket.on('connect', () => {
       console.log('Socket.IO connected');
       this._reconnectAttempt = 0;
+      clearTimeout(this._disconnectBannerTimer);
+      this._hideDisconnectBanner();
       this.setConnectionStatus('Connected', true);
 
       // Report previous disconnect reason to server for diagnostics
@@ -152,6 +154,13 @@ const App = {
           this.setConnectionStatus('Disconnected', false);
         }
       }, 3000);
+      // Show prominent disconnect banner after 10s of sustained disconnection
+      clearTimeout(this._disconnectBannerTimer);
+      this._disconnectBannerTimer = setTimeout(() => {
+        if (!this.socket.connected) {
+          this._showDisconnectBanner();
+        }
+      }, 10000);
     });
 
     this.socket.on('connect_error', () => {
@@ -172,6 +181,8 @@ const App = {
     this.socket.io.on('reconnect', () => {
       this._reconnectAttempt = 0;
       clearTimeout(this._disconnectUiTimer);
+      clearTimeout(this._disconnectBannerTimer);
+      this._hideDisconnectBanner();
       this._hideRestartOverlay();
       const downtime = this._disconnectedAt ? Date.now() - this._disconnectedAt : 0;
       this._disconnectedAt = null;
@@ -302,6 +313,21 @@ const App = {
 
   _hideRestartOverlay() {
     document.getElementById('gateway-restart-overlay')?.remove();
+  },
+
+  _showDisconnectBanner() {
+    if (document.getElementById('disconnect-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'disconnect-banner';
+    banner.className = 'disconnect-banner';
+    banner.innerHTML = '<span class="material-icons" style="font-size:18px;vertical-align:middle;margin-right:8px;">cloud_off</span>' +
+      '<strong>Gateway unreachable</strong> — Controls may not respond. Reconnecting automatically... ' +
+      '<button onclick="location.reload()">Reload</button>';
+    document.body.prepend(banner);
+  },
+
+  _hideDisconnectBanner() {
+    document.getElementById('disconnect-banner')?.remove();
   },
 
   refreshCurrentPage(subsystem) {
