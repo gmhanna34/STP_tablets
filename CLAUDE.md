@@ -240,7 +240,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
 **Phase 7 (THR Sunset) — COMPLETE:** The Home Remote (THR) app has been fully sunset. The web-based tablet frontend replaces all THR functionality. `STP_THRFiles_Current` and `STP_scripts` repos archived with deprecation READMEs documenting what was absorbed and rollback procedures. No `obs_rpc` (THR bridge) health checks were active in the gateway config. THR-referencing comments in `macros.yaml` retained as design-decision documentation (explaining retry patterns). The Chrome crash recovery and network adapter fix scripts in `STP_scripts` remain useful as standalone Windows Scheduled Tasks.
 
-**Phase 8 (Mac Migration):** Clone repo to Mac Mini, create venv, copy `.env`, update OBS WebSocket URL to point to Windows machine, configure launchd, test.
+**Phase 8 (Mac Migration):** Clone repo to Mac Mini, create venv, copy `.env`, update OBS WebSocket URL to point to Windows machine, configure launchd, test. Note: the git pre-commit hook (runs 104 gateway tests before each commit) lives in `.git/hooks/pre-commit` and is not tracked by git — copy it from the Windows machine or recreate it on the Mac.
 
 ### Post-Consolidation Architecture
 

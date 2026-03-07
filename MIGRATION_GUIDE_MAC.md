@@ -268,6 +268,22 @@ source .venv/bin/activate
 pip install --upgrade pip
 deactivate
 
+# Git pre-commit hook (runs 104 gateway tests before each commit)
+# Not tracked by git — must be created after each fresh clone
+cat > ~/STP/STP_tablets/.git/hooks/pre-commit << 'HOOK'
+#!/bin/sh
+cd "$(git rev-parse --show-toplevel)/gateway" || exit 0
+echo "Running gateway tests..."
+python -m pytest tests/ -q --tb=short 2>&1
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "Tests failed — commit aborted."
+    echo "Fix the failing tests or use 'git commit --no-verify' to skip."
+    exit 1
+fi
+HOOK
+chmod +x ~/STP/STP_tablets/.git/hooks/pre-commit
+
 # HealthDash venv
 cd ~/STP/STP_healthdash
 python3 -m venv .venv
