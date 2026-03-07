@@ -2586,6 +2586,37 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
             # Section-level disabled_when
             _collect_ha_entities(section.get("disabled_when"))
 
+    def _fetch_ha_button_states():
+        """Fetch current HA entity states for all button state bindings.
+
+        Returns a dict of {entity_id: {state, attributes}} or None.
+        Used by both the background poller and post-macro immediate refresh.
+        """
+        if not ha_state_entities:
+            return None
+        if mock_mode:
+            return {e: {"state": "on", "attributes": {}} for e in ha_state_entities}
+        try:
+            all_entities, err = _fetch_all_ha_entities()
+            if err:
+                logger.debug(f"HA bulk fetch failed: {err}")
+                return {e: {"state": "unavailable", "attributes": {}} for e in ha_state_entities}
+            states = {}
+            for entity in all_entities:
+                eid = entity.get("entity_id", "")
+                if eid in ha_state_entities:
+                    states[eid] = {
+                        "state": entity.get("state", "unknown"),
+                        "attributes": entity.get("attributes", {}),
+                    }
+            for eid in ha_state_entities:
+                if eid not in states:
+                    states[eid] = {"state": "unavailable", "attributes": {}}
+            return states
+        except Exception as e:
+            logger.debug(f"HA bulk fetch error: {e}")
+            return {e: {"state": "unavailable", "attributes": {}} for e in ha_state_entities}
+
     def _execute_macro(macro_key: str, tablet: str, depth: int = 0,
                        skip_steps: set = None, prefix: str = "") -> dict:
         """Execute a macro by key. Returns {success, steps_completed, steps_total, error}.
@@ -2618,6 +2649,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
         })
 
         completed = 0
+        ran_ha_service = False
         overall_start = time.time()
 
         for i, step in enumerate(steps):
@@ -2659,6 +2691,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
 
             if result["success"]:
                 completed += 1
+                if step_type == "ha_service":
+                    ran_ha_service = True
             else:
                 # Handle on_fail
                 if on_fail == "skip":
@@ -2700,6 +2734,17 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                               json.dumps({"label": label, "steps": len(steps)}),
                               f"FAILED at step {i+1}: {error_msg}", overall_ms)
 
+                # Refresh HA state even on failure — earlier steps may have
+                # already changed switches before this step failed
+                if ran_ha_service:
+                    try:
+                        ha_fresh = _fetch_ha_button_states()
+                        if ha_fresh:
+                            state_cache.set("ha", ha_fresh)
+                            socketio.emit("state:ha", ha_fresh, room="ha")
+                    except Exception as e:
+                        logger.debug(f"HA state refresh after macro failure: {e}")
+
                 return {
                     "success": False,
                     "macro": macro_key,
@@ -2735,6 +2780,17 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
                     socketio.emit("state:moip", fresh, room="moip")
         except Exception as e:
             logger.debug(f"MoIP state refresh after macro failed: {e}")  # Background poller will catch up
+
+        # Force fresh HA state broadcast so button colors update immediately
+        # after switch/outlet changes, instead of waiting up to 15s for next poll
+        if ran_ha_service:
+            try:
+                ha_fresh = _fetch_ha_button_states()
+                if ha_fresh:
+                    state_cache.set("ha", ha_fresh)
+                    socketio.emit("state:ha", ha_fresh, room="ha")
+            except Exception as e:
+                logger.debug(f"HA state refresh after macro failed: {e}")
 
         return {
             "success": True,
@@ -3815,35 +3871,10 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
         def poll_ha_states():
             """Poll HA entity states for button state bindings (bulk fetch).
 
-            Uses the single /api/states endpoint and filters client-side,
-            instead of making N individual requests per entity.
+            Delegates to _fetch_ha_button_states() which is also called
+            by the macro engine for immediate post-execution refresh.
             """
-            if not ha_state_entities:
-                return None
-            if mock_mode:
-                return {e: {"state": "on", "attributes": {}} for e in ha_state_entities}
-            try:
-                all_entities, err = _fetch_all_ha_entities()
-                if err:
-                    logger.debug(f"HA bulk poll failed: {err}")
-                    return {e: {"state": "unavailable", "attributes": {}} for e in ha_state_entities}
-                # Build lookup from bulk response, filtering to only tracked entities
-                states = {}
-                for entity in all_entities:
-                    eid = entity.get("entity_id", "")
-                    if eid in ha_state_entities:
-                        states[eid] = {
-                            "state": entity.get("state", "unknown"),
-                            "attributes": entity.get("attributes", {}),
-                        }
-                # Fill any missing entities (removed from HA, etc.)
-                for eid in ha_state_entities:
-                    if eid not in states:
-                        states[eid] = {"state": "unavailable", "attributes": {}}
-                return states
-            except Exception as e:
-                logger.debug(f"HA bulk poll error: {e}")
-                return {e: {"state": "unavailable", "attributes": {}} for e in ha_state_entities}
+            return _fetch_ha_button_states()
 
         def _get_camlytics_raw(url):
             """Fetch a raw counter value from a Camlytics cloud report URL.
