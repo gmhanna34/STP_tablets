@@ -1011,6 +1011,39 @@ body {
   box-shadow: 0 0 0 2px rgba(255, 140, 0, 0.2);
 }
 
+/* ── Test Methods Grid ──────────────────────────────────── */
+
+.test-methods-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.test-method-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.test-method-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.test-method-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+
+.test-btn {
+  max-width: 100px;
+}
+
 /* ── Camera Tab Bar ──────────────────────────────────────── */
 
 .cam-tab-bar {

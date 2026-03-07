@@ -6,6 +6,8 @@ const SourcePage = {
   _activeTab: 'video',
   _announcementsLoaded: false,
   _announcements: [],
+  _testLoaded: false,
+  _testLog: [],
   _previewEnabled: false,
   _previewSwitchDelay: 1500,
 
@@ -32,6 +34,10 @@ const SourcePage = {
           <button class="cam-tab" data-source-tab="announcements">
             <span class="material-icons">campaign</span>
             <span>Announcements</span>
+          </button>
+          <button class="cam-tab" data-source-tab="test">
+            <span class="material-icons">science</span>
+            <span>Test</span>
           </button>
         </div>
 
@@ -124,6 +130,25 @@ const SourcePage = {
             </div>
           </div>
         </div>
+
+        <!-- TEST TAB -->
+        <div id="source-tab-test" style="display:none;">
+          <div class="control-section">
+            <div class="section-title">Announcement Method Testing</div>
+            <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px;">
+              Test different announcement delivery methods to compare reliability and latency. Results are logged below each test.
+            </p>
+            <div id="test-container">
+              <div class="text-center" style="opacity:0.5;">Loading test panel...</div>
+            </div>
+          </div>
+          <div class="control-section">
+            <div class="section-title">Test Log</div>
+            <div id="test-log-container" style="max-height:300px;overflow-y:auto;font-size:12px;font-family:monospace;">
+              <div class="text-center" style="opacity:0.4;">No tests run yet</div>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   },
@@ -147,12 +172,16 @@ const SourcePage = {
         document.getElementById('source-tab-video').style.display = target === 'video' ? '' : 'none';
         document.getElementById('source-tab-audio').style.display = target === 'audio' ? '' : 'none';
         document.getElementById('source-tab-announcements').style.display = target === 'announcements' ? '' : 'none';
+        document.getElementById('source-tab-test').style.display = target === 'test' ? '' : 'none';
 
         if (target === 'audio' && !this.mixerTimer) {
           this._initAudio();
         }
         if (target === 'announcements' && !this._announcementsLoaded) {
           this._initAnnouncements();
+        }
+        if (target === 'test' && !this._testLoaded) {
+          this._initTestPanel();
         }
       });
     });
@@ -522,6 +551,285 @@ const SourcePage = {
     }
   },
 
+  // ---- TEST PANEL ----
+
+  async _initTestPanel() {
+    this._testLoaded = true;
+    const container = document.getElementById('test-container');
+    if (!container) return;
+
+    // Load notify entities from HA for device targeting options
+    let notifyEntities = [];
+    try {
+      const resp = await fetch('/api/ha/entities?domain=notify&q=alexa', {
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await resp.json();
+      notifyEntities = (data.domains?.notify?.entities || []).filter(e =>
+        /alexa|echo/i.test(e.entity_id) || /alexa|echo/i.test(e.friendly_name || '')
+      );
+    } catch (e) {
+      console.error('Failed to load notify entities:', e);
+    }
+
+    // Load automation presets (reuse from announcements)
+    if (!this._announcementsLoaded) {
+      try {
+        const resp = await fetch('/api/ha/entities?domain=automation&q=alexaannounce', {
+          signal: AbortSignal.timeout(10000),
+        });
+        const data = await resp.json();
+        const entities = data.domains?.automation?.entities || [];
+        this._announcements = entities.filter(e =>
+          e.entity_id.startsWith('automation.automation_alexaannounce_')
+        );
+      } catch (e) {
+        this._announcements = [];
+      }
+    }
+
+    const notifyOptions = notifyEntities.map(e => {
+      const label = e.friendly_name || e.entity_id;
+      return `<option value="${e.entity_id}">${label}</option>`;
+    }).join('');
+
+    const automationOptions = this._announcements.map(a => {
+      const label = a.friendly_name || a.entity_id.replace('automation.automation_alexaannounce_', '').replace(/_/g, ' ');
+      return `<option value="${a.entity_id}">${label}</option>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="announce-form" style="max-width:600px;">
+        <label class="announce-label">Test Message</label>
+        <input type="text" id="test-message" class="announce-textarea" style="min-height:auto;padding:8px 10px;"
+          value="This is a test announcement" />
+
+        <label class="announce-label" style="margin-top:12px;">Target Notify Entity</label>
+        <select id="test-notify-entity" class="routing-select" style="width:100%;margin-bottom:12px;">
+          <option value="notify.av_room_echo_dot_announce">notify.av_room_echo_dot_announce (current default)</option>
+          ${notifyOptions}
+        </select>
+
+        <div class="test-methods-grid">
+          <div class="test-method-card">
+            <div class="test-method-title">Method 1: notify/send_message</div>
+            <div class="test-method-desc">Direct HA notify service (current custom path)</div>
+            <button class="btn test-btn" data-test="notify_send_message">
+              <span class="material-icons">send</span>
+              <span class="btn-label">Test</span>
+            </button>
+          </div>
+
+          <div class="test-method-card">
+            <div class="test-method-title">Method 2: notify/send_message (type: announce)</div>
+            <div class="test-method-desc">Alexa Media Player announce mode — different voice style</div>
+            <button class="btn test-btn" data-test="notify_announce">
+              <span class="material-icons">send</span>
+              <span class="btn-label">Test</span>
+            </button>
+          </div>
+
+          <div class="test-method-card">
+            <div class="test-method-title">Method 3: notify/send_message (type: tts)</div>
+            <div class="test-method-desc">Alexa Media Player TTS mode</div>
+            <button class="btn test-btn" data-test="notify_tts">
+              <span class="material-icons">send</span>
+              <span class="btn-label">Test</span>
+            </button>
+          </div>
+
+          <div class="test-method-card">
+            <div class="test-method-title">Method 4: automation/trigger</div>
+            <div class="test-method-desc">Current preset path — triggers an HA automation</div>
+            <select id="test-automation-select" class="routing-select" style="width:100%;margin-bottom:6px;font-size:12px;">
+              <option value="">-- Select Automation --</option>
+              ${automationOptions}
+            </select>
+            <button class="btn test-btn" data-test="automation_trigger">
+              <span class="material-icons">send</span>
+              <span class="btn-label">Test</span>
+            </button>
+          </div>
+
+          <div class="test-method-card">
+            <div class="test-method-title">Method 5: script/turn_on</div>
+            <div class="test-method-desc">Call an HA script instead of automation (if configured)</div>
+            <input type="text" id="test-script-entity" class="announce-textarea" style="min-height:auto;padding:6px 8px;font-size:12px;"
+              placeholder="script.alexa_announce_test" />
+            <button class="btn test-btn" data-test="script_turn_on" style="margin-top:4px;">
+              <span class="material-icons">send</span>
+              <span class="btn-label">Test</span>
+            </button>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;display:flex;gap:8px;">
+          <button class="btn" id="btn-test-clear-log" style="max-width:160px;">
+            <span class="material-icons">delete_sweep</span>
+            <span class="btn-label">Clear Log</span>
+          </button>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);">
+            <input type="checkbox" id="test-unmute-aux" checked />
+            Unmute Aux 3 & 4 before test
+          </label>
+        </div>
+      </div>
+    `;
+
+    // Wire up test buttons
+    container.querySelectorAll('.test-btn').forEach(btn => {
+      btn.addEventListener('click', () => this._runTest(btn.dataset.test));
+    });
+
+    document.getElementById('btn-test-clear-log')?.addEventListener('click', () => {
+      this._testLog = [];
+      this._renderTestLog();
+    });
+  },
+
+  async _runTest(method) {
+    const message = document.getElementById('test-message')?.value?.trim();
+    const notifyEntity = document.getElementById('test-notify-entity')?.value;
+    const unmuteAux = document.getElementById('test-unmute-aux')?.checked;
+
+    if (!message && method !== 'automation_trigger') {
+      App.showToast('Enter a test message first', 2000);
+      return;
+    }
+
+    const entry = {
+      time: new Date().toLocaleTimeString(),
+      method,
+      message: message || '(automation preset)',
+      entity: notifyEntity,
+      status: 'pending',
+      latency: null,
+      error: null,
+    };
+
+    this._testLog.unshift(entry);
+    this._renderTestLog();
+
+    try {
+      if (unmuteAux) {
+        await Promise.all([X32API.unmuteAux(3), X32API.unmuteAux(4)]);
+      }
+
+      const start = performance.now();
+      let resp;
+
+      switch (method) {
+        case 'notify_send_message':
+          resp = await fetch('/api/ha/service/notify/send_message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entity_id: notifyEntity, message }),
+            signal: AbortSignal.timeout(15000),
+          });
+          break;
+
+        case 'notify_announce':
+          resp = await fetch('/api/ha/service/notify/send_message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entity_id: notifyEntity, message, data: { type: 'announce' } }),
+            signal: AbortSignal.timeout(15000),
+          });
+          break;
+
+        case 'notify_tts':
+          resp = await fetch('/api/ha/service/notify/send_message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entity_id: notifyEntity, message, data: { type: 'tts' } }),
+            signal: AbortSignal.timeout(15000),
+          });
+          break;
+
+        case 'automation_trigger': {
+          const autoId = document.getElementById('test-automation-select')?.value;
+          if (!autoId) {
+            entry.status = 'error';
+            entry.error = 'No automation selected';
+            this._renderTestLog();
+            return;
+          }
+          entry.message = autoId.replace('automation.automation_alexaannounce_', '');
+          resp = await fetch('/api/ha/service/automation/trigger', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entity_id: autoId }),
+            signal: AbortSignal.timeout(15000),
+          });
+          break;
+        }
+
+        case 'script_turn_on': {
+          const scriptId = document.getElementById('test-script-entity')?.value?.trim();
+          if (!scriptId) {
+            entry.status = 'error';
+            entry.error = 'Enter a script entity ID';
+            this._renderTestLog();
+            return;
+          }
+          entry.entity = scriptId;
+          resp = await fetch('/api/ha/service/script/turn_on', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entity_id: scriptId }),
+            signal: AbortSignal.timeout(15000),
+          });
+          break;
+        }
+
+        default:
+          entry.status = 'error';
+          entry.error = 'Unknown method';
+          this._renderTestLog();
+          return;
+      }
+
+      entry.latency = Math.round(performance.now() - start);
+      const body = await resp.json().catch(() => null);
+
+      if (resp.ok) {
+        entry.status = 'ok';
+        App.showToast(`Test sent (${entry.latency}ms)`, 2000);
+      } else {
+        entry.status = 'error';
+        entry.error = body?.error || body?.message || `HTTP ${resp.status}`;
+      }
+    } catch (e) {
+      entry.status = 'error';
+      entry.error = e.message || 'Network error';
+    }
+
+    this._renderTestLog();
+  },
+
+  _renderTestLog() {
+    const container = document.getElementById('test-log-container');
+    if (!container) return;
+
+    if (this._testLog.length === 0) {
+      container.innerHTML = '<div class="text-center" style="opacity:0.4;">No tests run yet</div>';
+      return;
+    }
+
+    container.innerHTML = this._testLog.map(e => {
+      const icon = e.status === 'ok' ? '✓' : e.status === 'error' ? '✗' : '…';
+      const color = e.status === 'ok' ? '#00b050' : e.status === 'error' ? '#cc0000' : '#888';
+      const latency = e.latency != null ? ` (${e.latency}ms)` : '';
+      const err = e.error ? ` — ${e.error}` : '';
+      return `<div style="padding:4px 8px;border-bottom:1px solid var(--border);color:${color};">
+        <span>${icon}</span>
+        <span style="color:var(--text-secondary);">${e.time}</span>
+        <strong>${e.method}</strong>
+        → ${e.message}${latency}${err}
+      </div>`;
+    }).join('');
+  },
+
   async loadRouting() {
     const state = await MoIPAPI.poll();
     this._renderRouting(state);
@@ -746,6 +1054,25 @@ const SourcePage = {
             </dl>
           </div>
 
+          <div class="help-section">
+            <h3>Test Tab</h3>
+            <p class="help-note">Compare different announcement delivery methods to find the most reliable approach. Each method calls Home Assistant differently:</p>
+            <dl class="help-list">
+              <dt>Method 1: notify/send_message</dt>
+              <dd>Direct HA notify service call (same as current custom announcements).</dd>
+              <dt>Method 2: notify/send_message (type: announce)</dt>
+              <dd>Uses Alexa Media Player's "announce" mode which uses a different voice style.</dd>
+              <dt>Method 3: notify/send_message (type: tts)</dt>
+              <dd>Uses Alexa Media Player's TTS mode.</dd>
+              <dt>Method 4: automation/trigger</dt>
+              <dd>Triggers an HA automation (same as current preset announcements).</dd>
+              <dt>Method 5: script/turn_on</dt>
+              <dd>Calls an HA script entity directly.</dd>
+              <dt>Test Log</dt>
+              <dd>Shows timing and success/failure for each test to help identify the most reliable method.</dd>
+            </dl>
+          </div>
+
           <div class="help-section" style="border-bottom:none;text-align:center;padding-top:16px;">
             <button class="btn" id="help-ask-chat" style="display:inline-flex;max-width:320px;">
               <span class="material-icons">support_agent</span>
@@ -766,5 +1093,7 @@ const SourcePage = {
     this._activeTab = 'video';
     this._announcementsLoaded = false;
     this._announcements = [];
+    this._testLoaded = false;
+    this._testLog = [];
   }
 };
