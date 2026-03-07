@@ -344,10 +344,10 @@ body {
 }
 
 .home-title {
-  font-size: 20px;
+  font-size: 40px;
   font-weight: 600;
   margin-bottom: 8px;
-  opacity: 0.7;
+  opacity: 0.9;
 }
 
 .home-logo-area {

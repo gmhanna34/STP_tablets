@@ -232,6 +232,11 @@ healthdash:
     ok_json_value: true
     warn_if_ms_gt: 500
     timeout_seconds: 10
+    alert:
+      enabled: true
+      warn_after_seconds: 180
+      down_after_seconds: 360
+      cooldown_seconds: 300
     log_path: ''
   - id: obs_module
     name: OBS Streaming (Built-in Module)
