@@ -1667,7 +1667,7 @@ def register_api_routes(ctx):
         tx_list = moip_data.get("transmitters", [])
         rx_list = moip_data.get("receivers", [])
         if tx_list:
-            tx_lines = [f"- {d.get('name', f'TX{d.get(\"id\",\"\")}')} (TX {d.get('id','')})"
+            tx_lines = [f"- {d.get('name', 'TX' + str(d.get('id', '')))} (TX {d.get('id', '')})"
                         for d in tx_list if isinstance(d, dict) and d.get("name") != "SPARE"]
             parts.append("\n## Video Sources (MoIP Transmitters)\n"
                          "These are the video inputs that can be routed to any display:\n"
