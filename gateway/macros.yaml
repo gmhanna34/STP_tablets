@@ -513,6 +513,19 @@ macros:
         minutes: 180
         on_fail: skip
         message: "Unlocking lobby door for 3 hours"
+      # --- Turn on Chapel A/C (cool, 69°) ---
+      - type: ha_service
+        domain: "climate"
+        service: "set_hvac_mode"
+        data: { entity_id: "climate.chapel_and_main_hallway", hvac_mode: "cool" }
+        on_fail: skip
+        message: "Setting Chapel A/C to cool mode"
+      - type: ha_service
+        domain: "climate"
+        service: "set_temperature"
+        data: { entity_id: "climate.chapel_and_main_hallway", temperature: 69 }
+        on_fail: skip
+        message: "Setting Chapel A/C to 69°F"
 
   chapel_full_teardown:
     label: "Chapel Teardown"
@@ -2811,6 +2824,19 @@ macros:
         macro: "stream_scene_main_church"
         on_fail: skip
         message: "Setting audio routing and X32 scene for Main Church"
+      # --- Turn on Main Church A/C (cool, 69°) ---
+      - type: ha_service
+        domain: "climate"
+        service: "set_hvac_mode"
+        data: { entity_id: "climate.mainchurch", hvac_mode: "cool" }
+        on_fail: skip
+        message: "Setting Main Church A/C to cool mode"
+      - type: ha_service
+        domain: "climate"
+        service: "set_temperature"
+        data: { entity_id: "climate.mainchurch", temperature: 69 }
+        on_fail: skip
+        message: "Setting Main Church A/C to 69°F"
 
   main_full_teardown:
     label: "Main Church Teardown"
@@ -2863,6 +2889,19 @@ macros:
         macro: "stream_scene_social_hall"
         on_fail: skip
         message: "Setting audio routing and X32 scene for Social Hall"
+      # --- Turn on Social Hall A/C (cool, 69°) ---
+      - type: ha_service
+        domain: "climate"
+        service: "set_hvac_mode"
+        data: { entity_id: "climate.social_hall_new", hvac_mode: "cool" }
+        on_fail: skip
+        message: "Setting Social Hall A/C to cool mode"
+      - type: ha_service
+        domain: "climate"
+        service: "set_temperature"
+        data: { entity_id: "climate.social_hall_new", temperature: 69 }
+        on_fail: skip
+        message: "Setting Social Hall A/C to 69°F"
 
   social_full_teardown:
     label: "Social Hall Teardown"
