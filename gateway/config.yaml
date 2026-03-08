@@ -30,7 +30,7 @@ moip:
   preview:
     enabled: true                     # Set to true once encoder hardware is installed
     encoder_ip: "192.168.1.181"        # Static IP of HDMI-to-IP encoder
-    mjpeg_url: 	http://192.168.1.181:8134/chn1"  # Encoder's MJPEG stream URL
+    mjpeg_url: "http://192.168.1.181:8134/chn1"  # Encoder's MJPEG stream URL
     preview_receiver: 41               # MoIP receiver index dedicated to preview
     switch_delay_ms: 1500              # Delay after switch before showing stream (signal lock time)
 
