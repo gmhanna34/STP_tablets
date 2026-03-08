@@ -1,6 +1,9 @@
 const StreamPage = {
   pollTimer: null,
   _resetTimer: null,
+  _previewEnabled: false,
+  _previewSwitchDelay: 1500,
+  _liveStreamTx: 8,
 
   // OBS scene name → macro key for MoIP routing + X32 scene
   _sceneMacroMap: {
@@ -94,24 +97,49 @@ const StreamPage = {
           </div>
         </div>		
 
-        <!-- Slides & Advanced: full width -->
+        <!-- Slides: full width -->
         <div class="control-section">
-          <div class="section-title">Slides & Advanced</div>
-          <div class="control-grid" style="grid-template-columns:repeat(6, 1fr);">
+          <div class="section-title">Slides</div>
+          <div class="control-grid" style="grid-template-columns:repeat(4, 1fr);">
             <button class="btn" id="btn-slides-on"><span class="material-icons">slideshow</span><span class="btn-label">Slides On</span></button>
             <button class="btn" id="btn-slides-off"><span class="material-icons">block</span><span class="btn-label">Slides Off</span></button>
             <button class="btn" id="btn-slides-toggle"><span class="material-icons">swap_horiz</span><span class="btn-label">Toggle</span></button>
             <button class="btn" id="btn-reset-stream"><span class="material-icons">restart_alt</span><span class="btn-label">Reset Stream</span></button>
-            <button class="btn" id="btn-set-shure"><span class="material-icons">mic_external_on</span><span class="btn-label">Shure Mic</span></button>
-            <button class="btn" id="btn-reenable-atem"><span class="material-icons">videocam</span><span class="btn-label">ATEM</span></button>
           </div>
         </div>
 
-        <!-- Footer link -->
-        <a class="section-link" href="#" id="link-obs-web" style="justify-self:center;">
-          <span class="material-icons">chevron_right</span>
-          <span>Web Control Popup</span>
-        </a>
+        <!-- Footer links -->
+        <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+          <a class="section-link" href="#" id="link-stream-advanced">
+            <span class="material-icons">chevron_right</span>
+            <span>Advanced Settings</span>
+          </a>
+          <a class="section-link" href="#" id="link-obs-web">
+            <span class="material-icons">chevron_right</span>
+            <span>Web Control Popup</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Live Stream Feed Preview overlay -->
+      <div id="stream-preview-overlay" class="moip-preview-overlay" style="display:none;">
+        <div class="moip-preview-modal">
+          <div class="moip-preview-header">
+            <span class="material-icons">live_tv</span>
+            <span>Live Stream Feed Preview</span>
+            <button class="moip-preview-close" id="btn-stream-preview-close">
+              <span class="material-icons">close</span>
+            </button>
+          </div>
+          <div class="moip-preview-body">
+            <div id="stream-preview-loading" class="text-center" style="padding:40px;">
+              <div class="spinner"></div>
+              <div style="margin-top:12px;opacity:0.7;">Switching to live stream feed...</div>
+            </div>
+            <img id="stream-preview-stream" style="display:none;width:100%;border-radius:4px;" />
+            <div id="stream-preview-error" class="text-center" style="display:none;padding:30px;color:#cc0000;"></div>
+          </div>
+        </div>
       </div>
     `;
   },
@@ -123,6 +151,12 @@ const StreamPage = {
 
     // Help button
     document.getElementById('stream-help-btn')?.addEventListener('click', () => this._showHelp());
+
+    // Check if MoIP preview is enabled
+    fetch('/api/moip/preview/config').then(r => r.json()).then(data => {
+      this._previewEnabled = data.enabled;
+      this._previewSwitchDelay = data.switch_delay_ms || 1500;
+    }).catch(() => {});
 
     // Stream/Record buttons
     document.getElementById('btn-start-stream')?.addEventListener('click', async () => {
@@ -146,10 +180,20 @@ const StreamPage = {
     document.getElementById('btn-slides-off')?.addEventListener('click', () => ObsAPI.slidesOff());
     document.getElementById('btn-slides-toggle')?.addEventListener('click', () => ObsAPI.toggleSlides());
 
-    // Advanced
+    // Slides row
     document.getElementById('btn-reset-stream')?.addEventListener('click', () => ObsAPI.resetLiveStream());
-    document.getElementById('btn-set-shure')?.addEventListener('click', () => ObsAPI.setAudioToShureMic());
-    document.getElementById('btn-reenable-atem')?.addEventListener('click', () => ObsAPI.reEnableBMATEMWebcam());
+
+    // Advanced Settings panel
+    document.getElementById('link-stream-advanced')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this._openAdvancedSettings();
+    });
+
+    // Stream preview overlay close handlers
+    document.getElementById('btn-stream-preview-close')?.addEventListener('click', () => this._closeStreamPreview());
+    document.getElementById('stream-preview-overlay')?.addEventListener('click', (e) => {
+      if (e.target.id === 'stream-preview-overlay') this._closeStreamPreview();
+    });
 
     // Click camera snapshot to open PTZ popup
     document.getElementById('camera-feed')?.addEventListener('click', () => {
@@ -454,6 +498,97 @@ const StreamPage = {
     }, 180000); // 3 minutes
   },
 
+  _openAdvancedSettings() {
+    const self = this;
+    App.showPanel('Advanced Settings', (body) => {
+      body.innerHTML = `
+        <div class="control-grid" style="grid-template-columns:repeat(3, 1fr);gap:10px;">
+          ${self._previewEnabled ? `
+          <button class="btn" id="adv-stream-preview" style="grid-column:1/-1;">
+            <span class="material-icons">live_tv</span>
+            <span class="btn-label">Live Stream Feed Preview</span>
+          </button>
+          ` : ''}
+          <button class="btn" id="adv-set-shure">
+            <span class="material-icons">mic_external_on</span>
+            <span class="btn-label">Shure Mic</span>
+          </button>
+          <button class="btn" id="adv-reenable-atem">
+            <span class="material-icons">videocam</span>
+            <span class="btn-label">ATEM</span>
+          </button>
+        </div>
+      `;
+
+      body.querySelector('#adv-stream-preview')?.addEventListener('click', () => {
+        App.closePanel();
+        self._openStreamPreview();
+      });
+      body.querySelector('#adv-set-shure')?.addEventListener('click', () => ObsAPI.setAudioToShureMic());
+      body.querySelector('#adv-reenable-atem')?.addEventListener('click', () => ObsAPI.reEnableBMATEMWebcam());
+    });
+  },
+
+  async _openStreamPreview() {
+    const overlay = document.getElementById('stream-preview-overlay');
+    if (!overlay) return;
+
+    overlay.style.display = 'flex';
+
+    const loading = overlay.querySelector('#stream-preview-loading');
+    const stream = overlay.querySelector('#stream-preview-stream');
+    const error = overlay.querySelector('#stream-preview-error');
+
+    if (loading) loading.style.display = '';
+    if (stream) { stream.style.display = 'none'; stream.src = ''; }
+    if (error) error.style.display = 'none';
+
+    try {
+      const resp = await fetch('/api/moip/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transmitter: this._liveStreamTx }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.success) {
+        throw new Error(data.error || `HTTP ${resp.status}`);
+      }
+
+      await new Promise(r => setTimeout(r, data.switch_delay_ms || this._previewSwitchDelay));
+
+      if (loading) loading.style.display = 'none';
+      if (stream) {
+        stream.onload = () => {
+          stream.style.display = '';
+          if (error) error.style.display = 'none';
+        };
+        stream.onerror = () => {
+          stream.style.display = 'none';
+          if (error) {
+            error.textContent = 'Stream unavailable. Check encoder connection.';
+            error.style.display = '';
+          }
+        };
+        stream.src = data.stream_url;
+        stream.style.display = '';
+      }
+    } catch (e) {
+      if (loading) loading.style.display = 'none';
+      if (error) {
+        error.textContent = e.message || 'Failed to start preview';
+        error.style.display = '';
+      }
+    }
+  },
+
+  _closeStreamPreview() {
+    const overlay = document.getElementById('stream-preview-overlay');
+    const stream = overlay?.querySelector('#stream-preview-stream');
+    if (overlay) overlay.style.display = 'none';
+    if (stream) { stream.src = ''; stream.style.display = 'none'; }
+  },
+
   _showHelp() {
     App.showPanel('Live Stream - Help', (body) => {
       body.innerHTML = `
@@ -499,12 +634,20 @@ const StreamPage = {
           </div>
 
           <div class="help-section">
-            <h3>Slides & Advanced</h3>
+            <h3>Slides</h3>
             <dl class="help-list">
               <dt><span class="material-icons">slideshow</span> Slides On / Off / Toggle</dt>
               <dd>Controls the slides overlay on the live stream output.</dd>
               <dt><span class="material-icons">restart_alt</span> Reset Stream</dt>
               <dd>Resets the OBS live stream configuration via Advanced Scene Switcher. Use if YouTube shows a stream error.</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3>Advanced Settings</h3>
+            <dl class="help-list">
+              <dt><span class="material-icons">live_tv</span> Live Stream Feed Preview</dt>
+              <dd>Opens a live MJPEG preview of the stream feed from the HDMI encoder, showing exactly what the live stream output looks like.</dd>
               <dt><span class="material-icons">mic_external_on</span> Shure Mic</dt>
               <dd>Sets the OBS audio input to the Shure wireless microphone.</dd>
               <dt><span class="material-icons">videocam</span> ATEM</dt>
@@ -533,6 +676,7 @@ const StreamPage = {
       this.pollTimer = null;
     }
     this._stopCameraFeed();
+    this._closeStreamPreview();
     // Don't clear _resetTimer on page navigation — the 3-min reset should still fire
   }
 };

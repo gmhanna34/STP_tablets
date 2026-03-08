@@ -1201,8 +1201,11 @@ const SourcePage = {
 
       if (loading) loading.style.display = 'none';
       if (stream) {
-        stream.src = data.stream_url;
-        stream.style.display = '';
+        // MJPEG streams fire onload per frame — use it to confirm stream is working
+        stream.onload = () => {
+          stream.style.display = '';
+          if (error) error.style.display = 'none';
+        };
         stream.onerror = () => {
           stream.style.display = 'none';
           if (error) {
@@ -1210,6 +1213,8 @@ const SourcePage = {
             error.style.display = '';
           }
         };
+        stream.src = data.stream_url;
+        stream.style.display = '';
       }
     } catch (e) {
       if (loading) loading.style.display = 'none';
