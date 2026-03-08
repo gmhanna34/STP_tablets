@@ -210,6 +210,12 @@ def register_api_routes(ctx):
         status_code = 200 if all_ok else 503
         return jsonify({"ready": all_ok, "checks": checks}), status_code
 
+    @app.route("/api/wifi-debug")
+    def api_wifi_debug():
+        """Per-tablet WiFi connection stats for debugging disconnects."""
+        from socket_handlers import conn_stats
+        return jsonify(conn_stats.get_summary()), 200
+
     @app.route("/api/healthdash/summary")
     def api_healthdash_summary():
         health = ctx.health
