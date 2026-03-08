@@ -8,6 +8,8 @@ const SourcePage = {
   _announcements: [],
   _testLoaded: false,
   _testLog: [],
+  _wiimLoaded: false,
+  _wiimEntity: 'media_player.wiim_pro_new',
   _previewEnabled: false,
   _previewSwitchDelay: 1500,
 
@@ -143,6 +145,15 @@ const SourcePage = {
             </div>
           </div>
           <div class="control-section">
+            <div class="section-title">WiiM Pro — Media Player Testing</div>
+            <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px;">
+              Test WiiM Pro media player via Home Assistant (media_player.wiim_pro_new). Use TTS to play announcements directly through the WiiM.
+            </p>
+            <div id="wiim-container">
+              <div class="text-center" style="opacity:0.5;">Loading WiiM panel...</div>
+            </div>
+          </div>
+          <div class="control-section">
             <div class="section-title">Test Log</div>
             <div id="test-log-container" style="max-height:300px;overflow-y:auto;font-size:12px;font-family:monospace;">
               <div class="text-center" style="opacity:0.4;">No tests run yet</div>
@@ -182,6 +193,9 @@ const SourcePage = {
         }
         if (target === 'test' && !this._testLoaded) {
           this._initTestPanel();
+        }
+        if (target === 'test' && !this._wiimLoaded) {
+          this._initWiimPanel();
         }
       });
     });
@@ -792,6 +806,258 @@ const SourcePage = {
         → ${e.message}${latency}${err}
       </div>`;
     }).join('');
+  },
+
+  // ---- WIIM PRO PANEL ----
+
+  async _initWiimPanel() {
+    this._wiimLoaded = true;
+    const container = document.getElementById('wiim-container');
+    if (!container) return;
+
+    // Fetch current state
+    let state = null;
+    try {
+      const resp = await fetch(`/api/ha/states/${this._wiimEntity}`, {
+        signal: AbortSignal.timeout(10000),
+      });
+      if (resp.ok) state = await resp.json();
+    } catch (e) {
+      console.error('Failed to fetch WiiM state:', e);
+    }
+
+    // Load available TTS services
+    let ttsServices = [];
+    try {
+      const resp = await fetch('/api/ha/entities?domain=tts', {
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await resp.json();
+      ttsServices = data.domains?.tts?.entities || [];
+    } catch (e) {
+      console.error('Failed to load TTS entities:', e);
+    }
+
+    const ttsOptions = ttsServices.map(e => {
+      const label = e.friendly_name || e.entity_id;
+      return `<option value="${e.entity_id}">${label}</option>`;
+    }).join('');
+
+    const stateStr = state?.state || 'unknown';
+    const volume = state?.attributes?.volume_level != null
+      ? Math.round(state.attributes.volume_level * 100)
+      : '—';
+    const source = state?.attributes?.source || '—';
+    const friendly = state?.attributes?.friendly_name || this._wiimEntity;
+    const mediaTitle = state?.attributes?.media_title || '—';
+
+    container.innerHTML = `
+      <div class="announce-form" style="max-width:600px;">
+        <!-- Status bar -->
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;margin-bottom:12px;">
+          <span class="material-icons" style="font-size:20px;color:${stateStr === 'playing' ? '#00b050' : stateStr === 'idle' || stateStr === 'on' ? '#f0a030' : '#888'};">
+            ${stateStr === 'playing' ? 'play_circle' : stateStr === 'paused' ? 'pause_circle' : 'speaker'}
+          </span>
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:600;">${friendly}</div>
+            <div style="font-size:11px;color:var(--text-secondary);">
+              State: <strong>${stateStr}</strong> &nbsp;|&nbsp; Volume: <strong id="wiim-vol-display">${volume}%</strong> &nbsp;|&nbsp; Source: ${source} &nbsp;|&nbsp; Now playing: ${mediaTitle}
+            </div>
+          </div>
+          <button class="btn" id="btn-wiim-refresh" style="min-width:36px;padding:6px;" title="Refresh state">
+            <span class="material-icons" style="font-size:18px;">refresh</span>
+          </button>
+        </div>
+
+        <!-- Volume control -->
+        <label class="announce-label">Volume</label>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+          <input type="range" id="wiim-volume" min="0" max="100" value="${volume !== '—' ? volume : 30}" style="flex:1;" />
+          <span id="wiim-vol-slider-val" style="font-size:13px;min-width:36px;text-align:right;">${volume !== '—' ? volume : 30}%</span>
+          <button class="btn" id="btn-wiim-set-vol" style="min-width:80px;padding:6px 10px;">
+            <span class="material-icons" style="font-size:16px;">volume_up</span>
+            <span class="btn-label">Set</span>
+          </button>
+        </div>
+
+        <!-- Transport controls -->
+        <label class="announce-label">Transport</label>
+        <div class="test-methods-grid" style="margin-bottom:12px;">
+          <button class="btn" id="btn-wiim-play" style="flex:1;">
+            <span class="material-icons">play_arrow</span>
+            <span class="btn-label">Play</span>
+          </button>
+          <button class="btn" id="btn-wiim-pause" style="flex:1;">
+            <span class="material-icons">pause</span>
+            <span class="btn-label">Pause</span>
+          </button>
+          <button class="btn" id="btn-wiim-stop" style="flex:1;">
+            <span class="material-icons">stop</span>
+            <span class="btn-label">Stop</span>
+          </button>
+          <button class="btn" id="btn-wiim-mute" style="flex:1;">
+            <span class="material-icons">volume_off</span>
+            <span class="btn-label">Mute</span>
+          </button>
+          <button class="btn" id="btn-wiim-unmute" style="flex:1;">
+            <span class="material-icons">volume_up</span>
+            <span class="btn-label">Unmute</span>
+          </button>
+        </div>
+
+        <!-- TTS Announcement -->
+        <label class="announce-label">TTS Announcement</label>
+        <div style="margin-bottom:8px;">
+          <select id="wiim-tts-service" class="routing-select" style="width:100%;margin-bottom:6px;">
+            <option value="tts.speak">tts.speak (generic)</option>
+            ${ttsOptions}
+          </select>
+          <input type="text" id="wiim-tts-message" class="announce-textarea" style="min-height:auto;padding:8px 10px;"
+            value="This is a test announcement from the WiiM Pro" />
+        </div>
+        <button class="btn" id="btn-wiim-tts" style="max-width:200px;">
+          <span class="material-icons">record_voice_over</span>
+          <span class="btn-label">Send TTS</span>
+        </button>
+
+        <!-- Play URL -->
+        <label class="announce-label" style="margin-top:12px;">Play Media URL</label>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input type="text" id="wiim-media-url" class="announce-textarea" style="min-height:auto;padding:8px 10px;flex:1;"
+            placeholder="https://example.com/audio.mp3" />
+          <button class="btn" id="btn-wiim-play-url" style="min-width:80px;padding:6px 10px;">
+            <span class="material-icons">play_circle</span>
+            <span class="btn-label">Play</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Wire up event handlers
+    this._wireWiimHandlers();
+  },
+
+  _wireWiimHandlers() {
+    const entity = this._wiimEntity;
+
+    // Volume slider display
+    document.getElementById('wiim-volume')?.addEventListener('input', (e) => {
+      document.getElementById('wiim-vol-slider-val').textContent = e.target.value + '%';
+    });
+
+    // Refresh
+    document.getElementById('btn-wiim-refresh')?.addEventListener('click', async () => {
+      this._wiimLoaded = false;
+      await this._initWiimPanel();
+      this._logWiimTest('refresh', 'Refreshed state');
+    });
+
+    // Set volume
+    document.getElementById('btn-wiim-set-vol')?.addEventListener('click', () => {
+      const vol = parseInt(document.getElementById('wiim-volume')?.value || '30', 10);
+      this._callWiimService('media_player', 'volume_set', {
+        entity_id: entity,
+        volume_level: vol / 100,
+      }, `volume_set → ${vol}%`);
+    });
+
+    // Transport buttons
+    document.getElementById('btn-wiim-play')?.addEventListener('click', () => {
+      this._callWiimService('media_player', 'media_play', { entity_id: entity }, 'media_play');
+    });
+    document.getElementById('btn-wiim-pause')?.addEventListener('click', () => {
+      this._callWiimService('media_player', 'media_pause', { entity_id: entity }, 'media_pause');
+    });
+    document.getElementById('btn-wiim-stop')?.addEventListener('click', () => {
+      this._callWiimService('media_player', 'media_stop', { entity_id: entity }, 'media_stop');
+    });
+    document.getElementById('btn-wiim-mute')?.addEventListener('click', () => {
+      this._callWiimService('media_player', 'volume_mute', {
+        entity_id: entity, is_volume_muted: true,
+      }, 'mute');
+    });
+    document.getElementById('btn-wiim-unmute')?.addEventListener('click', () => {
+      this._callWiimService('media_player', 'volume_mute', {
+        entity_id: entity, is_volume_muted: false,
+      }, 'unmute');
+    });
+
+    // TTS
+    document.getElementById('btn-wiim-tts')?.addEventListener('click', () => {
+      const message = document.getElementById('wiim-tts-message')?.value?.trim();
+      if (!message) { App.showToast('Enter a TTS message', 2000); return; }
+      const ttsEntity = document.getElementById('wiim-tts-service')?.value || 'tts.speak';
+
+      // Use tts.speak service which targets the media_player entity
+      this._callWiimService('tts', 'speak', {
+        entity_id: ttsEntity,
+        media_player_entity_id: entity,
+        message,
+      }, `TTS: "${message.substring(0, 40)}${message.length > 40 ? '…' : ''}"`);
+    });
+
+    // Play URL
+    document.getElementById('btn-wiim-play-url')?.addEventListener('click', () => {
+      const url = document.getElementById('wiim-media-url')?.value?.trim();
+      if (!url) { App.showToast('Enter a media URL', 2000); return; }
+      this._callWiimService('media_player', 'play_media', {
+        entity_id: entity,
+        media_content_id: url,
+        media_content_type: 'music',
+      }, `play_media: ${url.substring(0, 50)}`);
+    });
+  },
+
+  async _callWiimService(domain, service, data, label) {
+    const entry = {
+      time: new Date().toLocaleTimeString(),
+      method: `wiim/${service}`,
+      message: label,
+      entity: this._wiimEntity,
+      status: 'pending',
+      latency: null,
+      error: null,
+    };
+    this._testLog.unshift(entry);
+    this._renderTestLog();
+
+    try {
+      const start = performance.now();
+      const resp = await fetch(`/api/ha/service/${domain}/${service}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+        signal: AbortSignal.timeout(15000),
+      });
+      entry.latency = Math.round(performance.now() - start);
+      const body = await resp.json().catch(() => null);
+
+      if (resp.ok) {
+        entry.status = 'ok';
+        App.showToast(`WiiM ${service} OK (${entry.latency}ms)`, 2000);
+      } else {
+        entry.status = 'error';
+        entry.error = body?.error || body?.message || `HTTP ${resp.status}`;
+      }
+    } catch (e) {
+      entry.status = 'error';
+      entry.error = e.message || 'Network error';
+    }
+
+    this._renderTestLog();
+  },
+
+  _logWiimTest(method, message) {
+    this._testLog.unshift({
+      time: new Date().toLocaleTimeString(),
+      method: `wiim/${method}`,
+      message,
+      entity: this._wiimEntity,
+      status: 'ok',
+      latency: null,
+      error: null,
+    });
+    this._renderTestLog();
   },
 
   async loadRouting() {
