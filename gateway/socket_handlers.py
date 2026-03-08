@@ -50,6 +50,13 @@ class _TabletConnStats:
         with self._lock:
             self._wifi[tablet] = {**data, "ts": time.time()}
 
+    def update_last_reason(self, tablet: str, reason: str):
+        """Update the disconnect reason of the most recent session (backfill from client diag)."""
+        with self._lock:
+            sessions = self._sessions.get(tablet)
+            if sessions:
+                sessions[-1]["reason"] = reason
+
     def get_summary(self) -> dict:
         """Return per-tablet connection stats for the /api/wifi-debug endpoint."""
         now = time.time()
@@ -125,11 +132,24 @@ def register_socket_handlers(ctx):
         conn_count = data.get("session_count", "?")
         downtime = data.get("downtime_ms")
 
+        wifi_bssid = data.get("wifi_bssid")
+        wifi_ssid = data.get("wifi_ssid")
+        wifi_link_speed = data.get("wifi_link_speed")
+        ip4 = data.get("ip4")
+
         parts = [f"SocketIO diag: tablet={tablet} sid={request.sid} prev_disconnect={prev}"]
         if wifi_rssi is not None:
             parts.append(f"wifi_signal={wifi_rssi}")
         if wifi_freq is not None:
             parts.append(f"wifi_freq={wifi_freq}")
+        if wifi_bssid is not None:
+            parts.append(f"bssid={wifi_bssid}")
+        if wifi_ssid is not None:
+            parts.append(f"ssid={wifi_ssid}")
+        if wifi_link_speed is not None:
+            parts.append(f"link_speed={wifi_link_speed}")
+        if ip4 is not None:
+            parts.append(f"ip={ip4}")
         if rtt is not None:
             parts.append(f"rtt={rtt}ms")
         if downtime is not None:
@@ -137,13 +157,22 @@ def register_socket_handlers(ctx):
         parts.append(f"session_count={conn_count}")
         logger.info(" ".join(parts))
 
+        # Backfill the most recent session's disconnect reason with the client-reported value
+        conn_stats.update_last_reason(tablet, prev)
+
         # Store WiFi diag for the debug endpoint
-        conn_stats.record_wifi_diag(tablet, {
+        diag_data = {
             "wifi_signal": wifi_rssi,
             "wifi_freq": wifi_freq,
             "rtt_ms": rtt,
             "session_count": conn_count,
-        })
+        }
+        # Include extra fields if present (BSSID, SSID, link speed, IP)
+        for extra_key in ("wifi_ssid", "wifi_bssid", "wifi_rssi", "wifi_link_speed", "ip4"):
+            val = data.get(extra_key)
+            if val is not None:
+                diag_data[extra_key] = val
+        conn_stats.record_wifi_diag(tablet, diag_data)
 
     @socketio.on("join")
     def on_join(data):
