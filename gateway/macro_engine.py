@@ -569,7 +569,7 @@ def _step_epson_power(ctx, step: dict, tablet: str) -> dict:
     try:
         start = time.time()
         resp = http_requests.get(
-            f"http://{proj['ip']}/api/v01/contentmgr/remote/power/{state}", timeout=5)
+            f"http://{proj['ip']}/api/v01/contentmgr/remote/power/{state}", timeout=20)
         latency = (time.time() - start) * 1000
         ok = resp.status_code == 200
         ctx.socketio.emit("state:projectors", {"event": "power", "projector": key, "state": state}, room="projectors")
@@ -594,7 +594,7 @@ def _step_epson_all(ctx, step: dict, tablet: str) -> dict:
     for key, proj in projectors.items():
         try:
             http_requests.get(
-                f"http://{proj['ip']}/api/v01/contentmgr/remote/power/{state}", timeout=5)
+                f"http://{proj['ip']}/api/v01/contentmgr/remote/power/{state}", timeout=20)
         except Exception as e:
             logger.debug(f"Projector {key} power command failed: {e}")
     ctx.socketio.emit("state:projectors", {"event": "all_power", "state": state}, room="projectors")

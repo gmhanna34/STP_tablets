@@ -156,7 +156,7 @@ polling:
   projectors: 30
 timeouts:
   ptz_cameras: 3
-  projectors: 5
+  projectors: 20
   camlytics: 2
   ha_proxy: 10
   ha_stream: 30

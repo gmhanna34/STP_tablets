@@ -607,56 +607,53 @@ macros:
             service: "turn_on"
             data: { entity_id: "switch.sw_037_mc_rearleft" }
             on_fail: skip
-      # Individual Epson projectors with 1s stagger delays
-      - type: epson_power
-        projector: "epson1"
-        state: "on"
-        on_fail: skip
-        message: "Powering on Projector 1 (Front Left)"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.vs_epsonprojector1" }
-        on_fail: skip
-      - type: delay
-        seconds: 0.5
-      - type: epson_power
-        projector: "epson2"
-        state: "on"
-        on_fail: skip
-        message: "Powering on Projector 2 (Front Right)"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.vs_epsonprojector2" }
-        on_fail: skip
-      - type: delay
-        seconds: 0.5
-      - type: epson_power
-        projector: "epson3"
-        state: "on"
-        on_fail: skip
-        message: "Powering on Projector 3 (Rear Left)"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.vs_epsonprojector3" }
-        on_fail: skip
-      - type: delay
-        seconds: 0.5
-      - type: epson_power
-        projector: "epson4"
-        state: "on"
-        on_fail: skip
-        message: "Powering on Projector 4 (Rear Right)"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.vs_epsonprojector4" }
-        on_fail: skip
+      # All projector power commands + virtual switches in parallel
+      - type: parallel
+        message: "Powering on all projectors simultaneously"
+        steps:
+          - type: epson_power
+            projector: "epson1"
+            state: "on"
+            on_fail: skip
+            message: "Powering on Projector 1 (Front Left)"
+          - type: epson_power
+            projector: "epson2"
+            state: "on"
+            on_fail: skip
+            message: "Powering on Projector 2 (Front Right)"
+          - type: epson_power
+            projector: "epson3"
+            state: "on"
+            on_fail: skip
+            message: "Powering on Projector 3 (Rear Left)"
+          - type: epson_power
+            projector: "epson4"
+            state: "on"
+            on_fail: skip
+            message: "Powering on Projector 4 (Rear Right)"
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.vs_epsonprojector1" }
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.vs_epsonprojector2" }
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.vs_epsonprojector3" }
+            on_fail: skip
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.vs_epsonprojector4" }
+            on_fail: skip
       # Retry Projector 3 (known flaky per THR)
       - type: delay
-        seconds: 1
+        seconds: 2
         message: "Waiting before Projector 3 retry"
       - type: epson_power
         projector: "epson3"
