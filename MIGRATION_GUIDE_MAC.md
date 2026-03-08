@@ -270,8 +270,8 @@ deactivate
 
 # Git pre-commit hook — not tracked by git, must be installed after each fresh clone.
 # A tracked copy is kept at hooks/pre-commit for easy setup.
-# The hook auto-increments the version in frontend/config/settings.json (format: YY-NNN)
-# on every commit.
+# The hook runs gateway tests first (aborts on failure), then auto-increments
+# the version in frontend/config/settings.json (format: YY-NNN).
 cp ~/STP/STP_tablets/hooks/pre-commit ~/STP/STP_tablets/.git/hooks/pre-commit
 chmod +x ~/STP/STP_tablets/.git/hooks/pre-commit
 
