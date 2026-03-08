@@ -786,8 +786,8 @@ class HealthModule:
             import shutil
             self._ffprobe_available = shutil.which(ffprobe) is not None
             if not self._ffprobe_available:
-                self.log.warning(f"[health] ffprobe not found ('{ffprobe}'). "
-                                 f"Camera checks will use TCP fallback.")
+                self._logger.warning(f"[health] ffprobe not found ('{ffprobe}'). "
+                                     f"Camera checks will use TCP fallback.")
 
         if not self._ffprobe_available:
             return self._check_rtsp_tcp_fallback(svc)

@@ -217,7 +217,7 @@ healthdash:
     detail_json_paths:
       Scene: cur_scene
       Scene Name: cur_scene_name
-    warn_if_ms_gt: 5500
+    warn_if_ms_gt: 7500
     poll_interval_seconds: 120
     timeout_seconds: 20
     log_path: ''
