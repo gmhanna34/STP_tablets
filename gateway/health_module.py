@@ -1061,6 +1061,10 @@ class HealthModule:
         if (now - state["last_alert_at"]) < cooldown:
             return
 
+        # Only re-alert if level escalated (warning → down), not on repeat
+        if state["last_alert_at"] > 0 and level == state["last_level"]:
+            return
+
         # Fire alert
         state["last_alert_at"] = now
         state["last_level"] = level
