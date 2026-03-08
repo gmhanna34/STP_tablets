@@ -1119,7 +1119,11 @@ def register_api_routes(ctx):
             latency = (time.time() - start) * 1000
             db.log_action(tablet, f"ha:{domain}/{service}", "home_assistant",
                           json.dumps(data)[:500], f"status={resp.status_code}", latency)
-            return jsonify(resp.json() if resp.content else {"success": True}), resp.status_code
+            try:
+                body = resp.json() if resp.content else {"success": True}
+            except ValueError:
+                body = {"success": resp.ok}
+            return jsonify(body), resp.status_code
         except Exception as e:
             return jsonify({"error": str(e)}), 503
 
