@@ -613,7 +613,7 @@ const SourcePage = {
         <div class="test-methods-grid">
           <div class="test-method-card">
             <div class="test-method-title">Method 1: notify/send_message</div>
-            <div class="test-method-desc">Direct HA notify service (current custom path)</div>
+            <div class="test-method-desc">Direct HA notify — select _announce or _speak entity above</div>
             <button class="btn test-btn" data-test="notify_send_message">
               <span class="material-icons">send</span>
               <span class="btn-label">Test</span>
@@ -621,25 +621,7 @@ const SourcePage = {
           </div>
 
           <div class="test-method-card">
-            <div class="test-method-title">Method 2: notify/send_message (type: announce)</div>
-            <div class="test-method-desc">Alexa Media Player announce mode — different voice style</div>
-            <button class="btn test-btn" data-test="notify_announce">
-              <span class="material-icons">send</span>
-              <span class="btn-label">Test</span>
-            </button>
-          </div>
-
-          <div class="test-method-card">
-            <div class="test-method-title">Method 3: notify/send_message (type: tts)</div>
-            <div class="test-method-desc">Alexa Media Player TTS mode</div>
-            <button class="btn test-btn" data-test="notify_tts">
-              <span class="material-icons">send</span>
-              <span class="btn-label">Test</span>
-            </button>
-          </div>
-
-          <div class="test-method-card">
-            <div class="test-method-title">Method 4: automation/trigger</div>
+            <div class="test-method-title">Method 2: automation/trigger</div>
             <div class="test-method-desc">Current preset path — triggers an HA automation</div>
             <select id="test-automation-select" class="routing-select" style="width:100%;margin-bottom:6px;font-size:12px;">
               <option value="">-- Select Automation --</option>
@@ -652,7 +634,7 @@ const SourcePage = {
           </div>
 
           <div class="test-method-card">
-            <div class="test-method-title">Method 5: script/turn_on</div>
+            <div class="test-method-title">Method 3: script/turn_on</div>
             <div class="test-method-desc">Call an HA script instead of automation (if configured)</div>
             <input type="text" id="test-script-entity" class="announce-textarea" style="min-height:auto;padding:6px 8px;font-size:12px;"
               placeholder="script.alexa_announce_test" />
@@ -724,24 +706,6 @@ const SourcePage = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ entity_id: notifyEntity, message }),
-            signal: AbortSignal.timeout(15000),
-          });
-          break;
-
-        case 'notify_announce':
-          resp = await fetch('/api/ha/service/notify/send_message', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ entity_id: notifyEntity, message, data: { type: 'announce' } }),
-            signal: AbortSignal.timeout(15000),
-          });
-          break;
-
-        case 'notify_tts':
-          resp = await fetch('/api/ha/service/notify/send_message', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ entity_id: notifyEntity, message, data: { type: 'tts' } }),
             signal: AbortSignal.timeout(15000),
           });
           break;
