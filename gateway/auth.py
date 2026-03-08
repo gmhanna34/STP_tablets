@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
 import time
 from collections import defaultdict
 
-from flask import Response, jsonify, redirect, request, session, url_for
+from flask import Response, current_app, jsonify, redirect, request, session, url_for
 
 logger = logging.getLogger("stp-gateway")
 
@@ -70,20 +72,32 @@ def check_permission(tablet_id: str, required_page: str, permissions_data: dict)
 # CSRF token helpers
 # ---------------------------------------------------------------------------
 
+_CSRF_MAX_AGE = 3600  # token valid for 1 hour
+
+
 def _generate_csrf_token() -> str:
-    """Generate and store a CSRF token in the session."""
-    token = os.urandom(32).hex()
-    session["csrf_token"] = token
-    return token
+    """Create an HMAC-signed, timestamped CSRF token (no session required)."""
+    ts = str(int(time.time()))
+    key = current_app.config["SECRET_KEY"].encode() or b"fallback-csrf-key"
+    sig = hmac.new(key, ts.encode(), hashlib.sha256).hexdigest()[:32]
+    return f"{ts}.{sig}"
 
 
 def _validate_csrf_token() -> bool:
-    """Check if the submitted CSRF token matches the session token."""
-    expected = session.get("csrf_token", "")
+    """Verify the HMAC signature and age of the submitted CSRF token."""
     submitted = request.form.get("csrf_token", "")
-    if not expected or not submitted:
+    if not submitted or "." not in submitted:
         return False
-    return expected == submitted
+    ts, sig = submitted.split(".", 1)
+    try:
+        age = time.time() - int(ts)
+    except ValueError:
+        return False
+    if age < 0 or age > _CSRF_MAX_AGE:
+        return False
+    key = current_app.config["SECRET_KEY"].encode() or b"fallback-csrf-key"
+    expected_sig = hmac.new(key, ts.encode(), hashlib.sha256).hexdigest()[:32]
+    return hmac.compare_digest(sig, expected_sig)
 
 
 # ---------------------------------------------------------------------------
