@@ -277,10 +277,22 @@ def register_auth(ctx):
     db = ctx.db
 
     allowed_ips = ctx.allowed_ips
+    trusted_proxy_prefixes = ctx.trusted_proxy_prefixes
     settings_pin = ctx.settings_pin
     secure_pin = ctx.secure_pin
     remote_auth = ctx.remote_auth
     session_timeout = ctx.session_timeout
+
+    def _get_client_ip() -> str:
+        """Return the real client IP, respecting X-Forwarded-For from trusted proxies."""
+        remote_addr = request.remote_addr or ""
+        forwarded_for = request.headers.get("X-Forwarded-For", "")
+        if forwarded_for and (
+            not trusted_proxy_prefixes
+            or any(remote_addr.startswith(pfx) for pfx in trusted_proxy_prefixes)
+        ):
+            return forwarded_for.split(",")[0].strip()
+        return remote_addr
 
     def _ip_allowed(ip: str) -> bool:
         return any(ip.startswith(pfx) for pfx in allowed_ips)
@@ -297,7 +309,7 @@ def register_auth(ctx):
         return bool(session.get("authed"))
 
     def _is_authed() -> bool:
-        return _ip_allowed(request.remote_addr or "") or _session_is_authed()
+        return _ip_allowed(_get_client_ip()) or _session_is_authed()
 
     # Store on ctx so other modules can use it
     ctx._is_authed = _is_authed
@@ -316,7 +328,7 @@ def register_auth(ctx):
         if _is_authed():
             return None
 
-        client_ip = request.remote_addr or ""
+        client_ip = _get_client_ip()
 
         # If remote_auth is configured, redirect browsers / return 401 for API
         if remote_auth.get("password"):
@@ -335,7 +347,7 @@ def register_auth(ctx):
             return resp
         if not request.path.startswith("/api/"):
             return resp
-        client_ip = request.remote_addr or ""
+        client_ip = _get_client_ip()
         logger.info(
             f"[{get_tablet_id()}] ip={client_ip} {request.method} {request.path} -> {resp.status_code}"
         )
@@ -351,7 +363,7 @@ def register_auth(ctx):
 
         error_html = ""
         if request.method == "POST":
-            client_ip = request.remote_addr or "unknown"
+            client_ip = _get_client_ip()
             # Rate limiting
             if not _auth_limiter.is_allowed(client_ip):
                 logger.warning(f"LOGIN_RATE_LIMITED ip={client_ip}")
@@ -375,6 +387,7 @@ def register_auth(ctx):
             configured_pw = remote_auth.get("password", "")
 
             if pw and pw == configured_pw:
+                session.permanent = True
                 session["authed"] = True
                 session["auth_exp"] = time.time() + session_timeout * 60
                 logger.info(f"LOGIN_OK ip={client_ip}")
@@ -398,7 +411,7 @@ def register_auth(ctx):
 
     @app.route("/api/auth/verify-pin", methods=["POST"])
     def verify_pin():
-        client_ip = request.remote_addr or "unknown"
+        client_ip = _get_client_ip()
         if not _auth_limiter.is_allowed(f"pin:{client_ip}"):
             return jsonify({"success": False, "error": "Too many attempts"}), 429
         data = request.get_json(silent=True) or {}
@@ -409,7 +422,7 @@ def register_auth(ctx):
 
     @app.route("/api/auth/verify-secure-pin", methods=["POST"])
     def verify_secure_pin():
-        client_ip = request.remote_addr or "unknown"
+        client_ip = _get_client_ip()
         if not _auth_limiter.is_allowed(f"secure_pin:{client_ip}"):
             return jsonify({"success": False, "error": "Too many attempts"}), 429
         data = request.get_json(silent=True) or {}

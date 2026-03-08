@@ -135,6 +135,7 @@ security:
   secure_pin: ""                   # Set SECURE_PIN in .env (protects Config tab & Security page)
   secret_key: ""                   # Set FLASK_SECRET_KEY in .env
   session_timeout_minutes: 480
+  trusted_proxy_prefixes: []         # e.g. ["192.168.1.", "10.100."] — IPs allowed to set X-Forwarded-For
   remote_auth:
     username: ''
     password: ''

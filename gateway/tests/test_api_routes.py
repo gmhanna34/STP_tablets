@@ -85,6 +85,7 @@ def _build_test_app():
 
     # Security
     ctx.allowed_ips = ["127.0.0.1"]
+    ctx.trusted_proxy_prefixes = []
     ctx.settings_pin = "1234"
     ctx.secure_pin = "5678"
     ctx.remote_auth = {}

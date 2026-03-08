@@ -216,6 +216,7 @@ class GatewayContext:
 
         # Security config
         self.allowed_ips = []
+        self.trusted_proxy_prefixes = []
         self.settings_pin = ""
         self.secure_pin = ""
         self.remote_auth = {}
@@ -267,6 +268,13 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
 
     app = Flask(__name__, static_folder=None)
     app.config["SECRET_KEY"] = sec_cfg.get("secret_key", os.urandom(24).hex())
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = False          # gateway serves HTTP
+    app.config["SESSION_REFRESH_EACH_REQUEST"] = True
+    app.config["PERMANENT_SESSION_LIFETIME"] = int(
+        sec_cfg.get("session_timeout_minutes", 480)
+    ) * 60
 
     socketio = SocketIO(
         app,
@@ -333,6 +341,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     ctx.occupancy = occupancy
 
     ctx.allowed_ips = sec_cfg.get("allowed_ips", ["127.0.0.1"])
+    ctx.trusted_proxy_prefixes = sec_cfg.get("trusted_proxy_prefixes", [])
     ctx.settings_pin = sec_cfg.get("settings_pin", "1234")
     ctx.secure_pin = sec_cfg.get("secure_pin", "")
     ctx.remote_auth = sec_cfg.get("remote_auth", {})
