@@ -97,14 +97,13 @@ const StreamPage = {
           </div>
         </div>		
 
-        <!-- Slides: full width -->
+        <!-- Slides and Preview: full width -->
         <div class="control-section">
-          <div class="section-title">Slides</div>
-          <div class="control-grid" style="grid-template-columns:repeat(4, 1fr);">
+          <div class="section-title">Slides and Preview</div>
+          <div class="control-grid" style="grid-template-columns:repeat(3, 1fr);">
             <button class="btn" id="btn-slides-on"><span class="material-icons">slideshow</span><span class="btn-label">Slides On</span></button>
             <button class="btn" id="btn-slides-off"><span class="material-icons">block</span><span class="btn-label">Slides Off</span></button>
-            <button class="btn" id="btn-slides-toggle"><span class="material-icons">swap_horiz</span><span class="btn-label">Toggle</span></button>
-            <button class="btn" id="btn-reset-stream"><span class="material-icons">restart_alt</span><span class="btn-label">Reset Stream</span></button>
+            <button class="btn" id="btn-stream-preview"><span class="material-icons">live_tv</span><span class="btn-label">Live Stream Feed Preview</span></button>
           </div>
         </div>
 
@@ -175,13 +174,10 @@ const StreamPage = {
     document.getElementById('btn-start-record')?.addEventListener('click', async () => { await ObsAPI.startRecord(); this.updateStatus(); });
     document.getElementById('btn-stop-record')?.addEventListener('click', async () => { await ObsAPI.stopRecord(); this.updateStatus(); });
 
-    // Slides
+    // Slides and Preview
     document.getElementById('btn-slides-on')?.addEventListener('click', () => ObsAPI.slidesOn());
     document.getElementById('btn-slides-off')?.addEventListener('click', () => ObsAPI.slidesOff());
-    document.getElementById('btn-slides-toggle')?.addEventListener('click', () => ObsAPI.toggleSlides());
-
-    // Slides row
-    document.getElementById('btn-reset-stream')?.addEventListener('click', () => ObsAPI.resetLiveStream());
+    document.getElementById('btn-stream-preview')?.addEventListener('click', () => this._openStreamPreview());
 
     // Advanced Settings panel
     document.getElementById('link-stream-advanced')?.addEventListener('click', (e) => {
@@ -499,16 +495,9 @@ const StreamPage = {
   },
 
   _openAdvancedSettings() {
-    const self = this;
     App.showPanel('Advanced Settings', (body) => {
       body.innerHTML = `
-        <div class="control-grid" style="grid-template-columns:repeat(3, 1fr);gap:10px;">
-          ${self._previewEnabled ? `
-          <button class="btn" id="adv-stream-preview" style="grid-column:1/-1;">
-            <span class="material-icons">live_tv</span>
-            <span class="btn-label">Live Stream Feed Preview</span>
-          </button>
-          ` : ''}
+        <div class="control-grid" style="grid-template-columns:repeat(2, 1fr);gap:10px;">
           <button class="btn" id="adv-set-shure">
             <span class="material-icons">mic_external_on</span>
             <span class="btn-label">Shure Mic</span>
@@ -517,15 +506,21 @@ const StreamPage = {
             <span class="material-icons">videocam</span>
             <span class="btn-label">ATEM</span>
           </button>
+          <button class="btn" id="adv-slides-toggle">
+            <span class="material-icons">swap_horiz</span>
+            <span class="btn-label">Toggle Slides on Live Stream</span>
+          </button>
+          <button class="btn" id="adv-reset-stream">
+            <span class="material-icons">restart_alt</span>
+            <span class="btn-label">Reset Stream</span>
+          </button>
         </div>
       `;
 
-      body.querySelector('#adv-stream-preview')?.addEventListener('click', () => {
-        App.closePanel();
-        self._openStreamPreview();
-      });
       body.querySelector('#adv-set-shure')?.addEventListener('click', () => ObsAPI.setAudioToShureMic());
       body.querySelector('#adv-reenable-atem')?.addEventListener('click', () => ObsAPI.reEnableBMATEMWebcam());
+      body.querySelector('#adv-slides-toggle')?.addEventListener('click', () => ObsAPI.toggleSlides());
+      body.querySelector('#adv-reset-stream')?.addEventListener('click', () => ObsAPI.resetLiveStream());
     });
   },
 
@@ -634,24 +629,26 @@ const StreamPage = {
           </div>
 
           <div class="help-section">
-            <h3>Slides</h3>
+            <h3>Slides and Preview</h3>
             <dl class="help-list">
-              <dt><span class="material-icons">slideshow</span> Slides On / Off / Toggle</dt>
+              <dt><span class="material-icons">slideshow</span> Slides On / Off</dt>
               <dd>Controls the slides overlay on the live stream output.</dd>
-              <dt><span class="material-icons">restart_alt</span> Reset Stream</dt>
-              <dd>Resets the OBS live stream configuration via Advanced Scene Switcher. Use if YouTube shows a stream error.</dd>
+              <dt><span class="material-icons">live_tv</span> Live Stream Feed Preview</dt>
+              <dd>Opens a live MJPEG preview of the stream feed from the HDMI encoder, showing exactly what the live stream output looks like.</dd>
             </dl>
           </div>
 
           <div class="help-section">
             <h3>Advanced Settings</h3>
             <dl class="help-list">
-              <dt><span class="material-icons">live_tv</span> Live Stream Feed Preview</dt>
-              <dd>Opens a live MJPEG preview of the stream feed from the HDMI encoder, showing exactly what the live stream output looks like.</dd>
               <dt><span class="material-icons">mic_external_on</span> Shure Mic</dt>
               <dd>Sets the OBS audio input to the Shure wireless microphone.</dd>
               <dt><span class="material-icons">videocam</span> ATEM</dt>
               <dd>Re-enables the Blackmagic ATEM webcam input in OBS.</dd>
+              <dt><span class="material-icons">swap_horiz</span> Toggle Slides on Live Stream</dt>
+              <dd>Toggles the slides overlay on the live stream output.</dd>
+              <dt><span class="material-icons">restart_alt</span> Reset Stream</dt>
+              <dd>Resets the OBS live stream configuration via Advanced Scene Switcher. Use if YouTube shows a stream error.</dd>
             </dl>
           </div>
 
