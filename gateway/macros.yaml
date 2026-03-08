@@ -3170,7 +3170,7 @@ buttons:
           style: "large"
           state:
             source: ha
-            entity: "switch.sw_020_spare_plug5"
+            entity: "switch.sw_020_spare_plug6"
             on_value: "on"
             on_style: "active"
         - label: "Off"
