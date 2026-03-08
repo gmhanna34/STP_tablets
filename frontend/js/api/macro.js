@@ -102,11 +102,16 @@ const MacroAPI = {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(60000), // macros can take up to 60s
+        signal: AbortSignal.timeout(90000), // macros can take up to 90s
       });
       return await resp.json();
     } catch (e) {
       console.error('MacroAPI.execute:', e);
+      // Timeout / abort errors are non-fatal — the backend keeps running
+      // and Socket.IO progress events will deliver the real result.
+      if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+        return { success: true, deferred: true };
+      }
       return { success: false, error: String(e) };
     }
   },
