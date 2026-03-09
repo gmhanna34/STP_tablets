@@ -226,6 +226,7 @@ class GatewayContext:
 
         # Frontend data
         self.permissions_data = {}
+        self.permissions_path = ""
         self.devices_data = {}
         self.settings_data = {}
         self.static_dir = ""
@@ -363,6 +364,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
 
     # Load frontend config files
     permissions_path = os.path.join(static_dir, "config", "permissions.json")
+    ctx.permissions_path = permissions_path
     try:
         with open(permissions_path) as f:
             ctx.permissions_data = json.load(f)

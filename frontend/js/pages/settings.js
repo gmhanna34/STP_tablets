@@ -346,6 +346,26 @@ const SettingsPage = {
             </div>
           </div>
         </div>
+        <div class="page-grid" style="margin-top:12px;">
+          <div class="control-section col-span-6">
+            <div class="section-title">
+              <span class="material-icons" style="vertical-align:text-bottom;margin-right:4px;font-size:18px;">admin_panel_settings</span>
+              Roles &amp; Permissions
+            </div>
+            <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+              Define which pages each role can access. Roles are assigned to both users and tablet locations.
+            </div>
+            <div style="margin-bottom:12px;">
+              <button class="btn" id="btn-add-role" style="display:inline-flex;">
+                <span class="material-icons">add</span>
+                <span class="btn-label">Add Role</span>
+              </button>
+            </div>
+            <div id="roles-list">
+              <div style="opacity:0.5;padding:12px;text-align:center;">Loading roles...</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ============================================================ -->
@@ -460,7 +480,7 @@ const SettingsPage = {
           App.showSecurePINEntry((success) => {
             if (success) {
               this._switchTab(tab);
-              if (tab === 'users') this._loadUsers();
+              if (tab === 'users') { this._loadUsers(); this._loadRoles(); }
             }
           });
           return;
@@ -2977,6 +2997,201 @@ const SettingsPage = {
       } else {
         const data = await resp.json();
         App.showToast(data.error || 'Failed to delete', 2000, 'error');
+      }
+    } catch (e) {
+      App.showToast('Network error', 2000, 'error');
+    }
+  },
+
+  // ── Role Management ─────────────────────────────────────────────
+
+  async _loadRoles() {
+    const container = document.getElementById('roles-list');
+    if (!container) return;
+    container.innerHTML = '<div style="opacity:0.5;padding:12px;text-align:center;">Loading roles...</div>';
+
+    try {
+      const resp = await fetch('/api/roles');
+      const data = await resp.json();
+      this._rolesData = data.roles || [];
+      this._allPages = data.pages || [];
+      this._renderRolesList();
+    } catch (e) {
+      container.innerHTML = '<div style="color:var(--danger);padding:12px;">Failed to load roles</div>';
+    }
+
+    document.getElementById('btn-add-role')?.addEventListener('click', () => this._showRoleForm());
+  },
+
+  _renderRolesList() {
+    const container = document.getElementById('roles-list');
+    if (!container) return;
+    const roles = this._rolesData || [];
+    const pages = this._allPages || [];
+
+    if (roles.length === 0) {
+      container.innerHTML = '<div style="opacity:0.5;padding:12px;text-align:center;">No roles defined.</div>';
+      return;
+    }
+
+    const pageLabels = {
+      home: 'Home', main: 'Main', chapel: 'Chapel', social: 'Social',
+      gym: 'Gym', confroom: 'Conf Room', stream: 'Stream',
+      source: 'Source', security: 'Security', settings: 'Settings',
+    };
+
+    container.innerHTML = roles.map(r => {
+      const allowedPages = pages.filter(p => r.permissions[p]);
+      const deniedPages = pages.filter(p => !r.permissions[p]);
+      const isFullAccess = r.key === 'full_access';
+
+      const badges = allowedPages.map(p =>
+        `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;background:var(--ok);color:#fff;margin:2px;">${pageLabels[p] || p}</span>`
+      ).join('');
+      const deniedBadges = deniedPages.map(p =>
+        `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;background:var(--border);color:var(--text-secondary);margin:2px;text-decoration:line-through;">${pageLabels[p] || p}</span>`
+      ).join('');
+
+      return `
+        <div class="control-section" style="margin:0;padding:12px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+            <span class="material-icons" style="font-size:24px;">shield</span>
+            <div style="flex:1;">
+              <div style="font-weight:bold;font-size:15px;">${this._escHtml(r.displayName)}</div>
+              <div style="font-size:12px;opacity:0.6;">Key: ${this._escHtml(r.key)}</div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn" data-edit-role="${this._escAttr(r.key)}" style="min-width:auto;padding:8px 12px;">
+                <span class="material-icons" style="font-size:18px;">edit</span>
+              </button>
+              ${isFullAccess ? '' : `
+              <button class="btn" data-delete-role="${this._escAttr(r.key)}" style="min-width:auto;padding:8px 12px;color:var(--danger);">
+                <span class="material-icons" style="font-size:18px;">delete</span>
+              </button>`}
+            </div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:0;">${badges}${deniedBadges}</div>
+        </div>`;
+    }).join('');
+
+    container.querySelectorAll('[data-edit-role]').forEach(btn => {
+      btn.addEventListener('click', () => this._showRoleForm(btn.dataset.editRole));
+    });
+    container.querySelectorAll('[data-delete-role]').forEach(btn => {
+      btn.addEventListener('click', () => this._deleteRole(btn.dataset.deleteRole));
+    });
+  },
+
+  _showRoleForm(editKey = null) {
+    const pages = this._allPages || [];
+    const existing = editKey ? (this._rolesData || []).find(r => r.key === editKey) : null;
+    const isEdit = !!existing;
+    const title = isEdit ? `Edit Role: ${existing.displayName}` : 'New Role';
+
+    const pageLabels = {
+      home: 'Home', main: 'Main Church', chapel: 'Chapel', social: 'Social Hall',
+      gym: 'Gym', confroom: 'Conference Room', stream: 'Streaming',
+      source: 'Source Routing', security: 'Security', settings: 'Settings',
+    };
+
+    const overlay = document.createElement('div');
+    overlay.id = 'role-form-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML = `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:440px;width:100%;max-height:90vh;overflow-y:auto;">
+        <h3 style="margin:0 0 16px 0;">${title}</h3>
+        ${!isEdit ? `
+        <label style="display:block;margin-bottom:4px;font-size:13px;">Role Key</label>
+        <input id="rf-key" type="text" placeholder="e.g. choir_loft" autocapitalize="none" autocomplete="off"
+               style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);margin-bottom:12px;font-size:15px;">
+        ` : ''}
+        <label style="display:block;margin-bottom:4px;font-size:13px;">Display Name</label>
+        <input id="rf-name" type="text" placeholder="e.g. Choir Loft" autocomplete="off"
+               value="${isEdit ? this._escAttr(existing.displayName) : ''}"
+               style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);margin-bottom:16px;font-size:15px;">
+        <label style="display:block;margin-bottom:8px;font-size:13px;font-weight:600;">Page Access</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px;">
+          ${pages.map(p => `
+            <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:1px solid var(--border);cursor:pointer;font-size:14px;">
+              <input type="checkbox" id="rf-perm-${p}" ${isEdit ? (existing.permissions[p] ? 'checked' : '') : ''}
+                     style="width:18px;height:18px;cursor:pointer;">
+              ${pageLabels[p] || p}
+            </label>
+          `).join('')}
+        </div>
+        <div style="display:flex;gap:4px;margin-bottom:12px;">
+          <button class="btn" id="rf-select-all" style="min-width:auto;padding:4px 10px;font-size:12px;"><span class="btn-label">Select All</span></button>
+          <button class="btn" id="rf-select-none" style="min-width:auto;padding:4px 10px;font-size:12px;"><span class="btn-label">Select None</span></button>
+        </div>
+        <div id="rf-error" style="color:var(--danger);font-size:13px;margin-bottom:8px;display:none;"></div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" id="rf-cancel" style="flex:1;"><span class="btn-label">Cancel</span></button>
+          <button class="btn active" id="rf-save" style="flex:1;"><span class="btn-label">${isEdit ? 'Save' : 'Create'}</span></button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    document.getElementById('rf-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+    document.getElementById('rf-select-all').addEventListener('click', () => {
+      pages.forEach(p => { const cb = document.getElementById(`rf-perm-${p}`); if (cb) cb.checked = true; });
+    });
+    document.getElementById('rf-select-none').addEventListener('click', () => {
+      pages.forEach(p => { const cb = document.getElementById(`rf-perm-${p}`); if (cb) cb.checked = false; });
+    });
+
+    document.getElementById('rf-save').addEventListener('click', async () => {
+      const errEl = document.getElementById('rf-error');
+      errEl.style.display = 'none';
+
+      const displayName = document.getElementById('rf-name').value.trim();
+      const permissions = {};
+      pages.forEach(p => { permissions[p] = !!document.getElementById(`rf-perm-${p}`)?.checked; });
+
+      if (isEdit) {
+        try {
+          const resp = await fetch(`/api/roles/${encodeURIComponent(editKey)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ displayName, permissions }),
+          });
+          const data = await resp.json();
+          if (!resp.ok) { errEl.textContent = data.error || 'Failed'; errEl.style.display = 'block'; return; }
+          overlay.remove();
+          App.showToast('Role updated', 2000);
+          this._loadRoles();
+          this._loadUsers();
+        } catch (e) { errEl.textContent = 'Network error'; errEl.style.display = 'block'; }
+      } else {
+        const key = document.getElementById('rf-key').value.trim();
+        try {
+          const resp = await fetch('/api/roles', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, displayName, permissions }),
+          });
+          const data = await resp.json();
+          if (!resp.ok) { errEl.textContent = data.error || 'Failed'; errEl.style.display = 'block'; return; }
+          overlay.remove();
+          App.showToast(`Role "${displayName || key}" created`, 2000);
+          this._loadRoles();
+        } catch (e) { errEl.textContent = 'Network error'; errEl.style.display = 'block'; }
+      }
+    });
+  },
+
+  async _deleteRole(roleKey) {
+    if (!confirm(`Delete role "${roleKey}"? Users and locations using this role will need to be reassigned.`)) return;
+    try {
+      const resp = await fetch(`/api/roles/${encodeURIComponent(roleKey)}`, { method: 'DELETE' });
+      if (resp.ok) {
+        App.showToast(`Role "${roleKey}" deleted`, 2000);
+        this._loadRoles();
+      } else {
+        const data = await resp.json();
+        App.showToast(data.error || 'Failed to delete', 3000, 'error');
       }
     } catch (e) {
       App.showToast('Network error', 2000, 'error');

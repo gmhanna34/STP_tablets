@@ -2409,3 +2409,145 @@ def register_api_routes(ctx):
                 "displayName": info.get("displayName", key),
             })
         return jsonify({"roles": result})
+
+    # ---- Role management API ----
+
+    # All available page keys for permission toggles
+    _ALL_PAGES = ["home", "main", "chapel", "social", "gym", "confroom",
+                  "stream", "source", "security", "settings"]
+
+    def _save_permissions():
+        """Persist permissions_data to permissions.json on disk."""
+        perms_path = ctx.permissions_path
+        if not perms_path:
+            raise RuntimeError("permissions_path not set")
+        with open(perms_path, "w") as f:
+            json.dump(permissions_data, f, indent=2)
+            f.write("\n")
+
+    @app.route("/api/roles", methods=["GET"])
+    def api_roles_list():
+        """List all roles with full permission details."""
+        roles = permissions_data.get("roles", {})
+        result = []
+        for key, info in roles.items():
+            result.append({
+                "key": key,
+                "displayName": info.get("displayName", key),
+                "permissions": info.get("permissions", {}),
+            })
+        return jsonify({"roles": result, "pages": _ALL_PAGES})
+
+    @app.route("/api/roles", methods=["POST"])
+    def api_roles_create():
+        """Create a new role."""
+        data = request.get_json(silent=True) or {}
+        key = (data.get("key") or "").strip().lower().replace(" ", "_")
+        display_name = (data.get("displayName") or "").strip()
+        perms = data.get("permissions", {})
+
+        if not key:
+            return jsonify({"error": "Role key is required"}), 400
+        if len(key) < 2 or len(key) > 32:
+            return jsonify({"error": "Role key must be 2-32 characters"}), 400
+        if not key.replace("_", "").isalnum():
+            return jsonify({"error": "Role key may only contain letters, numbers, and underscores"}), 400
+        if key in permissions_data.get("roles", {}):
+            return jsonify({"error": f"Role '{key}' already exists"}), 400
+
+        # Build permissions dict — default to false for unlisted pages
+        role_perms = {}
+        for page in _ALL_PAGES:
+            role_perms[page] = bool(perms.get(page, False))
+
+        roles = permissions_data.setdefault("roles", {})
+        roles[key] = {
+            "displayName": display_name or key,
+            "permissions": role_perms,
+        }
+        try:
+            _save_permissions()
+        except Exception as e:
+            del roles[key]
+            return jsonify({"error": f"Failed to save: {e}"}), 500
+
+        actor = get_actor()
+        db.log_action(get_tablet_id(), "role:create", key,
+                      json.dumps({"displayName": display_name}), "OK", 0, actor=actor)
+        return jsonify({"success": True, "key": key}), 201
+
+    @app.route("/api/roles/<role_key>", methods=["PUT"])
+    def api_roles_update(role_key):
+        """Update an existing role's display name and/or permissions."""
+        roles = permissions_data.get("roles", {})
+        if role_key not in roles:
+            return jsonify({"error": f"Role '{role_key}' not found"}), 404
+
+        data = request.get_json(silent=True) or {}
+        changed = {}
+
+        if "displayName" in data:
+            name = (data["displayName"] or "").strip()
+            if name:
+                roles[role_key]["displayName"] = name
+                changed["displayName"] = name
+
+        if "permissions" in data:
+            perms = data["permissions"]
+            role_perms = roles[role_key].get("permissions", {})
+            for page in _ALL_PAGES:
+                if page in perms:
+                    role_perms[page] = bool(perms[page])
+            roles[role_key]["permissions"] = role_perms
+            changed["permissions"] = role_perms
+
+        if not changed:
+            return jsonify({"error": "No fields to update"}), 400
+
+        try:
+            _save_permissions()
+        except Exception as e:
+            return jsonify({"error": f"Failed to save: {e}"}), 500
+
+        actor = get_actor()
+        db.log_action(get_tablet_id(), "role:update", role_key,
+                      json.dumps(changed), "OK", 0, actor=actor)
+        return jsonify({"success": True})
+
+    @app.route("/api/roles/<role_key>", methods=["DELETE"])
+    def api_roles_delete(role_key):
+        """Delete a role. Prevents deleting full_access or roles in use by users."""
+        roles = permissions_data.get("roles", {})
+        if role_key not in roles:
+            return jsonify({"error": f"Role '{role_key}' not found"}), 404
+        if role_key == "full_access":
+            return jsonify({"error": "Cannot delete the full_access role"}), 400
+
+        # Check if any users are assigned this role
+        if user_module:
+            users = user_module.list_users()
+            assigned = [u["username"] for u in users if u.get("role") == role_key]
+            if assigned:
+                return jsonify({
+                    "error": f"Role is assigned to user(s): {', '.join(assigned)}. "
+                             f"Reassign them first."
+                }), 400
+
+        # Check if any locations reference this role
+        locations = permissions_data.get("locations", {})
+        loc_refs = [k for k, v in locations.items() if v.get("defaultRole") == role_key]
+        if loc_refs:
+            return jsonify({
+                "error": f"Role is used as default for location(s): {', '.join(loc_refs)}. "
+                         f"Update them first."
+            }), 400
+
+        del roles[role_key]
+        try:
+            _save_permissions()
+        except Exception as e:
+            return jsonify({"error": f"Failed to save: {e}"}), 500
+
+        actor = get_actor()
+        db.log_action(get_tablet_id(), "role:delete", role_key, "", "OK", 0, actor=actor)
+        return jsonify({"success": True})

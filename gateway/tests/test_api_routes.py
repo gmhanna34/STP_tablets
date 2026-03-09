@@ -65,6 +65,7 @@ def _build_test_app():
 
     # Frontend data
     ctx.permissions_data = {"roles": {}, "defaultRole": "full_access"}
+    ctx.permissions_path = ""
     ctx.devices_data = {}
     ctx.settings_data = {"version": "test"}
     ctx.static_dir = tempfile.mkdtemp()

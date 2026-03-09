@@ -1,5 +1,6 @@
 """Tests for user-based authentication — login, session, permissions, actor."""
 
+import json
 import os
 import re
 import sys
@@ -396,3 +397,194 @@ class TestAuditLogActor:
         db.log_action("chapel", "test", "target")
         logs = db.get_recent_logs(1)
         assert logs[0]["actor"] == "tablet:chapel"
+
+
+# ---------------------------------------------------------------------------
+# Role CRUD API Tests
+# ---------------------------------------------------------------------------
+
+def _make_role_api_app():
+    """Create a Flask app with auth + api routes registered for role CRUD tests."""
+    import threading
+    fd, db_path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    fd2, users_path = tempfile.mkstemp(suffix=".yaml")
+    os.close(fd2)
+    os.unlink(users_path)
+    fd3, perms_path = tempfile.mkstemp(suffix=".json")
+    os.close(fd3)
+
+    perms_data = {
+        "roles": {
+            "full_access": {"displayName": "Full Access", "permissions": {
+                "home": True, "main": True, "chapel": True, "social": True,
+                "gym": True, "confroom": True, "stream": True, "source": True,
+                "security": True, "settings": True,
+            }},
+            "chapel": {"displayName": "Chapel", "permissions": {
+                "home": True, "main": False, "chapel": True, "social": False,
+                "gym": False, "confroom": False, "stream": True, "source": True,
+                "security": False, "settings": True,
+            }},
+        },
+        "locations": {},
+        "defaultRole": "full_access",
+    }
+    with open(perms_path, "w") as f:
+        json.dump(perms_data, f)
+
+    app = Flask(__name__, static_folder=None)
+    app.config["SECRET_KEY"] = "test-secret"
+    app.config["TESTING"] = True
+
+    from polling import StateCache, PollerWatchdog
+
+    class Ctx:
+        pass
+
+    ctx = Ctx()
+    ctx.app = app
+    ctx.socketio = type("FakeSocketIO", (), {"emit": lambda *a, **kw: None})()
+    ctx.db = Database(db_path)
+    ctx.cfg = {
+        "home_assistant": {"url": "", "token": ""},
+        "middleware": {}, "camlytics": {}, "polling": {},
+        "projectors": {}, "ptz_cameras": {},
+        "wattbox": {"ip": "", "username": "", "password": ""},
+    }
+    ctx.mock_mode = True
+    ctx.config_path = ""
+    ctx.state_cache = StateCache()
+    ctx.watchdog = PollerWatchdog()
+    ctx.verbose_logging = threading.Event()
+    ctx.camlytics_buffers = {"communion": 0, "occupancy": 0, "enter": 0}
+    ctx.camlytics_lock = threading.Lock()
+    ctx.ha_device_cache = {"cameras": [], "locks": [], "ready": True}
+    ctx.ha_cache_lock = threading.Lock()
+    ctx.sid_to_tablet = {}
+    ctx.sid_connect_time = {}
+    ctx.sid_lock = threading.Lock()
+    ctx.permissions_data = perms_data
+    ctx.permissions_path = perms_path
+    ctx.devices_data = {}
+    ctx.settings_data = {"version": "test"}
+    ctx.static_dir = tempfile.mkdtemp()
+    ctx.known_location_slugs = set()
+
+    from macro_engine import load_macros
+    import logging
+    _, ctx.macro_defs, ctx.button_defs, ctx.ha_state_entities = load_macros({}, logging.getLogger("test"))
+    ctx.macros_cfg = {}
+    ctx.x32 = None
+    ctx.moip = None
+    ctx.obs = None
+    ctx.health = None
+    ctx.occupancy = None
+
+    from announcement_module import AnnouncementModule
+    ctx.announcements = AnnouncementModule(ctx.cfg, logging.getLogger("test"), ctx=ctx)
+
+    ctx.allowed_ips = ["127.0.0.1"]
+    ctx.trusted_proxy_prefixes = []
+    ctx.settings_pin = "1234"
+    ctx.secure_pin = "5678"
+    ctx.remote_auth = {}
+    ctx.session_timeout = 480
+    ctx.user_module = UserModule(users_path)
+
+    from auth import register_auth
+    from api_routes import register_api_routes
+    register_auth(ctx)
+    register_api_routes(ctx)
+
+    with open(os.path.join(ctx.static_dir, "index.html"), "w") as f:
+        f.write("<html><body>test</body></html>")
+
+    return app, ctx, [db_path, users_path, perms_path]
+
+
+@pytest.fixture
+def role_api():
+    _reset_rate_limiter()
+    app, ctx, paths = _make_role_api_app()
+    yield app, ctx
+    for p in paths:
+        try:
+            os.unlink(p)
+        except OSError:
+            pass
+
+
+class TestRoleCRUD:
+    def test_list_roles(self, role_api):
+        app, ctx = role_api
+        with app.test_client() as client:
+            resp = client.get("/api/roles")
+            data = resp.get_json()
+            assert resp.status_code == 200
+            assert len(data["roles"]) == 2
+            assert "pages" in data
+
+    def test_create_role(self, role_api):
+        app, ctx = role_api
+        with app.test_client() as client:
+            resp = client.post("/api/roles",
+                               json={"key": "test_role", "displayName": "Test Role",
+                                     "permissions": {"home": True, "main": True}},
+                               content_type="application/json")
+            assert resp.status_code == 201
+            # Verify persisted to disk
+            with open(ctx.permissions_path) as f:
+                saved = json.load(f)
+            assert "test_role" in saved["roles"]
+            assert saved["roles"]["test_role"]["displayName"] == "Test Role"
+
+    def test_create_duplicate_role(self, role_api):
+        app, ctx = role_api
+        with app.test_client() as client:
+            resp = client.post("/api/roles",
+                               json={"key": "chapel", "displayName": "Dup"},
+                               content_type="application/json")
+            assert resp.status_code == 400
+            assert "already exists" in resp.get_json()["error"]
+
+    def test_update_role(self, role_api):
+        app, ctx = role_api
+        with app.test_client() as client:
+            resp = client.put("/api/roles/chapel",
+                              json={"displayName": "Chapel Updated",
+                                    "permissions": {"gym": True}},
+                              content_type="application/json")
+            assert resp.status_code == 200
+            assert ctx.permissions_data["roles"]["chapel"]["displayName"] == "Chapel Updated"
+            assert ctx.permissions_data["roles"]["chapel"]["permissions"]["gym"] is True
+
+    def test_update_nonexistent_role(self, role_api):
+        app, ctx = role_api
+        with app.test_client() as client:
+            resp = client.put("/api/roles/nope",
+                              json={"displayName": "X"},
+                              content_type="application/json")
+            assert resp.status_code == 404
+
+    def test_delete_role(self, role_api):
+        app, ctx = role_api
+        with app.test_client() as client:
+            resp = client.delete("/api/roles/chapel")
+            assert resp.status_code == 200
+            assert "chapel" not in ctx.permissions_data["roles"]
+
+    def test_delete_full_access_forbidden(self, role_api):
+        app, ctx = role_api
+        with app.test_client() as client:
+            resp = client.delete("/api/roles/full_access")
+            assert resp.status_code == 400
+            assert "Cannot delete" in resp.get_json()["error"]
+
+    def test_delete_role_in_use_by_user(self, role_api):
+        app, ctx = role_api
+        ctx.user_module.create_user("john", "John", "pass1234", "chapel")
+        with app.test_client() as client:
+            resp = client.delete("/api/roles/chapel")
+            assert resp.status_code == 400
+            assert "assigned to user" in resp.get_json()["error"]
