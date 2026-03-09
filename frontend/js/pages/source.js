@@ -1059,7 +1059,8 @@ const SourcePage = {
         if (!genResp.ok) {
           entry.status = 'error';
           entry.latency = Math.round(performance.now() - start);
-          entry.error = genData?.error || `Generate failed: HTTP ${genResp.status}`;
+          entry.error = (genData?.error || `Generate failed: HTTP ${genResp.status}`) +
+            (genData?.detail ? ` | ${genData.detail}` : '');
           this._renderTestLog();
           return;
         }
