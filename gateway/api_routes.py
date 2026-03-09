@@ -1170,7 +1170,7 @@ def register_api_routes(ctx):
 
     @app.route("/api/tts/generate", methods=["POST"])
     def tts_generate():
-        """Generate TTS audio directly via edge-tts, cache it, return a gateway-hosted URL."""
+        """Generate TTS audio via edge-tts CLI subprocess, cache it, return a gateway-hosted URL."""
         if mock_mode:
             return jsonify({"url": "/api/tts/audio/mock.mp3", "mock": True}), 200
 
@@ -1180,36 +1180,33 @@ def register_api_routes(ctx):
             return jsonify({"error": "message is required"}), 400
 
         voice = data.get("voice", "en-US-GuyNeural")  # Microsoft Edge TTS voice
-        # Common voices: en-US-GuyNeural, en-US-JennyNeural, en-US-AriaNeural
 
         try:
-            import asyncio
-            import concurrent.futures
-            import edge_tts
-            import io
+            import subprocess
+            import tempfile
 
-            def _generate_in_thread():
-                """Run edge-tts in a native thread to avoid eventlet monkey-patch conflicts."""
-                async def _generate():
-                    communicate = edge_tts.Communicate(message, voice)
-                    audio_data = io.BytesIO()
-                    async for chunk in communicate.stream():
-                        if chunk["type"] == "audio":
-                            audio_data.write(chunk["data"])
-                    return audio_data.getvalue()
+            # Use edge-tts CLI as a subprocess to completely avoid eventlet conflicts
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+                tmp_path = tmp.name
 
-                loop = asyncio.new_event_loop()
+            try:
+                result = subprocess.run(
+                    ["edge-tts", "--voice", voice, "--text", message, "--write-media", tmp_path],
+                    capture_output=True, text=True, timeout=30,
+                )
+                if result.returncode != 0:
+                    return jsonify({"error": f"edge-tts failed: {result.stderr[:300]}"}), 502
+
+                with open(tmp_path, "rb") as f:
+                    audio_bytes = f.read()
+            finally:
                 try:
-                    return loop.run_until_complete(_generate())
-                finally:
-                    loop.close()
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
 
-            # Run in a real OS thread to avoid eventlet's monkey-patched sockets
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                audio_bytes = pool.submit(_generate_in_thread).result(timeout=30)
-
-            if not audio_bytes:
-                return jsonify({"error": "edge-tts returned empty audio"}), 502
+            if not audio_bytes or len(audio_bytes) < 100:
+                return jsonify({"error": "edge-tts returned empty/invalid audio"}), 502
 
             # Cache the audio and return a gateway URL
             filename = hashlib.md5((message + voice + str(time.time())).encode()).hexdigest() + ".mp3"
@@ -1230,8 +1227,10 @@ def register_api_routes(ctx):
                         message[:50], len(audio_bytes), voice, gateway_url)
             return jsonify({"url": gateway_url, "size": len(audio_bytes), "voice": voice}), 200
 
-        except ImportError:
-            return jsonify({"error": "edge-tts package not installed. Run: pip install edge-tts"}), 503
+        except FileNotFoundError:
+            return jsonify({"error": "edge-tts CLI not found. Run: pip install edge-tts"}), 503
+        except subprocess.TimeoutExpired:
+            return jsonify({"error": "edge-tts timed out (30s)"}), 504
         except Exception as e:
             logger.error("TTS generate error: %s", e)
             return jsonify({"error": str(e)}), 503
@@ -1240,23 +1239,31 @@ def register_api_routes(ctx):
     def tts_voices():
         """List available edge-tts voices (filtered to English)."""
         try:
-            import asyncio
-            import concurrent.futures
-            import edge_tts
+            import subprocess
 
-            def _list_in_thread():
-                async def _list():
-                    return await edge_tts.list_voices()
-                loop = asyncio.new_event_loop()
-                try:
-                    return loop.run_until_complete(_list())
-                finally:
-                    loop.close()
+            result = subprocess.run(
+                ["edge-tts", "--list-voices"],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode != 0:
+                return jsonify({"error": f"edge-tts --list-voices failed: {result.stderr[:200]}"}), 502
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                all_voices = pool.submit(_list_in_thread).result(timeout=15)
+            # Parse the output (format: "Name: en-US-GuyNeural\nGender: Male\n...")
+            voices = []
+            current = {}
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("Name:"):
+                    if current:
+                        voices.append(current)
+                    current = {"Name": line.split(":", 1)[1].strip()}
+                elif ":" in line and current:
+                    key, val = line.split(":", 1)
+                    current[key.strip()] = val.strip()
+            if current:
+                voices.append(current)
 
-            en_voices = [v for v in all_voices if v.get("Locale", "").startswith("en-")]
+            en_voices = [v for v in voices if v.get("Name", "").startswith("en-")]
             return jsonify({"voices": en_voices, "total": len(en_voices)}), 200
         except Exception as e:
             return jsonify({"error": str(e)}), 503
