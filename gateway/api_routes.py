@@ -1223,11 +1223,14 @@ def register_api_routes(ctx):
         voice = data.get("voice")
         gateway_origin = request.host_url.rstrip("/")
         tablet = get_tablet_id()
+        logger.info("[ANNOUNCE-API] preset=%s voice=%s origin=%s tablet=%s",
+                    preset_key, voice or ann.default_voice, gateway_origin, tablet)
 
         result = ann.announce_preset(preset_key, voice, gateway_origin)
         status = 200 if result.get("success") else 400
         db.log_action(tablet, "announce:preset", preset_key,
-                      json.dumps({"voice": voice or ann.default_voice}),
+                      json.dumps({"voice": voice or ann.default_voice,
+                                  "origin": gateway_origin}),
                       "OK" if result.get("success") else result.get("error", "FAILED"), 0)
         return jsonify(result), status
 
@@ -1243,11 +1246,14 @@ def register_api_routes(ctx):
         voice = data.get("voice")
         gateway_origin = request.host_url.rstrip("/")
         tablet = get_tablet_id()
+        logger.info("[ANNOUNCE-API] custom text='%s' voice=%s origin=%s tablet=%s",
+                    text[:60], voice or ann.default_voice, gateway_origin, tablet)
 
         result = ann.announce_text(text, voice, gateway_origin)
         status = 200 if result.get("success") else 502
         db.log_action(tablet, "announce:text", text[:100],
-                      json.dumps({"voice": voice or ann.default_voice}),
+                      json.dumps({"voice": voice or ann.default_voice,
+                                  "origin": gateway_origin}),
                       "OK" if result.get("success") else result.get("error", "FAILED"), 0)
         return jsonify(result), status
 
