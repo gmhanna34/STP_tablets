@@ -115,6 +115,8 @@ const App = {
     const tabletId = Auth.getTabletId();
     this._reconnectAttempt = 0;
 
+    this._sessionCount = 0;  // track how many times this page has connected
+
     this.socket = io({
       query: { tablet: tabletId },
       reconnection: true,
@@ -125,16 +127,42 @@ const App = {
     });
 
     this.socket.on('connect', () => {
-      console.log('Socket.IO connected');
+      this._sessionCount++;
+      console.log(`Socket.IO connected (session #${this._sessionCount})`);
       this._reconnectAttempt = 0;
       clearTimeout(this._disconnectBannerTimer);
       this._hideDisconnectBanner();
       document.getElementById('gateway-reload-overlay')?.remove();
       this.setConnectionStatus('Connected', true);
 
-      // Report previous disconnect reason to server for diagnostics
+      // Report previous disconnect reason + WiFi quality to server for diagnostics
       if (this._lastDisconnectReason) {
-        this.socket.emit('diag', { prev_disconnect: this._lastDisconnectReason });
+        const diagData = {
+          prev_disconnect: this._lastDisconnectReason,
+          session_count: this._sessionCount,
+          downtime_ms: this._disconnectedAt ? Date.now() - this._disconnectedAt : null,
+        };
+        // Include WiFi info from Fully Kiosk if available
+        if (this._lastDeviceInfo) {
+          diagData.wifi_signal = this._lastDeviceInfo.wifiSignalLevel;
+          diagData.wifi_freq = this._lastDeviceInfo.wifiFrequency;
+          diagData.wifi_ssid = this._lastDeviceInfo.ssid;
+          diagData.wifi_bssid = this._lastDeviceInfo.bssid;
+          diagData.wifi_rssi = this._lastDeviceInfo.wifiRssi;
+          diagData.wifi_link_speed = this._lastDeviceInfo.wifiLinkSpeed;
+          diagData.ip4 = this._lastDeviceInfo.ip4Address;
+        }
+        // Measure round-trip latency to gateway
+        const rttStart = Date.now();
+        fetch('/api/health', { signal: AbortSignal.timeout(5000) })
+          .then(() => {
+            diagData.rtt_ms = Date.now() - rttStart;
+            this.socket.emit('diag', diagData);
+          })
+          .catch(() => {
+            diagData.rtt_ms = null;
+            this.socket.emit('diag', diagData);
+          });
         this._lastDisconnectReason = null;
       }
 
@@ -271,12 +299,21 @@ const App = {
     // Heartbeat — report presence every 30 seconds
     this._heartbeatInterval = setInterval(() => {
       if (this.socket && this.socket.connected) {
-        this.socket.emit('heartbeat', {
+        const hb = {
           tablet: Auth.getTabletId(),
           displayName: Auth.getDisplayName(),
           role: Auth.currentRole,
           currentPage: Router.currentPage,
-        });
+        };
+        // Include WiFi quality in heartbeat for continuous monitoring
+        if (this._lastDeviceInfo) {
+          hb.wifi_signal = this._lastDeviceInfo.wifiSignalLevel;
+          hb.wifi_rssi = this._lastDeviceInfo.wifiRssi;
+          hb.wifi_freq = this._lastDeviceInfo.wifiFrequency;
+          hb.wifi_link_speed = this._lastDeviceInfo.wifiLinkSpeed;
+        }
+        hb.session_count = this._sessionCount;
+        this.socket.emit('heartbeat', hb);
       }
     }, 30000);
   },
@@ -476,6 +513,7 @@ const App = {
           { signal: AbortSignal.timeout(3000) });
         const info = await resp.json();
         this._deviceInfoFailCount = 0;
+        this._lastDeviceInfo = info;  // store for WiFi diag reporting on reconnect
         this._updateBattery(info.batteryLevel, info.isPlugged);
         this._updateWifi(info.wifiSignalLevel);
       } catch {

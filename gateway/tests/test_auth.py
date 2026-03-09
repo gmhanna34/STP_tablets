@@ -37,6 +37,7 @@ def _make_app_and_ctx(allowed_ips=None, settings_pin="1234", secure_pin="5678",
     ctx.app = app
     ctx.db = Database(db_path)
     ctx.allowed_ips = allowed_ips or ["127.0.0.1", "192.168.1."]
+    ctx.trusted_proxy_prefixes = []
     ctx.settings_pin = settings_pin
     ctx.secure_pin = secure_pin
     ctx.remote_auth = remote_auth or {}

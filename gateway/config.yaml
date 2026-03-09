@@ -136,6 +136,7 @@ security:
   secure_pin: ""                   # Set SECURE_PIN in .env (protects Config tab & Security page)
   secret_key: ""                   # Set FLASK_SECRET_KEY in .env
   session_timeout_minutes: 480
+  trusted_proxy_prefixes: []         # e.g. ["192.168.1.", "10.100."] — IPs allowed to set X-Forwarded-For
   remote_auth:
     username: ''
     password: ''
@@ -156,7 +157,7 @@ polling:
   projectors: 30
 timeouts:
   ptz_cameras: 3
-  projectors: 5
+  projectors: 20
   camlytics: 2
   ha_proxy: 10
   ha_stream: 30
@@ -218,7 +219,7 @@ healthdash:
     detail_json_paths:
       Scene: cur_scene
       Scene Name: cur_scene_name
-    warn_if_ms_gt: 5500
+    warn_if_ms_gt: 7500
     poll_interval_seconds: 120
     timeout_seconds: 20
     log_path: ''
