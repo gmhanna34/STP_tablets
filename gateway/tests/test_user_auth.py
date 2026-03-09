@@ -1,0 +1,279 @@
+"""Tests for user-based authentication — login, session, permissions, actor."""
+
+import os
+import re
+import sys
+import tempfile
+
+import pytest
+import yaml
+from flask import Flask
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+import auth as auth_mod
+from auth import check_permission, get_actor, get_tablet_id
+from database import Database
+from user_module import UserModule
+
+
+def _reset_rate_limiter():
+    """Reset the shared rate limiter between tests to prevent cross-test pollution."""
+    auth_mod._auth_limiter._attempts.clear()
+
+
+def _make_user_auth_app(users_yaml_path=None):
+    """Create a Flask app with user auth configured."""
+    fd, db_path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+
+    if not users_yaml_path:
+        fd2, users_yaml_path = tempfile.mkstemp(suffix=".yaml")
+        os.close(fd2)
+        os.unlink(users_yaml_path)
+
+    app = Flask(__name__)
+    app.config["SECRET_KEY"] = "test-secret"
+    app.config["TESTING"] = True
+
+    class Ctx:
+        pass
+
+    ctx = Ctx()
+    ctx.app = app
+    ctx.db = Database(db_path)
+    ctx.allowed_ips = ["192.168.1."]  # Only LAN IPs auto-allowed
+    ctx.trusted_proxy_prefixes = []
+    ctx.settings_pin = "1234"
+    ctx.secure_pin = "5678"
+    ctx.remote_auth = {"username": "admin", "password": "legacy123"}  # Legacy fallback
+    ctx.session_timeout = 480
+    ctx.user_module = UserModule(users_yaml_path)
+
+    from auth import register_auth
+    register_auth(ctx)
+
+    return app, ctx, db_path, users_yaml_path
+
+
+@pytest.fixture
+def user_auth_app():
+    _reset_rate_limiter()
+    app, ctx, db_path, users_path = _make_user_auth_app()
+    # Create a test user
+    ctx.user_module.create_user("testuser", "Test User", "testpass1", "chapel")
+    ctx.user_module.create_user("admin_user", "Admin", "adminpass", "full_access")
+    yield app, ctx
+    for p in [db_path, users_path]:
+        try:
+            os.unlink(p)
+        except OSError:
+            pass
+
+
+class TestUserLogin:
+    def _get_csrf(self, client):
+        resp = client.get("/login", environ_base={"REMOTE_ADDR": "10.0.0.1"})
+        m = re.search(r'name="csrf_token" value="([^"]+)"', resp.data.decode())
+        return m.group(1) if m else ""
+
+    def test_user_login_success(self, user_auth_app):
+        app, ctx = user_auth_app
+        with app.test_client() as client:
+            csrf = self._get_csrf(client)
+            resp = client.post("/login",
+                               data={"username": "testuser", "password": "testpass1",
+                                     "csrf_token": csrf},
+                               environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            assert resp.status_code == 302  # Redirect to /
+
+    def test_user_login_wrong_password(self, user_auth_app):
+        app, ctx = user_auth_app
+        with app.test_client() as client:
+            csrf = self._get_csrf(client)
+            resp = client.post("/login",
+                               data={"username": "testuser", "password": "wrong",
+                                     "csrf_token": csrf},
+                               environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            assert resp.status_code == 200
+            assert b"Invalid username or password" in resp.data
+
+    def test_user_login_nonexistent_user(self, user_auth_app):
+        app, ctx = user_auth_app
+        with app.test_client() as client:
+            csrf = self._get_csrf(client)
+            resp = client.post("/login",
+                               data={"username": "nobody", "password": "pass",
+                                     "csrf_token": csrf},
+                               environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            assert resp.status_code == 200
+            assert b"Invalid username or password" in resp.data
+
+    def test_legacy_password_still_works(self, user_auth_app):
+        """Legacy single-password login should still work as fallback."""
+        app, ctx = user_auth_app
+        with app.test_client() as client:
+            csrf = self._get_csrf(client)
+            resp = client.post("/login",
+                               data={"username": "admin", "password": "legacy123",
+                                     "csrf_token": csrf},
+                               environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            assert resp.status_code == 302  # Redirect — legacy login succeeded
+
+
+class TestAuthMe:
+    def _login_user(self, client, username="testuser", password="testpass1"):
+        csrf = self._get_csrf(client)
+        client.post("/login",
+                     data={"username": username, "password": password,
+                           "csrf_token": csrf},
+                     environ_base={"REMOTE_ADDR": "10.0.0.1"})
+
+    def _get_csrf(self, client):
+        resp = client.get("/login", environ_base={"REMOTE_ADDR": "10.0.0.1"})
+        m = re.search(r'name="csrf_token" value="([^"]+)"', resp.data.decode())
+        return m.group(1) if m else ""
+
+    def test_auth_me_user_session(self, user_auth_app):
+        app, ctx = user_auth_app
+
+        @app.route("/api/auth/test-me")
+        def test_me():
+            pass  # auth_me already registered
+
+        with app.test_client() as client:
+            self._login_user(client)
+            resp = client.get("/api/auth/me", environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            assert resp.status_code == 200
+            data = resp.get_json()
+            assert data["type"] == "user"
+            assert data["username"] == "testuser"
+            assert data["display_name"] == "Test User"
+            assert data["role"] == "chapel"
+
+    def test_auth_me_tablet_session(self, user_auth_app):
+        app, ctx = user_auth_app
+        with app.test_client() as client:
+            # LAN IP = auto-authed, no user session
+            resp = client.get("/api/auth/me",
+                              headers={"X-Tablet-ID": "chapel"},
+                              environ_base={"REMOTE_ADDR": "192.168.1.100"})
+            assert resp.status_code == 200
+            data = resp.get_json()
+            assert data["type"] == "tablet"
+            assert data["tablet_id"] == "chapel"
+
+
+class TestUserPermissions:
+    def _login_user(self, client, username="testuser", password="testpass1"):
+        resp = client.get("/login", environ_base={"REMOTE_ADDR": "10.0.0.1"})
+        m = re.search(r'name="csrf_token" value="([^"]+)"', resp.data.decode())
+        csrf = m.group(1) if m else ""
+        client.post("/login",
+                     data={"username": username, "password": password,
+                           "csrf_token": csrf},
+                     environ_base={"REMOTE_ADDR": "10.0.0.1"})
+
+    def test_user_session_role_checked(self, user_auth_app):
+        """User's role from session should be used for permission checks."""
+        app, ctx = user_auth_app
+        perms = {
+            "roles": {
+                "chapel": {"permissions": {"stream": True, "settings": False}},
+                "full_access": {"permissions": {"stream": True, "settings": True}},
+            }
+        }
+
+        @app.route("/api/test-perm")
+        def test_perm():
+            from flask import jsonify
+            result = check_permission("user:testuser", "settings", perms)
+            if result:
+                return result
+            return jsonify({"ok": True})
+
+        with app.test_client() as client:
+            self._login_user(client)
+            # testuser has "chapel" role, which denies "settings"
+            resp = client.get("/api/test-perm", environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            assert resp.status_code == 403
+
+    def test_user_session_allowed_page(self, user_auth_app):
+        """User should be allowed to access pages their role permits."""
+        app, ctx = user_auth_app
+        perms = {
+            "roles": {
+                "chapel": {"permissions": {"stream": True, "settings": False}},
+            }
+        }
+
+        @app.route("/api/test-allowed")
+        def test_allowed():
+            from flask import jsonify
+            result = check_permission("user:testuser", "stream", perms)
+            if result:
+                return result
+            return jsonify({"ok": True})
+
+        with app.test_client() as client:
+            self._login_user(client)
+            resp = client.get("/api/test-allowed", environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            assert resp.status_code == 200
+
+
+class TestGetActor:
+    def _login_user(self, client):
+        resp = client.get("/login", environ_base={"REMOTE_ADDR": "10.0.0.1"})
+        m = re.search(r'name="csrf_token" value="([^"]+)"', resp.data.decode())
+        csrf = m.group(1) if m else ""
+        client.post("/login",
+                     data={"username": "testuser", "password": "testpass1",
+                           "csrf_token": csrf},
+                     environ_base={"REMOTE_ADDR": "10.0.0.1"})
+
+    def test_actor_for_user_session(self, user_auth_app):
+        app, ctx = user_auth_app
+
+        @app.route("/api/test-actor")
+        def test_actor():
+            from flask import jsonify
+            return jsonify({"actor": get_actor()})
+
+        with app.test_client() as client:
+            self._login_user(client)
+            resp = client.get("/api/test-actor", environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            data = resp.get_json()
+            assert data["actor"] == "user:testuser"
+
+    def test_actor_for_tablet(self, user_auth_app):
+        app, ctx = user_auth_app
+
+        @app.route("/api/test-actor-tablet")
+        def test_actor_tablet():
+            from flask import jsonify
+            return jsonify({"actor": get_actor()})
+
+        with app.test_client() as client:
+            resp = client.get("/api/test-actor-tablet",
+                              headers={"X-Tablet-ID": "chapel"},
+                              environ_base={"REMOTE_ADDR": "192.168.1.100"})
+            data = resp.get_json()
+            assert data["actor"] == "tablet:chapel"
+
+
+class TestAuditLogActor:
+    def test_actor_column_in_logs(self, user_auth_app):
+        app, ctx = user_auth_app
+        db = ctx.db
+        db.log_action("chapel", "test", "target", actor="user:john")
+        logs = db.get_recent_logs(1)
+        assert len(logs) == 1
+        assert logs[0]["actor"] == "user:john"
+
+    def test_auto_actor_without_explicit(self, user_auth_app):
+        app, ctx = user_auth_app
+        db = ctx.db
+        # Outside request context, auto_actor falls back to tablet_id
+        db.log_action("chapel", "test", "target")
+        logs = db.get_recent_logs(1)
+        assert logs[0]["actor"] == "tablet:chapel"

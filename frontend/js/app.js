@@ -117,8 +117,14 @@ const App = {
 
     this._sessionCount = 0;  // track how many times this page has connected
 
+    const socketQuery = { tablet: tabletId };
+    if (Auth.isUserSession()) {
+      socketQuery.user = Auth.userSession.username;
+      socketQuery.user_display = Auth.userSession.display_name;
+    }
+
     this.socket = io({
-      query: { tablet: tabletId },
+      query: socketQuery,
       reconnection: true,
       reconnectionDelay: 1000 + Math.floor(Math.random() * 2000),  // jitter to avoid thundering herd
       reconnectionDelayMax: 30000,
@@ -318,6 +324,12 @@ const App = {
     }, 30000);
   },
 
+  _escHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML;
+  },
+
   _patchFetch() {
     const originalFetch = window.fetch;
     window.fetch = function(input, init) {
@@ -436,11 +448,21 @@ const App = {
       versionEl.textContent = `Version: ${this.settings?.app?.version || '26-012'} - Web App`;
     }
     if (tabletEl) {
-      let label = Auth.getDisplayName();
-      if (Auth.isRoleOverridden()) {
-        label += ` (${Auth.getRoleDisplayName()})`;
+      if (Auth.isUserSession()) {
+        tabletEl.innerHTML = `<span class="material-icons" style="font-size:16px;vertical-align:text-bottom;margin-right:2px;">person</span>${this._escHtml(Auth.getDisplayName())}`;
+      } else {
+        let label = Auth.getDisplayName();
+        if (Auth.isRoleOverridden()) {
+          label += ` (${Auth.getRoleDisplayName()})`;
+        }
+        tabletEl.textContent = label;
       }
-      tabletEl.textContent = label;
+    }
+
+    // Show/hide user logout button
+    const logoutBtn = document.getElementById('user-logout-btn');
+    if (logoutBtn) {
+      logoutBtn.style.display = Auth.isUserSession() ? '' : 'none';
     }
 
     this.setConnectionStatus('Connecting...', false);

@@ -42,6 +42,10 @@ const SettingsPage = {
           <span class="material-icons">settings_applications</span>
           <span>Config</span>
         </button>
+        <button class="cam-tab" data-settings-tab="users">
+          <span class="material-icons">people</span>
+          <span>Users</span>
+        </button>
         <button class="cam-tab active" data-settings-tab="admin">
           <span class="material-icons">admin_panel_settings</span>
           <span>Admin</span>
@@ -316,6 +320,32 @@ const SettingsPage = {
       </div>
 
       <!-- ============================================================ -->
+      <!-- USERS TAB                                                     -->
+      <!-- ============================================================ -->
+      <div id="settings-tab-users" class="settings-tab-content" style="display:none;">
+        <div class="page-grid">
+          <div class="control-section col-span-6">
+            <div class="section-title">
+              <span class="material-icons" style="vertical-align:text-bottom;margin-right:4px;font-size:18px;">people</span>
+              User Accounts
+            </div>
+            <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+              Manage user accounts for remote access. Users log in from personal devices with their own credentials and permissions.
+            </div>
+            <div style="margin-bottom:12px;">
+              <button class="btn" id="btn-add-user" style="display:inline-flex;">
+                <span class="material-icons">person_add</span>
+                <span class="btn-label">Add User</span>
+              </button>
+            </div>
+            <div id="users-list" style="display:grid;gap:8px;">
+              <div style="opacity:0.5;padding:12px;text-align:center;">Loading users...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
       <!-- ADMIN TAB                                                     -->
       <!-- ============================================================ -->
       <div id="settings-tab-admin" class="settings-tab-content">
@@ -422,10 +452,13 @@ const SettingsPage = {
     document.querySelectorAll('[data-settings-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = btn.dataset.settingsTab;
-        if (tab === 'config') {
-          // Config tab requires secure PIN every time
+        if (tab === 'config' || tab === 'users') {
+          // Config and Users tabs require secure PIN every time
           App.showSecurePINEntry((success) => {
-            if (success) this._switchTab(tab);
+            if (success) {
+              this._switchTab(tab);
+              if (tab === 'users') this._loadUsers();
+            }
           });
           return;
         }
@@ -1409,7 +1442,7 @@ const SettingsPage = {
           ts = d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(',', '');
         }
       }
-      const tablet = (log.tablet_id || '').replace('Tablet_', '');
+      const tablet = (log.actor || log.tablet_id || '').replace('Tablet_', '');
       const latency = log.latency_ms ? `${Math.round(log.latency_ms)}ms` : '';
       const resultFull = log.result || '';
       const resultShort = resultFull.substring(0, 60);
@@ -1471,7 +1504,7 @@ const SettingsPage = {
     }
     if (searchTerm) {
       filtered = filtered.filter(log => {
-        const searchable = `${log.action || ''} ${log.target || ''} ${log.tablet_id || ''} ${log.result || ''} ${log.request_data || ''}`.toLowerCase();
+        const searchable = `${log.action || ''} ${log.target || ''} ${log.actor || ''} ${log.tablet_id || ''} ${log.result || ''} ${log.request_data || ''}`.toLowerCase();
         return searchable.includes(searchTerm);
       });
     }
@@ -2737,6 +2770,209 @@ const SettingsPage = {
     } finally {
       if (btn) { btn.disabled = this._frPairs.length === 0; btn.querySelector('.btn-label').textContent = 'Replace All'; }
     }
+  },
+
+  // ── User Management ─────────────────────────────────────────────
+
+  async _loadUsers() {
+    const container = document.getElementById('users-list');
+    if (!container) return;
+    container.innerHTML = '<div style="opacity:0.5;padding:12px;text-align:center;">Loading users...</div>';
+
+    try {
+      const [usersResp, rolesResp] = await Promise.all([
+        fetch('/api/users'),
+        fetch('/api/users/roles'),
+      ]);
+      const usersData = await usersResp.json();
+      const rolesData = await rolesResp.json();
+      this._availableRoles = rolesData.roles || [];
+      this._renderUsersList(usersData.users || []);
+    } catch (e) {
+      container.innerHTML = '<div style="color:var(--danger);padding:12px;">Failed to load users</div>';
+    }
+
+    // Wire up Add User button
+    document.getElementById('btn-add-user')?.addEventListener('click', () => this._showUserForm());
+  },
+
+  _renderUsersList(users) {
+    const container = document.getElementById('users-list');
+    if (!container) return;
+
+    if (users.length === 0) {
+      container.innerHTML = '<div style="opacity:0.5;padding:12px;text-align:center;">No users configured. Click "Add User" to create one.</div>';
+      return;
+    }
+
+    container.innerHTML = users.map(u => `
+      <div class="control-section" style="margin:0;padding:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span class="material-icons" style="font-size:32px;opacity:${u.enabled ? '1' : '0.3'};">
+          ${u.enabled ? 'person' : 'person_off'}
+        </span>
+        <div style="flex:1;min-width:150px;">
+          <div style="font-weight:bold;font-size:15px;">${this._escHtml(u.display_name)}</div>
+          <div style="font-size:13px;opacity:0.7;">@${this._escHtml(u.username)} &middot; ${this._escHtml(u.role)}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn" data-edit-user="${this._escAttr(u.username)}" style="min-width:auto;padding:8px 12px;">
+            <span class="material-icons" style="font-size:18px;">edit</span>
+          </button>
+          <button class="btn" data-toggle-user="${this._escAttr(u.username)}" data-enabled="${u.enabled}" style="min-width:auto;padding:8px 12px;">
+            <span class="material-icons" style="font-size:18px;">${u.enabled ? 'block' : 'check_circle'}</span>
+          </button>
+          <button class="btn" data-delete-user="${this._escAttr(u.username)}" style="min-width:auto;padding:8px 12px;color:var(--danger);">
+            <span class="material-icons" style="font-size:18px;">delete</span>
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    // Wire up action buttons
+    container.querySelectorAll('[data-edit-user]').forEach(btn => {
+      btn.addEventListener('click', () => this._showEditUserForm(btn.dataset.editUser));
+    });
+    container.querySelectorAll('[data-toggle-user]').forEach(btn => {
+      btn.addEventListener('click', () => this._toggleUser(btn.dataset.toggleUser, btn.dataset.enabled === 'true'));
+    });
+    container.querySelectorAll('[data-delete-user]').forEach(btn => {
+      btn.addEventListener('click', () => this._deleteUser(btn.dataset.deleteUser));
+    });
+  },
+
+  _showUserForm(editUser = null) {
+    const roles = this._availableRoles || [];
+    const isEdit = !!editUser;
+    const title = isEdit ? 'Edit User' : 'New User';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'user-form-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML = `
+      <div style="background:var(--bg-secondary, #1e1e2e);border-radius:12px;padding:24px;max-width:400px;width:100%;">
+        <h3 style="margin:0 0 16px 0;">${title}</h3>
+        ${!isEdit ? `
+        <label style="display:block;margin-bottom:4px;font-size:13px;">Username</label>
+        <input id="uf-username" type="text" placeholder="e.g. john" autocapitalize="none" autocomplete="off"
+               style="width:100%;padding:10px;border-radius:6px;border:1px solid #444;background:#111;color:#fff;margin-bottom:12px;font-size:15px;">
+        ` : ''}
+        <label style="display:block;margin-bottom:4px;font-size:13px;">Display Name</label>
+        <input id="uf-display" type="text" placeholder="e.g. John Smith" autocomplete="off"
+               value="${isEdit && editUser ? this._escAttr(editUser.display_name || '') : ''}"
+               style="width:100%;padding:10px;border-radius:6px;border:1px solid #444;background:#111;color:#fff;margin-bottom:12px;font-size:15px;">
+        ${!isEdit ? `
+        <label style="display:block;margin-bottom:4px;font-size:13px;">Password</label>
+        <input id="uf-password" type="password" placeholder="Min 4 characters" autocomplete="new-password"
+               style="width:100%;padding:10px;border-radius:6px;border:1px solid #444;background:#111;color:#fff;margin-bottom:12px;font-size:15px;">
+        ` : ''}
+        <label style="display:block;margin-bottom:4px;font-size:13px;">Role</label>
+        <select id="uf-role" style="width:100%;padding:10px;border-radius:6px;border:1px solid #444;background:#111;color:#fff;margin-bottom:16px;font-size:15px;">
+          ${roles.map(r => `<option value="${this._escAttr(r.key)}" ${isEdit && editUser && editUser.role === r.key ? 'selected' : ''}>${this._escHtml(r.displayName)}</option>`).join('')}
+        </select>
+        <div id="uf-error" style="color:var(--danger);font-size:13px;margin-bottom:8px;display:none;"></div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" id="uf-cancel" style="flex:1;"><span class="btn-label">Cancel</span></button>
+          <button class="btn active" id="uf-save" style="flex:1;"><span class="btn-label">${isEdit ? 'Save' : 'Create'}</span></button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    document.getElementById('uf-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+    document.getElementById('uf-save').addEventListener('click', async () => {
+      const errEl = document.getElementById('uf-error');
+      errEl.style.display = 'none';
+
+      if (isEdit) {
+        const display_name = document.getElementById('uf-display').value.trim();
+        const role = document.getElementById('uf-role').value;
+        try {
+          const resp = await fetch(`/api/users/${encodeURIComponent(editUser.username)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ display_name, role }),
+          });
+          const data = await resp.json();
+          if (!resp.ok) { errEl.textContent = data.error || 'Failed'; errEl.style.display = 'block'; return; }
+          overlay.remove();
+          App.showToast('User updated', 2000);
+          this._loadUsers();
+        } catch (e) { errEl.textContent = 'Network error'; errEl.style.display = 'block'; }
+      } else {
+        const username = document.getElementById('uf-username').value.trim();
+        const display_name = document.getElementById('uf-display').value.trim();
+        const password = document.getElementById('uf-password').value;
+        const role = document.getElementById('uf-role').value;
+        try {
+          const resp = await fetch('/api/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, display_name, password, role }),
+          });
+          const data = await resp.json();
+          if (!resp.ok) { errEl.textContent = data.error || 'Failed'; errEl.style.display = 'block'; return; }
+          overlay.remove();
+          App.showToast(`User "${username}" created`, 2000);
+          this._loadUsers();
+        } catch (e) { errEl.textContent = 'Network error'; errEl.style.display = 'block'; }
+      }
+    });
+  },
+
+  async _showEditUserForm(username) {
+    try {
+      const resp = await fetch('/api/users');
+      const data = await resp.json();
+      const user = (data.users || []).find(u => u.username === username);
+      if (!user) { App.showToast('User not found', 2000, 'error'); return; }
+      this._showUserForm(user);
+    } catch (e) {
+      App.showToast('Failed to load user', 2000, 'error');
+    }
+  },
+
+  async _toggleUser(username, currentlyEnabled) {
+    try {
+      const resp = await fetch(`/api/users/${encodeURIComponent(username)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !currentlyEnabled }),
+      });
+      if (resp.ok) {
+        App.showToast(`User ${currentlyEnabled ? 'disabled' : 'enabled'}`, 2000);
+        this._loadUsers();
+      }
+    } catch (e) {
+      App.showToast('Failed to update user', 2000, 'error');
+    }
+  },
+
+  async _deleteUser(username) {
+    if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+    try {
+      const resp = await fetch(`/api/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
+      if (resp.ok) {
+        App.showToast(`User "${username}" deleted`, 2000);
+        this._loadUsers();
+      } else {
+        const data = await resp.json();
+        App.showToast(data.error || 'Failed to delete', 2000, 'error');
+      }
+    } catch (e) {
+      App.showToast('Network error', 2000, 'error');
+    }
+  },
+
+  _escHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  },
+
+  _escAttr(str) {
+    return (str || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   },
 
   destroy() {

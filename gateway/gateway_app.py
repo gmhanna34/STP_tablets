@@ -214,6 +214,7 @@ class GatewayContext:
         self.health = None
         self.occupancy = None
         self.announcements = None
+        self.user_module = None
 
         # Security config
         self.allowed_ips = []
@@ -326,6 +327,10 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     from announcement_module import AnnouncementModule
     announcements = AnnouncementModule(cfg, logger)
 
+    from user_module import UserModule
+    users_path = os.path.join(os.path.dirname(os.path.abspath(config_path)), "users.yaml")
+    user_module = UserModule(users_path)
+
     # Build the shared context
     ctx = GatewayContext()
     ctx.app = app
@@ -344,6 +349,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     ctx.health = health
     ctx.occupancy = occupancy
     ctx.announcements = announcements
+    ctx.user_module = user_module
     announcements.ctx = ctx
 
     ctx.allowed_ips = sec_cfg.get("allowed_ips", ["127.0.0.1"])

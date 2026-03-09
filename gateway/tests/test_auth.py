@@ -42,6 +42,7 @@ def _make_app_and_ctx(allowed_ips=None, settings_pin="1234", secure_pin="5678",
     ctx.secure_pin = secure_pin
     ctx.remote_auth = remote_auth or {}
     ctx.session_timeout = session_timeout
+    ctx.user_module = None  # No user module in basic auth tests
 
     from auth import register_auth
     register_auth(ctx)
@@ -313,7 +314,7 @@ class TestAuthMiddleware:
                                      "csrf_token": csrf},
                                environ_base={"REMOTE_ADDR": "10.0.0.1"})
             assert resp.status_code == 200  # Re-renders login page
-            assert b"Invalid password" in resp.data
+            assert b"Invalid username or password" in resp.data
 
     def test_logout_clears_session(self, remote_auth_app):
         app, ctx = remote_auth_app

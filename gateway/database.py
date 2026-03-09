@@ -35,7 +35,8 @@ class Database:
                 target TEXT,
                 request_data TEXT,
                 result TEXT,
-                latency_ms REAL
+                latency_ms REAL,
+                actor TEXT
             );
             CREATE TABLE IF NOT EXISTS sessions (
                 tablet_id TEXT PRIMARY KEY,
@@ -56,21 +57,51 @@ class Database:
             );
             CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(timestamp);
             CREATE INDEX IF NOT EXISTS idx_audit_tablet ON audit_log(tablet_id);
+            CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor);
         """)
         conn.commit()
+        self._migrate_actor_column(conn)
+
+    def _migrate_actor_column(self, conn):
+        """Add 'actor' column to audit_log if it doesn't exist (migration for existing databases)."""
+        try:
+            cols = [row[1] for row in conn.execute("PRAGMA table_info(audit_log)").fetchall()]
+            if "actor" not in cols:
+                conn.execute("ALTER TABLE audit_log ADD COLUMN actor TEXT")
+                conn.commit()
+                logger.info("Migrated audit_log: added 'actor' column")
+        except Exception as e:
+            logger.warning(f"audit_log migration check failed: {e}")
 
     def log_action(self, tablet_id: str, action: str, target: str,
-                   request_data: str = "", result: str = "", latency_ms: float = 0):
+                   request_data: str = "", result: str = "", latency_ms: float = 0,
+                   actor: str = ""):
+        # Auto-derive actor from Flask session if not explicitly provided
+        if not actor:
+            actor = self._auto_actor(tablet_id)
         try:
             conn = self._get_conn()
             conn.execute(
-                "INSERT INTO audit_log (tablet_id, action, target, request_data, result, latency_ms) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (tablet_id, action, target, request_data, result, latency_ms),
+                "INSERT INTO audit_log (tablet_id, action, target, request_data, result, latency_ms, actor) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (tablet_id, action, target, request_data, result, latency_ms, actor or None),
             )
             conn.commit()
         except Exception as e:
             logger.warning(f"Audit log write failed: {e}")  # Never let audit logging crash a request
+
+    @staticmethod
+    def _auto_actor(tablet_id: str) -> str:
+        """Derive actor from Flask session context, falling back to tablet_id."""
+        try:
+            from flask import session as flask_session, has_request_context
+            if has_request_context():
+                user = flask_session.get("user")
+                if user:
+                    return f"user:{user}"
+            return f"tablet:{tablet_id}" if tablet_id else ""
+        except Exception:
+            return f"tablet:{tablet_id}" if tablet_id else ""
 
     def flush(self):
         """Flush WAL to main database file for clean shutdown."""

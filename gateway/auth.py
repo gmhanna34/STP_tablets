@@ -1,4 +1,4 @@
-"""IP allowlist, PIN verification, sessions, CSRF, rate limiting, and permission enforcement."""
+"""IP allowlist, PIN verification, user auth, sessions, CSRF, rate limiting, and permission enforcement."""
 
 from __future__ import annotations
 
@@ -27,6 +27,18 @@ def get_tablet_id() -> str:
     )
 
 
+def get_actor() -> str:
+    """Return 'user:<username>' for user sessions, 'tablet:<id>' for tablet requests.
+
+    This provides a unified actor identity for audit logging regardless of
+    whether the request came from a logged-in user or a LAN tablet.
+    """
+    user = session.get("user")
+    if user:
+        return f"user:{user}"
+    return f"tablet:{get_tablet_id()}"
+
+
 def get_tablet_role(permissions_data: dict) -> str:
     """Get the tablet's current role from header, falling back to defaultRole."""
     role = request.headers.get("X-Tablet-Role", "")
@@ -38,12 +50,23 @@ def get_tablet_role(permissions_data: dict) -> str:
 def check_permission(tablet_id: str, required_page: str, permissions_data: dict):
     """Returns an error response tuple if permission denied, None if OK.
 
-    Uses the X-Tablet-Role header (new) or falls back to looking up
-    the tablet_id as an old-style location key for backwards compat.
+    Priority:
+    1. User session role (server-side, not spoofable via header)
+    2. X-Tablet-Role header (for LAN tablets)
+    3. Old-style location key backwards compat
+    4. Unknown: fail-open for tablets, fail-closed for user sessions
     """
     roles = permissions_data.get("roles", {})
 
-    # New path: check X-Tablet-Role header
+    # User session: role stored server-side (not from header)
+    user_role = session.get("user_role") if session else None
+    if user_role and user_role in roles:
+        perms = roles[user_role].get("permissions", {})
+        if perms.get(required_page) is False:
+            return jsonify({"error": "Permission denied", "page": required_page}), 403
+        return None
+
+    # Tablet path: check X-Tablet-Role header
     role_key = request.headers.get("X-Tablet-Role", "")
     if role_key and role_key in roles:
         perms = roles[role_key].get("permissions", {})
@@ -59,6 +82,12 @@ def check_permission(tablet_id: str, required_page: str, permissions_data: dict)
         if perms.get(required_page) is False:
             return jsonify({"error": "Permission denied", "page": required_page}), 403
         return None
+
+    # User sessions without a recognized role: fail-closed
+    if session and session.get("user"):
+        logger.warning(f"Permission check: user={session.get('user')} has unrecognized role "
+                       f"{user_role!r}, page={required_page} — denying")
+        return jsonify({"error": "Permission denied", "page": required_page}), 403
 
     # Unknown tablet / no role header — allow (fail-open) for now
     logger.debug(f"Permission check: no recognised role for tablet={tablet_id}, "
@@ -296,6 +325,7 @@ def register_auth(ctx):
     secure_pin = ctx.secure_pin
     remote_auth = ctx.remote_auth
     session_timeout = ctx.session_timeout
+    user_module = getattr(ctx, "user_module", None)
 
     def _get_client_ip() -> str:
         """Return the real client IP, respecting X-Forwarded-For from trusted proxies."""
@@ -347,8 +377,9 @@ def register_auth(ctx):
 
         client_ip = _get_client_ip()
 
-        # If remote_auth is configured, redirect browsers / return 401 for API
-        if remote_auth.get("password"):
+        # If remote_auth or user accounts are configured, redirect to login
+        has_login = remote_auth.get("password") or (user_module is not None)
+        if has_login:
             if request.path.startswith("/api/"):
                 return jsonify({"error": "Authentication required"}), 401
             logger.info(f"AUTH_REDIRECT ip={client_ip} path={request.path}")
@@ -365,8 +396,9 @@ def register_auth(ctx):
         if not request.path.startswith("/api/"):
             return resp
         client_ip = _get_client_ip()
+        actor = get_actor()
         logger.info(
-            f"[{get_tablet_id()}] ip={client_ip} {request.method} {request.path} -> {resp.status_code}"
+            f"[{actor}] ip={client_ip} {request.method} {request.path} -> {resp.status_code}"
         )
         return resp
 
@@ -400,18 +432,33 @@ def register_auth(ctx):
                     content_type="text/html",
                 )
 
+            username = request.form.get("username", "").strip()
             pw = request.form.get("password", "")
-            configured_pw = remote_auth.get("password", "")
 
-            if pw and pw == configured_pw:
+            # Try user-based auth first (users.yaml)
+            if user_module and username:
+                user_info = user_module.authenticate(username, pw)
+                if user_info:
+                    session.permanent = True
+                    session["authed"] = True
+                    session["user"] = user_info["username"]
+                    session["user_role"] = user_info["role"]
+                    session["user_display"] = user_info["display_name"]
+                    session["auth_exp"] = time.time() + session_timeout * 60
+                    logger.info(f"LOGIN_OK user={user_info['username']} ip={client_ip}")
+                    return redirect(request.args.get("next") or "/")
+
+            # Fallback: legacy single-password mode
+            configured_pw = remote_auth.get("password", "")
+            if pw and configured_pw and pw == configured_pw:
                 session.permanent = True
                 session["authed"] = True
                 session["auth_exp"] = time.time() + session_timeout * 60
-                logger.info(f"LOGIN_OK ip={client_ip}")
+                logger.info(f"LOGIN_OK ip={client_ip} (legacy password)")
                 return redirect(request.args.get("next") or "/")
 
-            logger.warning(f"LOGIN_FAIL ip={client_ip}")
-            error_html = '<div class="alert">Invalid password</div>'
+            logger.warning(f"LOGIN_FAIL ip={client_ip} username={username!r}")
+            error_html = '<div class="alert">Invalid username or password</div>'
 
         csrf_token = _generate_csrf_token()
         return Response(
@@ -423,6 +470,24 @@ def register_auth(ctx):
     def logout():
         session.clear()
         return redirect("/login")
+
+    # ---- Session info ----
+
+    @app.route("/api/auth/me")
+    def auth_me():
+        """Return current session identity — user info or tablet info."""
+        user = session.get("user")
+        if user:
+            return jsonify({
+                "type": "user",
+                "username": user,
+                "display_name": session.get("user_display", user),
+                "role": session.get("user_role", "full_access"),
+            })
+        return jsonify({
+            "type": "tablet",
+            "tablet_id": get_tablet_id(),
+        })
 
     # ---- PIN verification ----
 

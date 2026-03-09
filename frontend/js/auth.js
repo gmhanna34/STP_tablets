@@ -6,6 +6,9 @@ const Auth = {
   isAuthenticated: false,
   permissionsLoadFailed: false,  // true when permissions could not be loaded from any source
 
+  // User session state (set when logged in as a user, not a tablet)
+  userSession: null,  // { username, display_name, role } or null
+
   async init(config) {
     if (config && config.permissions) {
       // Use config already fetched by App.init() — avoids duplicate /api/config request
@@ -33,13 +36,34 @@ const Auth = {
     // Resolve location from URL path
     this._resolveLocation();
 
-    // Resolve role: localStorage override > location default > global default
+    // Check if this is a user session (logged in via username/password)
+    await this._checkUserSession();
+
+    // Resolve role: user session > localStorage override > location default > global default
     this._resolveRole();
 
     // Check for existing session
     const sessionToken = sessionStorage.getItem('authToken');
     if (sessionToken) {
       this.isAuthenticated = true;
+    }
+  },
+
+  async _checkUserSession() {
+    try {
+      const resp = await fetch('/api/auth/me', { signal: AbortSignal.timeout(3000) });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.type === 'user') {
+        this.userSession = {
+          username: data.username,
+          display_name: data.display_name,
+          role: data.role,
+        };
+      }
+    } catch (e) {
+      // Not a user session or gateway unavailable — proceed as tablet
+      console.debug('User session check:', e.message || e);
     }
   },
 
@@ -57,10 +81,16 @@ const Auth = {
   },
 
   _resolveRole() {
-    // Priority: localStorage override > location's defaultRole > global defaultRole
-    const override = localStorage.getItem('tabletRole');
+    // Priority: user session role > localStorage override > location's defaultRole > global defaultRole
     const roles = this.permissions.roles || {};
 
+    // User session: role comes from server (not spoofable)
+    if (this.userSession && roles[this.userSession.role]) {
+      this.currentRole = this.userSession.role;
+      return;
+    }
+
+    const override = localStorage.getItem('tabletRole');
     if (override && roles[override]) {
       this.currentRole = override;
       return;
@@ -88,14 +118,22 @@ const Auth = {
   },
 
   getTabletId() {
-    // Unique identity based on URL-derived location slug
+    // For user sessions, return 'user:<username>' for identification
+    if (this.userSession) return `user:${this.userSession.username}`;
+    // Tablet identity based on URL-derived location slug
     return this.currentLocation || 'unknown';
   },
 
   getDisplayName() {
+    // User sessions show the user's display name
+    if (this.userSession) return this.userSession.display_name;
     const loc = this.getLocationConfig();
     if (loc) return loc.displayName;
     return 'Unknown Location';
+  },
+
+  isUserSession() {
+    return this.userSession !== null;
   },
 
   getRoleDisplayName() {

@@ -93,6 +93,7 @@ def _build_test_app():
     ctx.secure_pin = "5678"
     ctx.remote_auth = {}
     ctx.session_timeout = 480
+    ctx.user_module = None
 
     # Register auth and routes
     from auth import register_auth

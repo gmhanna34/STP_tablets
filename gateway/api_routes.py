@@ -18,7 +18,7 @@ import requests as http_requests
 import yaml
 from flask import Response, jsonify, request, send_file, send_from_directory
 
-from auth import get_tablet_id, check_permission
+from auth import get_tablet_id, get_actor, check_permission
 from macro_engine import (
     execute_macro, fetch_ha_button_states, fetch_all_ha_entities, step_summary,
 )
@@ -2271,3 +2271,108 @@ def register_api_routes(ctx):
             "total_replaced": total_replaced,
             "backup": os.path.basename(backup_path),
         }), 200
+
+    # ---- User management API ----
+
+    user_module = ctx.user_module
+
+    @app.route("/api/users", methods=["GET"])
+    def api_users_list():
+        """List all users (without password hashes). Requires secure PIN session."""
+        if not user_module:
+            return jsonify({"error": "User module not available"}), 503
+        users = user_module.list_users()
+        return jsonify({"users": users})
+
+    @app.route("/api/users", methods=["POST"])
+    def api_users_create():
+        """Create a new user account."""
+        if not user_module:
+            return jsonify({"error": "User module not available"}), 503
+        data = request.get_json(silent=True) or {}
+        username = data.get("username", "")
+        display_name = data.get("display_name", "")
+        password = data.get("password", "")
+        role = data.get("role", "full_access")
+
+        # Validate role exists
+        if role not in permissions_data.get("roles", {}):
+            return jsonify({"error": f"Unknown role: {role}"}), 400
+
+        try:
+            user = user_module.create_user(username, display_name, password, role)
+            actor = get_actor()
+            db.log_action(get_tablet_id(), "user:create", username,
+                          json.dumps({"role": role}), "OK", 0, actor=actor)
+            return jsonify({"success": True, "user": user}), 201
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+
+    @app.route("/api/users/<username>", methods=["PUT"])
+    def api_users_update(username):
+        """Update user fields (display_name, role, enabled)."""
+        if not user_module:
+            return jsonify({"error": "User module not available"}), 503
+        data = request.get_json(silent=True) or {}
+        fields = {}
+        if "display_name" in data:
+            fields["display_name"] = data["display_name"]
+        if "role" in data:
+            if data["role"] not in permissions_data.get("roles", {}):
+                return jsonify({"error": f"Unknown role: {data['role']}"}), 400
+            fields["role"] = data["role"]
+        if "enabled" in data:
+            fields["enabled"] = bool(data["enabled"])
+
+        if not fields:
+            return jsonify({"error": "No fields to update"}), 400
+
+        try:
+            user = user_module.update_user(username, **fields)
+            actor = get_actor()
+            db.log_action(get_tablet_id(), "user:update", username,
+                          json.dumps(fields), "OK", 0, actor=actor)
+            return jsonify({"success": True, "user": user})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 404
+
+    @app.route("/api/users/<username>", methods=["DELETE"])
+    def api_users_delete(username):
+        """Delete a user account."""
+        if not user_module:
+            return jsonify({"error": "User module not available"}), 503
+        try:
+            user_module.delete_user(username)
+            actor = get_actor()
+            db.log_action(get_tablet_id(), "user:delete", username, "", "OK", 0, actor=actor)
+            return jsonify({"success": True})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 404
+
+    @app.route("/api/users/<username>/reset-password", methods=["POST"])
+    def api_users_reset_password(username):
+        """Reset a user's password."""
+        if not user_module:
+            return jsonify({"error": "User module not available"}), 503
+        data = request.get_json(silent=True) or {}
+        new_password = data.get("password", "")
+        try:
+            user_module.reset_password(username, new_password)
+            actor = get_actor()
+            db.log_action(get_tablet_id(), "user:reset_password", username,
+                          "", "OK", 0, actor=actor)
+            return jsonify({"success": True})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+
+    @app.route("/api/users/roles", methods=["GET"])
+    def api_users_roles():
+        """List available roles from permissions.json for the user management UI."""
+        roles = permissions_data.get("roles", {})
+        result = []
+        for key, info in roles.items():
+            result.append({
+                "key": key,
+                "displayName": info.get("displayName", key),
+            })
+        return jsonify({"roles": result})

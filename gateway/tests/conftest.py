@@ -38,6 +38,7 @@ class StubContext:
         self.obs = None
         self.health = None
         self.occupancy = None
+        self.user_module = None
 
         # Security
         self.allowed_ips = ["192.168.1.", "127.0.0.1"]
