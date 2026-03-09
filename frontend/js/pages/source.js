@@ -915,10 +915,28 @@ const SourcePage = {
           <input type="text" id="wiim-tts-message" class="announce-textarea" style="min-height:auto;padding:8px 10px;"
             value="This is a test announcement from the WiiM Pro" />
         </div>
-        <button class="btn" id="btn-wiim-tts" style="max-width:200px;">
-          <span class="material-icons">record_voice_over</span>
-          <span class="btn-label">Send TTS</span>
-        </button>
+        <div class="test-methods-grid" style="margin-bottom:12px;">
+          <button class="btn" id="btn-wiim-tts" style="flex:1;">
+            <span class="material-icons">record_voice_over</span>
+            <span class="btn-label">Send TTS (Direct)</span>
+          </button>
+          <button class="btn" id="btn-wiim-tts-proxy" style="flex:1;">
+            <span class="material-icons">cloud_download</span>
+            <span class="btn-label">Send TTS (via Gateway)</span>
+          </button>
+        </div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">
+          <strong>Direct:</strong> HA tells WiiM to fetch TTS audio from HA (may fail if WiiM can't reach HA).<br/>
+          <strong>Via Gateway:</strong> Gateway fetches TTS audio from HA, serves it to WiiM (recommended).
+        </div>
+
+        <!-- Announce option for play_media -->
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="wiim-announce-mode" />
+            <span>Use <code>announce: true</code> on play_media (ducks current audio, resumes after)</span>
+          </label>
+        </div>
 
         <!-- Play URL -->
         <label class="announce-label" style="margin-top:12px;">Play Media URL</label>
@@ -982,29 +1000,120 @@ const SourcePage = {
       }, 'unmute');
     });
 
-    // TTS
+    // TTS (direct via HA — may not work if WiiM can't fetch HA's TTS proxy URL)
     document.getElementById('btn-wiim-tts')?.addEventListener('click', () => {
       const message = document.getElementById('wiim-tts-message')?.value?.trim();
       if (!message) { App.showToast('Enter a TTS message', 2000); return; }
       const ttsEntity = document.getElementById('wiim-tts-service')?.value || 'tts.speak';
 
-      // Use tts.speak service which targets the media_player entity
-      this._callWiimService('tts', 'speak', {
-        entity_id: ttsEntity,
-        media_player_entity_id: entity,
-        message,
-      }, `TTS: "${message.substring(0, 40)}${message.length > 40 ? '…' : ''}"`);
+      if (ttsEntity === 'tts.speak') {
+        // Generic tts.speak — no specific TTS engine entity, use default
+        this._callWiimService('tts', 'speak', {
+          media_player_entity_id: entity,
+          message,
+        }, `TTS(default): "${message.substring(0, 40)}${message.length > 40 ? '…' : ''}"`);
+      } else {
+        // Specific TTS engine entity (e.g., tts.edge_tts)
+        this._callWiimService('tts', 'speak', {
+          entity_id: ttsEntity,
+          media_player_entity_id: entity,
+          message,
+        }, `TTS(${ttsEntity}): "${message.substring(0, 40)}${message.length > 40 ? '…' : ''}"`);
+      }
+    });
+
+    // TTS via Gateway Proxy (recommended — gateway fetches audio from HA, serves to WiiM)
+    document.getElementById('btn-wiim-tts-proxy')?.addEventListener('click', async () => {
+      const message = document.getElementById('wiim-tts-message')?.value?.trim();
+      if (!message) { App.showToast('Enter a TTS message', 2000); return; }
+      const ttsEntity = document.getElementById('wiim-tts-service')?.value;
+      const announce = document.getElementById('wiim-announce-mode')?.checked || false;
+      const label = `TTS-proxy: "${message.substring(0, 40)}${message.length > 40 ? '…' : ''}"`;
+
+      const entry = {
+        time: new Date().toLocaleTimeString(),
+        method: 'wiim/tts-proxy',
+        message: label,
+        entity: this._wiimEntity,
+        status: 'pending',
+        latency: null,
+        error: null,
+      };
+      this._testLog.unshift(entry);
+      this._renderTestLog();
+
+      try {
+        const start = performance.now();
+
+        // Step 1: Generate TTS audio via gateway proxy
+        const genResp = await fetch('/api/tts/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message,
+            engine: ttsEntity && ttsEntity !== 'tts.speak' ? ttsEntity : null,
+          }),
+          signal: AbortSignal.timeout(20000),
+        });
+        const genData = await genResp.json().catch(() => null);
+        if (!genResp.ok) {
+          entry.status = 'error';
+          entry.latency = Math.round(performance.now() - start);
+          entry.error = genData?.error || `Generate failed: HTTP ${genResp.status}`;
+          this._renderTestLog();
+          return;
+        }
+
+        // Step 2: Build full URL the WiiM can reach (gateway address)
+        const audioPath = genData.url; // e.g. /api/tts/audio/abc123.mp3
+        const gatewayOrigin = window.location.origin; // e.g. http://192.168.1.X:20858
+        const fullAudioUrl = gatewayOrigin + audioPath;
+
+        // Step 3: Tell WiiM to play the gateway-hosted audio
+        const playData = {
+          entity_id: entity,
+          media_content_id: fullAudioUrl,
+          media_content_type: 'music',
+        };
+        if (announce) playData.announce = true;
+
+        const playResp = await fetch('/api/ha/service/media_player/play_media', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(playData),
+          signal: AbortSignal.timeout(15000),
+        });
+
+        entry.latency = Math.round(performance.now() - start);
+        if (playResp.ok) {
+          entry.status = 'ok';
+          entry.message = `${label} → ${fullAudioUrl} (${genData.size} bytes)`;
+          App.showToast(`TTS proxy OK (${entry.latency}ms)`, 2000);
+        } else {
+          const playBody = await playResp.json().catch(() => null);
+          entry.status = 'error';
+          entry.error = playBody?.error || `play_media failed: HTTP ${playResp.status}`;
+        }
+      } catch (e) {
+        entry.status = 'error';
+        entry.error = e.message || 'Network error';
+      }
+      this._renderTestLog();
     });
 
     // Play URL
     document.getElementById('btn-wiim-play-url')?.addEventListener('click', () => {
       const url = document.getElementById('wiim-media-url')?.value?.trim();
       if (!url) { App.showToast('Enter a media URL', 2000); return; }
-      this._callWiimService('media_player', 'play_media', {
+      const announce = document.getElementById('wiim-announce-mode')?.checked || false;
+      const playData = {
         entity_id: entity,
         media_content_id: url,
         media_content_type: 'music',
-      }, `play_media: ${url.substring(0, 50)}`);
+      };
+      if (announce) playData.announce = true;
+      this._callWiimService('media_player', 'play_media', playData,
+        `play_media${announce ? ' (announce)' : ''}: ${url.substring(0, 50)}`);
     });
   },
 

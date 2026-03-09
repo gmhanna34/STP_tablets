@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import logging
 import os
@@ -1157,6 +1158,101 @@ def register_api_routes(ctx):
             return jsonify(body), resp.status_code
         except Exception as e:
             return jsonify({"error": str(e)}), 503
+
+    # ---- TTS proxy: generate audio via HA, serve from gateway ----
+    # The WiiM can't fetch HA's /api/tts_proxy/ URLs directly.
+    # This endpoint generates TTS via HA, downloads the audio, and serves
+    # it from the gateway so the WiiM can reach it.
+
+    _tts_cache = {}  # filename -> {"bytes": bytes, "created": float}
+    _tts_cache_lock = threading.Lock()
+    _TTS_CACHE_MAX = 20
+    _TTS_CACHE_TTL = 300  # 5 minutes
+
+    @app.route("/api/tts/generate", methods=["POST"])
+    def tts_generate():
+        """Generate TTS audio via HA, cache it, return a gateway-hosted URL."""
+        ha_cfg = cfg.get("home_assistant", {})
+        if mock_mode:
+            return jsonify({"url": "/api/tts/audio/mock.mp3", "mock": True}), 200
+
+        data = request.get_json(silent=True) or {}
+        message = data.get("message", "").strip()
+        if not message:
+            return jsonify({"error": "message is required"}), 400
+
+        tts_entity = data.get("engine", None)  # e.g. "tts.edge_tts" or None for default
+        language = data.get("language", "en")
+
+        headers = {"Authorization": f"Bearer {ha_cfg['token']}", "Content-Type": "application/json"}
+        ha_url = ha_cfg["url"]
+
+        try:
+            # Step 1: Call tts.speak targeting a non-existent player to just generate audio,
+            # OR use the /api/tts_get_url endpoint if available (HA 2024.1+)
+            tts_payload = {"message": message, "language": language}
+            if tts_entity:
+                # Use the specific engine's platform name (e.g., "edge_tts" from "tts.edge_tts")
+                tts_payload["platform"] = tts_entity.replace("tts.", "") if tts_entity.startswith("tts.") else tts_entity
+            else:
+                # Default — try edge_tts first, fall back to whatever HA has
+                tts_payload["platform"] = "edge_tts"
+
+            # HA endpoint to generate TTS and get the proxy URL
+            resp = http_requests.post(
+                f"{ha_url}/api/tts_get_url",
+                headers=headers, json=tts_payload, timeout=15,
+            )
+            if not resp.ok:
+                return jsonify({"error": f"HA tts_get_url failed: {resp.status_code}", "detail": resp.text}), 502
+
+            tts_result = resp.json()
+            proxy_url = tts_result.get("url", "")
+            if not proxy_url:
+                return jsonify({"error": "HA returned no TTS URL", "detail": tts_result}), 502
+
+            # Make relative URL absolute
+            if proxy_url.startswith("/"):
+                proxy_url = f"{ha_url}{proxy_url}"
+
+            # Step 2: Download the audio from HA's TTS proxy
+            audio_resp = http_requests.get(proxy_url, headers=headers, timeout=15)
+            if not audio_resp.ok:
+                return jsonify({"error": f"Failed to fetch TTS audio: {audio_resp.status_code}"}), 502
+
+            # Step 3: Cache the audio and return a gateway URL
+            filename = hashlib.md5((message + str(tts_entity)).encode()).hexdigest() + ".mp3"
+
+            with _tts_cache_lock:
+                # Evict old entries
+                now = time.time()
+                expired = [k for k, v in _tts_cache.items() if now - v["created"] > _TTS_CACHE_TTL]
+                for k in expired:
+                    del _tts_cache[k]
+                # Evict oldest if over limit
+                while len(_tts_cache) >= _TTS_CACHE_MAX:
+                    oldest = min(_tts_cache, key=lambda k: _tts_cache[k]["created"])
+                    del _tts_cache[oldest]
+                _tts_cache[filename] = {"bytes": audio_resp.content, "created": now,
+                                        "content_type": audio_resp.headers.get("Content-Type", "audio/mpeg")}
+
+            gateway_url = f"/api/tts/audio/{filename}"
+            logger.info("TTS generated: %s (%d bytes) -> %s", message[:50], len(audio_resp.content), gateway_url)
+            return jsonify({"url": gateway_url, "size": len(audio_resp.content)}), 200
+
+        except Exception as e:
+            logger.error("TTS generate error: %s", e)
+            return jsonify({"error": str(e)}), 503
+
+    @app.route("/api/tts/audio/<filename>")
+    def tts_serve_audio(filename):
+        """Serve cached TTS audio file (no auth required so WiiM can fetch it)."""
+        with _tts_cache_lock:
+            entry = _tts_cache.get(filename)
+        if not entry:
+            return jsonify({"error": "TTS audio not found or expired"}), 404
+        return Response(entry["bytes"], mimetype=entry.get("content_type", "audio/mpeg"),
+                        headers={"Cache-Control": "no-cache"})
 
     @app.route("/api/ha/entities")
     def ha_entities():
