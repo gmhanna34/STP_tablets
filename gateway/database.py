@@ -57,10 +57,12 @@ class Database:
             );
             CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(timestamp);
             CREATE INDEX IF NOT EXISTS idx_audit_tablet ON audit_log(tablet_id);
-            CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor);
         """)
         conn.commit()
+        # Migrate existing databases before creating actor index
         self._migrate_actor_column(conn)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor)")
+        conn.commit()
 
     def _migrate_actor_column(self, conn):
         """Add 'actor' column to audit_log if it doesn't exist (migration for existing databases)."""
