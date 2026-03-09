@@ -28,10 +28,11 @@ moip:
   ha_webhook_id: ""              # Set MOIP_HA_WEBHOOK_ID in .env
   # Preview: dedicated receiver + HDMI encoder for on-demand transmitter preview
   preview:
-    enabled: true                     # Set to true once encoder hardware is installed
+    enabled: true                      # Encoder hardware installed (ORIVISION HLS encoder)
     encoder_ip: "192.168.1.181"        # Static IP of HDMI-to-IP encoder
-    mjpeg_url: "http://192.168.1.181:8134/chn1"  # Encoder's MJPEG stream URL
-    preview_receiver: 41               # MoIP receiver index dedicated to preview
+    stream_url: "http://192.168.1.181:8100/chn2.m3u8"  # Encoder's HLS stream URL
+    stream_type: "hls"                 # Stream type: "hls" (requires HLS.js) or "mjpeg" (legacy <img>)
+    preview_receiver: 49               # MoIP receiver index dedicated to preview
     switch_delay_ms: 1500              # Delay after switch before showing stream (signal lock time)
 
 # --- X32 mixer (direct OSC/UDP, Phase 1 consolidation) -----------------------
