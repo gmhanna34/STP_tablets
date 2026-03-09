@@ -1643,7 +1643,8 @@ const SourcePage = {
     if (stream) { stream.style.display = 'none'; stream.pause(); }
     if (error) error.style.display = 'none';
 
-    // Destroy previous HLS instance
+    // Destroy previous HLS instance and refresh timer
+    if (this._hlsRefreshTimer) { clearTimeout(this._hlsRefreshTimer); this._hlsRefreshTimer = null; }
     if (this._hlsInstance) { this._hlsInstance.destroy(); this._hlsInstance = null; }
 
     // Reset mute button state (starts muted)
@@ -1679,28 +1680,7 @@ const SourcePage = {
       };
 
       if (data.stream_type === 'hls') {
-        // HLS stream — use HLS.js on Chrome/Android, native on Safari/iOS
-        if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-          const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
-          this._hlsInstance = hls;
-          hls.loadSource(data.stream_url);
-          hls.attachMedia(stream);
-          hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            stream.style.display = '';
-            stream.play().catch(() => {});
-          });
-          hls.on(Hls.Events.ERROR, (_event, errData) => {
-            if (errData.fatal) showError('Stream unavailable. Check encoder connection.');
-          });
-        } else if (stream.canPlayType('application/vnd.apple.mpegurl')) {
-          // Safari native HLS
-          stream.src = data.stream_url;
-          stream.style.display = '';
-          stream.play().catch(() => {});
-          stream.onerror = () => showError('Stream unavailable. Check encoder connection.');
-        } else {
-          showError('HLS playback not supported on this browser.');
-        }
+        this._startHls(stream, data.stream_url, showError);
       } else {
         // Legacy MJPEG fallback — swap to <img> behavior via poster/src
         stream.src = data.stream_url;
@@ -1716,10 +1696,52 @@ const SourcePage = {
     }
   },
 
+  _startHls(stream, url, showError) {
+    // HLS stream — use HLS.js on Chrome/Android, native on Safari/iOS
+    if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        liveSyncDurationCount: 1,        // Stay just 1 segment behind live edge
+        liveMaxLatencyDurationCount: 3,  // Max drift before seeking forward
+        maxBufferLength: 4,              // Don't over-buffer
+        backBufferLength: 0,             // Discard played segments immediately
+      });
+      this._hlsInstance = hls;
+      hls.loadSource(url);
+      hls.attachMedia(stream);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        stream.style.display = '';
+        stream.play().catch(() => {});
+      });
+      hls.on(Hls.Events.ERROR, (_event, errData) => {
+        if (errData.fatal) showError('Stream unavailable. Check encoder connection.');
+      });
+      // Safety net: after 4s, reload manifest to ensure we have fresh segments
+      // (covers edge case where first load grabbed stale encoder segments)
+      this._hlsRefreshTimer = setTimeout(() => {
+        if (this._hlsInstance === hls) {
+          hls.stopLoad();
+          hls.startLoad(-1);  // -1 = start from live edge
+        }
+      }, 4000);
+    } else if (stream.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari native HLS
+      stream.src = url;
+      stream.style.display = '';
+      stream.play().catch(() => {});
+      stream.onerror = () => showError('Stream unavailable. Check encoder connection.');
+    } else {
+      showError('HLS playback not supported on this browser.');
+    }
+  },
+
   _closePreview() {
     const overlay = document.getElementById('moip-preview-overlay');
     const stream = document.getElementById('moip-preview-stream');
     if (overlay) overlay.style.display = 'none';
+    // Clear refresh timer
+    if (this._hlsRefreshTimer) { clearTimeout(this._hlsRefreshTimer); this._hlsRefreshTimer = null; }
     // Destroy HLS instance and stop video
     if (this._hlsInstance) { this._hlsInstance.destroy(); this._hlsInstance = null; }
     if (stream) { stream.pause(); stream.removeAttribute('src'); stream.load(); stream.style.display = 'none'; }

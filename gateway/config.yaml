@@ -33,7 +33,7 @@ moip:
     stream_url: "http://192.168.1.181:8100/chn2.m3u8"  # Encoder's HLS stream URL
     stream_type: "hls"                 # Stream type: "hls" (requires HLS.js) or "mjpeg" (legacy <img>)
     preview_receiver: 41               # MoIP receiver index dedicated to preview (RX 41 = Spare)
-    switch_delay_ms: 1500              # Delay after switch before showing stream (signal lock time)
+    switch_delay_ms: 3500              # Delay after switch before loading stream (signal lock + HLS segment flush)
 
 # --- X32 mixer (direct OSC/UDP, Phase 1 consolidation) -----------------------
 x32:
