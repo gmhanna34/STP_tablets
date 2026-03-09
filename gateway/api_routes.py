@@ -660,7 +660,7 @@ def register_api_routes(ctx):
     @app.route("/api/moip/preview/stream")
     def moip_preview_stream():
         """Proxy the HLS/MJPEG stream from the HDMI encoder to avoid cross-origin issues.
-        For HLS: proxies .m3u8 manifest (rewriting segment URLs to also go through proxy).
+        For HLS: proxies .m3u8 manifests (rewriting URLs to also go through proxy).
         For MJPEG: proxies the raw multipart stream.
         """
         preview_cfg = cfg.get("moip", {}).get("preview", {})
@@ -668,28 +668,41 @@ def register_api_routes(ctx):
             return jsonify({"error": "Preview not enabled"}), 404
 
         stream_type = preview_cfg.get("stream_type", "mjpeg")
-        stream_url = preview_cfg.get("stream_url", preview_cfg.get("mjpeg_url", ""))
+        # Allow ?url= override for sub-playlist proxying; default to configured stream_url
+        stream_url = request.args.get("url", preview_cfg.get("stream_url", preview_cfg.get("mjpeg_url", "")))
         if not stream_url:
             return jsonify({"error": "No stream URL configured"}), 500
+        # Validate that proxied URLs point to the configured encoder IP
+        encoder_ip = preview_cfg.get("encoder_ip", "")
+        if request.args.get("url") and encoder_ip and encoder_ip not in stream_url:
+            return jsonify({"error": "Invalid stream URL"}), 403
 
         try:
             if stream_type == "hls":
-                # Proxy HLS manifest — rewrite .ts segment URLs to go through our proxy
+                from urllib.parse import urljoin, quote
+                # Proxy HLS manifest — rewrite URLs to go through our proxy
                 upstream = http_requests.get(stream_url, timeout=5)
                 upstream.raise_for_status()
-                # Derive base URL of the encoder for segment references
-                from urllib.parse import urljoin
+                # Derive base URL of the encoder for relative references
                 base_url = stream_url.rsplit("/", 1)[0] + "/"
                 lines = []
                 for line in upstream.text.splitlines():
                     if line and not line.startswith("#"):
-                        # Segment filename — rewrite to proxy path
-                        seg_url = urljoin(base_url, line)
-                        lines.append(f"/api/moip/preview/segment?url={seg_url}")
+                        abs_url = urljoin(base_url, line.strip())
+                        if abs_url.endswith(".m3u8"):
+                            # Sub-playlist — route back through this same endpoint
+                            lines.append(f"/api/moip/preview/stream?url={quote(abs_url, safe='')}")
+                        else:
+                            # Segment (.ts) — route through segment endpoint
+                            lines.append(f"/api/moip/preview/segment?url={quote(abs_url, safe='')}")
                     else:
                         lines.append(line)
                 manifest = "\n".join(lines) + "\n"
-                return Response(manifest, content_type="application/vnd.apple.mpegurl")
+                return Response(
+                    manifest,
+                    content_type="application/vnd.apple.mpegurl",
+                    headers={"Cache-Control": "no-cache, no-store"},
+                )
             else:
                 # Legacy MJPEG proxy
                 upstream = http_requests.get(stream_url, stream=True, timeout=5)
