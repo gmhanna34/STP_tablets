@@ -1157,40 +1157,93 @@ def register_api_routes(ctx):
         ha_url = ha_cfg["url"]
 
         try:
-            # Step 1: Call tts.speak targeting a non-existent player to just generate audio,
-            # OR use the /api/tts_get_url endpoint if available (HA 2024.1+)
-            tts_payload = {"message": message, "language": language}
+            # Determine engine/platform name
+            engine = None
             if tts_entity:
-                # Use the specific engine's platform name (e.g., "edge_tts" from "tts.edge_tts")
-                tts_payload["platform"] = tts_entity.replace("tts.", "") if tts_entity.startswith("tts.") else tts_entity
-            else:
-                # Default — try edge_tts first, fall back to whatever HA has
-                tts_payload["platform"] = "edge_tts"
+                engine = tts_entity.replace("tts.", "") if tts_entity.startswith("tts.") else tts_entity
 
-            # HA endpoint to generate TTS and get the proxy URL
-            resp = http_requests.post(
-                f"{ha_url}/api/tts_get_url",
-                headers=headers, json=tts_payload, timeout=15,
-            )
-            if not resp.ok:
-                return jsonify({"error": f"HA tts_get_url failed: {resp.status_code}", "detail": resp.text}), 502
+            # Try multiple HA API approaches to generate TTS audio
+            proxy_url = None
+            last_error = None
 
-            tts_result = resp.json()
-            proxy_url = tts_result.get("url", "")
+            # Approach 1: /api/tts_get_url with engine_id (HA 2024.7+)
             if not proxy_url:
-                return jsonify({"error": "HA returned no TTS URL", "detail": tts_result}), 502
+                payload = {"message": message, "language": language}
+                if engine:
+                    payload["engine_id"] = engine
+                try:
+                    resp = http_requests.post(f"{ha_url}/api/tts_get_url", headers=headers,
+                                              json=payload, timeout=15)
+                    if resp.ok:
+                        result = resp.json()
+                        proxy_url = result.get("url", "") or result.get("path", "")
+                    else:
+                        last_error = f"tts_get_url(engine_id): {resp.status_code} {resp.text[:200]}"
+                        logger.warning("TTS approach 1 failed: %s", last_error)
+                except Exception as e:
+                    last_error = f"tts_get_url(engine_id): {e}"
+
+            # Approach 2: /api/tts_get_url with platform (older HA)
+            if not proxy_url:
+                payload = {"message": message, "language": language}
+                if engine:
+                    payload["platform"] = engine
+                try:
+                    resp = http_requests.post(f"{ha_url}/api/tts_get_url", headers=headers,
+                                              json=payload, timeout=15)
+                    if resp.ok:
+                        result = resp.json()
+                        proxy_url = result.get("url", "") or result.get("path", "")
+                    else:
+                        last_error = f"tts_get_url(platform): {resp.status_code} {resp.text[:200]}"
+                        logger.warning("TTS approach 2 failed: %s", last_error)
+                except Exception as e:
+                    last_error = f"tts_get_url(platform): {e}"
+
+            # Approach 3: Call tts.speak service targeting media_player.wiim,
+            # then read its media_content_id attribute to get the TTS proxy URL
+            if not proxy_url:
+                try:
+                    speak_data = {"message": message, "media_player_entity_id": "media_player.wiim_pro_new"}
+                    if tts_entity and tts_entity != "tts.speak":
+                        speak_data["entity_id"] = tts_entity
+                    resp = http_requests.post(f"{ha_url}/api/services/tts/speak", headers=headers,
+                                              json=speak_data, timeout=15)
+                    if resp.ok:
+                        # Give HA a moment to process, then read media_player state
+                        time.sleep(1)
+                        state_resp = http_requests.get(
+                            f"{ha_url}/api/states/media_player.wiim_pro_new",
+                            headers=headers, timeout=10)
+                        if state_resp.ok:
+                            state = state_resp.json()
+                            content_id = state.get("attributes", {}).get("media_content_id", "")
+                            if content_id and "tts_proxy" in content_id:
+                                proxy_url = content_id
+                                logger.info("TTS approach 3: got URL from media_player state: %s", proxy_url)
+                            else:
+                                last_error = f"tts/speak OK but media_content_id={content_id!r}"
+                    else:
+                        last_error = f"tts/speak: {resp.status_code} {resp.text[:200]}"
+                        logger.warning("TTS approach 3 failed: %s", last_error)
+                except Exception as e:
+                    last_error = f"tts/speak: {e}"
+
+            if not proxy_url:
+                return jsonify({"error": f"All TTS generation approaches failed", "detail": last_error}), 502
 
             # Make relative URL absolute
             if proxy_url.startswith("/"):
                 proxy_url = f"{ha_url}{proxy_url}"
 
-            # Step 2: Download the audio from HA's TTS proxy
+            # Download the audio from HA's TTS proxy
             audio_resp = http_requests.get(proxy_url, headers=headers, timeout=15)
             if not audio_resp.ok:
-                return jsonify({"error": f"Failed to fetch TTS audio: {audio_resp.status_code}"}), 502
+                return jsonify({"error": f"Failed to fetch TTS audio: {audio_resp.status_code}",
+                                "proxy_url": proxy_url}), 502
 
-            # Step 3: Cache the audio and return a gateway URL
-            filename = hashlib.md5((message + str(tts_entity)).encode()).hexdigest() + ".mp3"
+            # Cache the audio and return a gateway URL
+            filename = hashlib.md5((message + str(tts_entity) + str(time.time())).encode()).hexdigest() + ".mp3"
 
             with _tts_cache_lock:
                 # Evict old entries
@@ -1198,7 +1251,6 @@ def register_api_routes(ctx):
                 expired = [k for k, v in _tts_cache.items() if now - v["created"] > _TTS_CACHE_TTL]
                 for k in expired:
                     del _tts_cache[k]
-                # Evict oldest if over limit
                 while len(_tts_cache) >= _TTS_CACHE_MAX:
                     oldest = min(_tts_cache, key=lambda k: _tts_cache[k]["created"])
                     del _tts_cache[oldest]
