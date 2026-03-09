@@ -474,6 +474,11 @@ const App = {
     if (userMenuWrapper) {
       userMenuWrapper.style.display = Auth.isUserSession() ? '' : 'none';
     }
+    // Populate username in dropdown
+    const userMenuName = document.getElementById('user-menu-name');
+    if (userMenuName && Auth.isUserSession()) {
+      userMenuName.textContent = Auth.getDisplayName();
+    }
     this._initUserMenu();
 
     this.setConnectionStatus('Connecting...', false);
