@@ -618,12 +618,13 @@ def register_api_routes(ctx):
 
         # Use gateway proxy URL so browsers don't hit cross-origin issues
         proxy_stream_url = "/api/moip/preview/stream"
+        stream_type = preview_cfg.get("stream_type", "mjpeg")
 
         if mock_mode:
             return jsonify({
                 "success": True, "mock": True,
-                "stream_url": preview_cfg.get("stream_url", preview_cfg.get("mjpeg_url", "")),
-                "stream_type": preview_cfg.get("stream_type", "mjpeg"),
+                "stream_url": proxy_stream_url,
+                "stream_type": stream_type,
                 "switch_delay_ms": preview_cfg.get("switch_delay_ms", 1500),
             }), 200
 
@@ -641,8 +642,8 @@ def register_api_routes(ctx):
 
         return jsonify({
             "success": True,
-            "stream_url": preview_cfg.get("stream_url", preview_cfg.get("mjpeg_url", "")),
-            "stream_type": preview_cfg.get("stream_type", "mjpeg"),
+            "stream_url": proxy_stream_url,
+            "stream_type": stream_type,
             "switch_delay_ms": preview_cfg.get("switch_delay_ms", 1500),
             "transmitter": tx,
             "transmitter_name": tx_name,
@@ -658,25 +659,71 @@ def register_api_routes(ctx):
 
     @app.route("/api/moip/preview/stream")
     def moip_preview_stream():
-        """Proxy the MJPEG stream from the HDMI encoder to avoid cross-origin issues."""
+        """Proxy the HLS/MJPEG stream from the HDMI encoder to avoid cross-origin issues.
+        For HLS: proxies .m3u8 manifest (rewriting segment URLs to also go through proxy).
+        For MJPEG: proxies the raw multipart stream.
+        """
         preview_cfg = cfg.get("moip", {}).get("preview", {})
         if not preview_cfg.get("enabled"):
             return jsonify({"error": "Preview not enabled"}), 404
 
-        mjpeg_url = preview_cfg.get("mjpeg_url", "")
-        if not mjpeg_url:
-            return jsonify({"error": "No MJPEG URL configured"}), 500
+        stream_type = preview_cfg.get("stream_type", "mjpeg")
+        stream_url = preview_cfg.get("stream_url", preview_cfg.get("mjpeg_url", ""))
+        if not stream_url:
+            return jsonify({"error": "No stream URL configured"}), 500
 
         try:
-            upstream = http_requests.get(mjpeg_url, stream=True, timeout=5)
-            content_type = upstream.headers.get("Content-Type", "multipart/x-mixed-replace; boundary=myboundary")
-            return Response(
-                upstream.iter_content(chunk_size=4096),
-                content_type=content_type,
-            )
+            if stream_type == "hls":
+                # Proxy HLS manifest — rewrite .ts segment URLs to go through our proxy
+                upstream = http_requests.get(stream_url, timeout=5)
+                upstream.raise_for_status()
+                # Derive base URL of the encoder for segment references
+                from urllib.parse import urljoin
+                base_url = stream_url.rsplit("/", 1)[0] + "/"
+                lines = []
+                for line in upstream.text.splitlines():
+                    if line and not line.startswith("#"):
+                        # Segment filename — rewrite to proxy path
+                        seg_url = urljoin(base_url, line)
+                        lines.append(f"/api/moip/preview/segment?url={seg_url}")
+                    else:
+                        lines.append(line)
+                manifest = "\n".join(lines) + "\n"
+                return Response(manifest, content_type="application/vnd.apple.mpegurl")
+            else:
+                # Legacy MJPEG proxy
+                upstream = http_requests.get(stream_url, stream=True, timeout=5)
+                content_type = upstream.headers.get("Content-Type", "multipart/x-mixed-replace; boundary=myboundary")
+                return Response(
+                    upstream.iter_content(chunk_size=4096),
+                    content_type=content_type,
+                )
         except Exception as e:
             log.warning("Preview stream proxy failed: %s", e)
             return jsonify({"error": "Failed to connect to encoder"}), 502
+
+    @app.route("/api/moip/preview/segment")
+    def moip_preview_segment():
+        """Proxy an individual HLS .ts segment from the encoder."""
+        seg_url = request.args.get("url", "")
+        if not seg_url:
+            return jsonify({"error": "Missing url parameter"}), 400
+        # Only allow proxying to the configured encoder IP
+        preview_cfg = cfg.get("moip", {}).get("preview", {})
+        encoder_ip = preview_cfg.get("encoder_ip", "")
+        if encoder_ip and encoder_ip not in seg_url:
+            return jsonify({"error": "Invalid segment URL"}), 403
+        try:
+            upstream = http_requests.get(seg_url, stream=True, timeout=10)
+            upstream.raise_for_status()
+            content_type = upstream.headers.get("Content-Type", "video/mp2t")
+            return Response(
+                upstream.iter_content(chunk_size=8192),
+                content_type=content_type,
+            )
+        except Exception as e:
+            log.warning("Preview segment proxy failed: %s", e)
+            return jsonify({"error": "Failed to fetch segment"}), 502
 
     # ---- X32 ----
 
