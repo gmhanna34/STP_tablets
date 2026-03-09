@@ -362,6 +362,8 @@ def _execute_step(ctx, step: dict, tablet: str, depth: int) -> dict:
             return execute_macro(ctx, child_key, tablet, depth + 1)
         elif step_type == "condition":
             return _step_condition(ctx, step, tablet, depth)
+        elif step_type == "tts_announce":
+            return _step_tts_announce(ctx, step, tablet)
         elif step_type == "notify":
             msg = step.get("message", "")
             ctx.socketio.emit("notification", {"message": msg})
@@ -705,6 +707,21 @@ def _step_ptz_preset(ctx, step: dict, tablet: str) -> dict:
         return {"success": False, "error": str(e)}
 
 
+def _step_tts_announce(ctx, step: dict, tablet: str) -> dict:
+    """Execute a TTS announcement step (preset, sequence, or inline text)."""
+    if not ctx.announcements:
+        return {"success": False, "error": "Announcement module not available"}
+    # Build gateway origin for audio URLs
+    gw_cfg = ctx.cfg.get("gateway", {})
+    port = gw_cfg.get("port", 20858)
+    gateway_origin = f"http://127.0.0.1:{port}"
+    result = ctx.announcements.execute_macro_step(step, gateway_origin, tablet)
+    ok = result.get("success", False) and "error" not in result
+    if ok:
+        return {"success": True}
+    return {"success": False, "error": result.get("error", "TTS announce failed")}
+
+
 def _step_parallel(ctx, step: dict, tablet: str, depth: int) -> dict:
     """Run sub-steps concurrently. Succeeds only if ALL sub-steps succeed."""
     sub_steps = step.get("steps", [])
@@ -786,6 +803,12 @@ def step_summary(step: dict, macro_defs: dict) -> str:
         return f"PTZ {step.get('camera', '')} preset {step.get('preset', '')}"
     elif t == "delay":
         return f"Wait {step.get('seconds', 0)}s"
+    elif t == "tts_announce":
+        if step.get("preset"):
+            return f"Announce preset: {step.get('preset', '')}"
+        if step.get("sequence"):
+            return f"Announce sequence: {step.get('sequence', '')}"
+        return f"Announce: {step.get('text', '')[:50]}"
     elif t == "notify":
         return f"Notify: {step.get('message', '')}"
     elif t == "condition":

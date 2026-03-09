@@ -17,11 +17,29 @@
 #   x32_mute      Mute/unmute an X32 channel
 #   obs_emit      Trigger an OBS action (StartStream, StopStream, etc.)
 #   ptz_preset    Recall a PTZ camera preset
+#   tts_announce  Play a TTS announcement via WiiM (preset, sequence, or inline text)
 #   delay         Wait N seconds (with optional progress message)
 #   macro         Call another macro (nesting, max depth 5)
 #   parallel      Run sub-steps concurrently (all must succeed unless on_fail: skip)
 #   condition     If/then/else branching based on a check
 #   notify        Broadcast a message to all tablets
+#
+# TTS_ANNOUNCE USAGE:
+#   Play a preset (defined in announcements.yaml):
+#     - type: tts_announce
+#       preset: church_closing
+#       message: "Announcing church closing"
+#
+#   Run a full sequence (defined in announcements.yaml):
+#     - type: tts_announce
+#       sequence: sunday_school_countdown
+#       message: "Running Sunday School countdown"
+#
+#   Speak inline text:
+#     - type: tts_announce
+#       text: "The liturgy is beginning."
+#       voice: "en-US-AndrewNeural"    # optional, uses default from announcements.yaml
+#       message: "Announcing liturgy start"
 #
 # ON_FAIL OPTIONS (per step):
 #   abort         Stop the macro and report failure (default)

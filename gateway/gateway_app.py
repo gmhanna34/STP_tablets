@@ -213,6 +213,7 @@ class GatewayContext:
         self.obs = None
         self.health = None
         self.occupancy = None
+        self.announcements = None
 
         # Security config
         self.allowed_ips = []
@@ -314,6 +315,9 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     from occupancy_module import OccupancyModule
     occupancy = None if mock_mode else OccupancyModule(cfg, logger, db=db)
 
+    from announcement_module import AnnouncementModule
+    announcements = AnnouncementModule(cfg, logger)
+
     # Build the shared context
     ctx = GatewayContext()
     ctx.app = app
@@ -331,6 +335,8 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     ctx.obs = obs
     ctx.health = health
     ctx.occupancy = occupancy
+    ctx.announcements = announcements
+    announcements.ctx = ctx
 
     ctx.allowed_ips = sec_cfg.get("allowed_ips", ["127.0.0.1"])
     ctx.settings_pin = sec_cfg.get("settings_pin", "1234")
@@ -395,7 +401,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     register_socket_handlers(ctx)
 
     # Store references for use in main and shutdown
-    app._modules = {"x32": x32, "moip": moip, "obs": obs, "health": health, "occupancy": occupancy}
+    app._modules = {"x32": x32, "moip": moip, "obs": obs, "health": health, "occupancy": occupancy, "announcements": announcements}
     app._db = db
     app._ctx = ctx
 

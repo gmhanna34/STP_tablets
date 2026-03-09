@@ -83,6 +83,9 @@ def _build_test_app():
     ctx.health = None
     ctx.occupancy = None
 
+    from announcement_module import AnnouncementModule
+    ctx.announcements = AnnouncementModule(ctx.cfg, logging.getLogger("test"), ctx=ctx)
+
     # Security
     ctx.allowed_ips = ["127.0.0.1"]
     ctx.settings_pin = "1234"

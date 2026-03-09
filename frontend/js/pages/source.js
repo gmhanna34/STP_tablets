@@ -5,7 +5,8 @@ const SourcePage = {
   receivers: [],
   _activeTab: 'video',
   _announcementsLoaded: false,
-  _announcements: [],
+  _announceConfig: null,
+  _announceProgressBound: false,
   _testLoaded: false,
   _testLog: [],
   _wiimLoaded: false,
@@ -125,10 +126,67 @@ const SourcePage = {
 
         <!-- ANNOUNCEMENTS TAB -->
         <div id="source-tab-announcements" style="display:none;">
-          <div class="control-section">
-            <div class="section-title">Alexa Announcements</div>
-            <div id="announce-container">
-              <div class="text-center" style="opacity:0.5;">Loading announcements...</div>
+          <!-- Voice selector (global) -->
+          <div class="announce-voice-bar">
+            <span class="material-icons" style="font-size:18px;color:var(--text-secondary);">record_voice_over</span>
+            <label style="font-size:12px;color:var(--text-secondary);white-space:nowrap;">Voice:</label>
+            <select id="announce-voice-select" class="routing-select" style="flex:1;max-width:250px;"></select>
+          </div>
+
+          <!-- Sub-tabs -->
+          <div class="announce-sub-tabs">
+            <button class="announce-sub-tab active" data-announce-tab="presets">
+              <span class="material-icons">touch_app</span> Presets
+            </button>
+            <button class="announce-sub-tab" data-announce-tab="sequences">
+              <span class="material-icons">playlist_play</span> Sequences
+            </button>
+            <button class="announce-sub-tab" data-announce-tab="custom">
+              <span class="material-icons">edit_note</span> Custom
+            </button>
+          </div>
+
+          <!-- PRESETS SUB-TAB -->
+          <div id="announce-tab-presets">
+            <div id="announce-presets-grid" class="announce-presets-grid">
+              <div class="text-center" style="opacity:0.5;">Loading presets...</div>
+            </div>
+          </div>
+
+          <!-- SEQUENCES SUB-TAB -->
+          <div id="announce-tab-sequences" style="display:none;">
+            <div id="announce-sequences-list">
+              <div class="text-center" style="opacity:0.5;">Loading sequences...</div>
+            </div>
+          </div>
+
+          <!-- CUSTOM SUB-TAB -->
+          <div id="announce-tab-custom" style="display:none;">
+            <div class="control-section">
+              <div class="section-title">Custom Text Announcement</div>
+              <textarea id="announce-custom-text" class="announce-textarea"
+                placeholder="Type your announcement message..." rows="3"></textarea>
+              <div style="display:flex;gap:8px;margin-top:8px;">
+                <button class="btn" id="btn-announce-custom" style="max-width:180px;">
+                  <span class="material-icons">campaign</span>
+                  <span class="btn-label">Announce</span>
+                </button>
+              </div>
+            </div>
+            <div class="control-section">
+              <div class="section-title">Play Audio File</div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <label class="btn" style="max-width:180px;cursor:pointer;">
+                  <span class="material-icons">upload_file</span>
+                  <span class="btn-label">Choose File</span>
+                  <input type="file" id="announce-file-input" accept="audio/*" style="display:none;" />
+                </label>
+                <span id="announce-file-name" style="font-size:12px;color:var(--text-secondary);">No file selected</span>
+              </div>
+              <button class="btn" id="btn-announce-play-file" style="max-width:180px;margin-top:8px;" disabled>
+                <span class="material-icons">play_circle</span>
+                <span class="btn-label">Upload &amp; Play</span>
+              </button>
             </div>
           </div>
         </div>
@@ -437,132 +495,360 @@ const SourcePage = {
 
   async _initAnnouncements() {
     this._announcementsLoaded = true;
-    const container = document.getElementById('announce-container');
-    if (!container) return;
+    this._announceConfig = null;
+
+    // Load announcement config from gateway
+    try {
+      const resp = await fetch('/api/announcements/config', {
+        signal: AbortSignal.timeout(10000),
+      });
+      this._announceConfig = await resp.json();
+    } catch (e) {
+      console.error('Failed to load announcement config:', e);
+      this._announceConfig = { defaults: {}, presets: {}, sequences: {}, voices: [] };
+    }
+
+    const cfg = this._announceConfig;
+
+    // Populate voice selector
+    const voiceSelect = document.getElementById('announce-voice-select');
+    if (voiceSelect && cfg.voices) {
+      const savedVoice = localStorage.getItem('stp_announce_voice') || cfg.defaults?.voice || '';
+      voiceSelect.innerHTML = cfg.voices.map(v =>
+        `<option value="${v.id}" ${v.id === savedVoice ? 'selected' : ''}>${v.name} (${v.gender}, ${v.locale})</option>`
+      ).join('');
+      voiceSelect.addEventListener('change', () => {
+        localStorage.setItem('stp_announce_voice', voiceSelect.value);
+      });
+    }
+
+    // Sub-tab switching
+    document.querySelectorAll('[data-announce-tab]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.announceTab;
+        document.querySelectorAll('[data-announce-tab]').forEach(t => t.classList.toggle('active', t.dataset.announceTab === target));
+        document.getElementById('announce-tab-presets').style.display = target === 'presets' ? '' : 'none';
+        document.getElementById('announce-tab-sequences').style.display = target === 'sequences' ? '' : 'none';
+        document.getElementById('announce-tab-custom').style.display = target === 'custom' ? '' : 'none';
+      });
+    });
+
+    this._renderPresets(cfg.presets || {});
+    this._renderSequences(cfg.sequences || {});
+    this._wireCustomAnnounce();
+    this._wireFileUpload();
+    this._listenAnnounceProgress();
+  },
+
+  _getSelectedVoice() {
+    return document.getElementById('announce-voice-select')?.value || 'en-US-AndrewNeural';
+  },
+
+  _renderPresets(presets) {
+    const grid = document.getElementById('announce-presets-grid');
+    if (!grid) return;
+
+    if (!Object.keys(presets).length) {
+      grid.innerHTML = '<div class="text-center" style="opacity:0.5;">No presets configured</div>';
+      return;
+    }
+
+    grid.innerHTML = Object.entries(presets).map(([key, preset]) => `
+      <button class="announce-preset-btn" data-preset="${key}" title="${preset.text || ''}">
+        <span class="material-icons announce-preset-icon">${preset.icon || 'campaign'}</span>
+        <span class="announce-preset-label">${preset.label || key}</span>
+      </button>
+    `).join('');
+
+    grid.querySelectorAll('[data-preset]').forEach(btn => {
+      btn.addEventListener('click', () => this._playPreset(btn.dataset.preset));
+    });
+  },
+
+  async _playPreset(presetKey) {
+    const preset = this._announceConfig?.presets?.[presetKey];
+    if (!preset) return;
+
+    if (!await App.showConfirm(`Broadcast this announcement?\n\n"${preset.text}"`)) return;
+
+    const btn = document.querySelector(`[data-preset="${presetKey}"]`);
+    if (btn) btn.classList.add('announcing');
 
     try {
-      const resp = await fetch('/api/ha/entities?domain=automation&q=alexaannounce', {
+      const resp = await fetch(`/api/announcements/preset/${presetKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voice: this._getSelectedVoice() }),
+        signal: AbortSignal.timeout(30000),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        App.showToast(`Announced: ${preset.label}`, 3000);
+      } else {
+        App.showToast(`Failed: ${data.error || 'Unknown error'}`, 5000);
+      }
+    } catch (e) {
+      App.showToast('Announcement failed — network error', 4000);
+    } finally {
+      if (btn) btn.classList.remove('announcing');
+    }
+  },
+
+  _renderSequences(sequences) {
+    const container = document.getElementById('announce-sequences-list');
+    if (!container) return;
+
+    if (!Object.keys(sequences).length) {
+      container.innerHTML = '<div class="text-center" style="opacity:0.5;">No sequences configured</div>';
+      return;
+    }
+
+    container.innerHTML = Object.entries(sequences).map(([key, seq]) => {
+      const stepsHtml = (seq.steps || []).map((step, i) => {
+        if (step.type === 'announce') {
+          return `<div class="announce-seq-step" data-step="${i}">
+            <span class="material-icons" style="font-size:14px;color:var(--accent);">campaign</span>
+            <span>"${step.text}"</span>
+          </div>`;
+        }
+        if (step.type === 'delay') {
+          const label = step.minutes ? `${step.minutes} min` : `${step.seconds || 0}s`;
+          return `<div class="announce-seq-step" data-step="${i}">
+            <span class="material-icons" style="font-size:14px;color:var(--text-secondary);">hourglass_empty</span>
+            <span>Wait ${label}</span>
+          </div>`;
+        }
+        return '';
+      }).join('');
+
+      return `
+        <div class="announce-sequence-card" data-sequence="${key}">
+          <div class="announce-seq-header">
+            <div class="announce-seq-info">
+              <span class="material-icons" style="font-size:20px;">${seq.icon || 'playlist_play'}</span>
+              <div>
+                <div class="announce-seq-title">${seq.label || key}</div>
+                ${seq.description ? `<div class="announce-seq-desc">${seq.description}</div>` : ''}
+              </div>
+            </div>
+            <div class="announce-seq-actions">
+              <button class="btn announce-seq-play-btn" data-seq-play="${key}" title="Start sequence">
+                <span class="material-icons">play_arrow</span>
+              </button>
+              <button class="btn announce-seq-cancel-btn" data-seq-cancel="${key}" title="Cancel sequence" style="display:none;">
+                <span class="material-icons">stop</span>
+              </button>
+            </div>
+          </div>
+          <div class="announce-seq-steps">${stepsHtml}</div>
+          <div class="announce-seq-progress" id="seq-progress-${key}" style="display:none;">
+            <div class="announce-seq-progress-bar"><div class="announce-seq-progress-fill" id="seq-fill-${key}"></div></div>
+            <div class="announce-seq-progress-text" id="seq-status-${key}"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.querySelectorAll('[data-seq-play]').forEach(btn => {
+      btn.addEventListener('click', () => this._playSequence(btn.dataset.seqPlay));
+    });
+    container.querySelectorAll('[data-seq-cancel]').forEach(btn => {
+      btn.addEventListener('click', () => this._cancelSequence(btn.dataset.seqCancel));
+    });
+  },
+
+  async _playSequence(sequenceKey) {
+    const seq = this._announceConfig?.sequences?.[sequenceKey];
+    if (!seq) return;
+
+    if (!await App.showConfirm(`Run announcement sequence?\n\n${seq.label}\n(${seq.steps?.length || 0} steps)`)) return;
+
+    // Show progress, swap play/cancel buttons
+    const playBtn = document.querySelector(`[data-seq-play="${sequenceKey}"]`);
+    const cancelBtn = document.querySelector(`[data-seq-cancel="${sequenceKey}"]`);
+    const progress = document.getElementById(`seq-progress-${sequenceKey}`);
+    if (playBtn) playBtn.style.display = 'none';
+    if (cancelBtn) cancelBtn.style.display = '';
+    if (progress) progress.style.display = '';
+
+    try {
+      const resp = await fetch(`/api/announcements/sequence/${sequenceKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voice: this._getSelectedVoice() }),
         signal: AbortSignal.timeout(10000),
       });
       const data = await resp.json();
-      const entities = data.domains?.automation?.entities || [];
-      // Filter to only automation.automation_alexaannounce_* entity IDs
-      this._announcements = entities.filter(e =>
-        e.entity_id.startsWith('automation.automation_alexaannounce_')
-      );
+      if (!data.success) {
+        App.showToast(`Failed to start sequence: ${data.error}`, 5000);
+        if (playBtn) playBtn.style.display = '';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        if (progress) progress.style.display = 'none';
+      }
     } catch (e) {
-      console.error('Failed to load Alexa announcements:', e);
-      this._announcements = [];
+      App.showToast('Failed to start sequence — network error', 4000);
+      if (playBtn) playBtn.style.display = '';
+      if (cancelBtn) cancelBtn.style.display = 'none';
+      if (progress) progress.style.display = 'none';
     }
+  },
 
-    const options = this._announcements.map(a => {
-      const label = a.friendly_name || a.entity_id.replace('automation.automation_alexaannounce_', '').replace(/_/g, ' ');
-      return `<option value="${a.entity_id}">${label}</option>`;
-    }).join('');
+  async _cancelSequence(sequenceKey) {
+    try {
+      await fetch(`/api/announcements/sequence/${sequenceKey}/cancel`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(5000),
+      });
+      App.showToast('Cancelling sequence...', 2000);
+    } catch (e) {
+      App.showToast('Failed to cancel', 3000);
+    }
+  },
 
-    container.innerHTML = `
-      <div class="announce-form">
-        <label class="announce-label">Select an announcement</label>
-        <select id="announce-select" class="routing-select" style="width:100%;margin-bottom:10px;">
-          <option value="">-- Choose --</option>
-          ${options}
-          <option value="__custom__">Custom Announcement</option>
-        </select>
-        <div id="announce-description" class="announce-description" style="display:none;"></div>
-        <textarea id="announce-custom-text" class="announce-textarea" style="display:none;"
-          placeholder="Type your announcement message..." rows="3"></textarea>
-        <button class="btn" id="btn-announce" style="margin-top:10px;max-width:220px;">
-          <span class="material-icons">campaign</span>
-          <span class="btn-label">Announce</span>
-        </button>
-      </div>
-    `;
+  _listenAnnounceProgress() {
+    if (this._announceProgressBound) return;
+    this._announceProgressBound = true;
 
-    // Dropdown change handler
-    document.getElementById('announce-select')?.addEventListener('change', (e) => {
-      const val = e.target.value;
-      const descEl = document.getElementById('announce-description');
-      const textEl = document.getElementById('announce-custom-text');
+    App.socket?.on('announce:progress', (data) => {
+      if (data.type !== 'sequence') return;
+      const key = data.sequence;
+      const playBtn = document.querySelector(`[data-seq-play="${key}"]`);
+      const cancelBtn = document.querySelector(`[data-seq-cancel="${key}"]`);
+      const progress = document.getElementById(`seq-progress-${key}`);
+      const fill = document.getElementById(`seq-fill-${key}`);
+      const status = document.getElementById(`seq-status-${key}`);
 
-      if (val === '__custom__') {
-        descEl.style.display = 'none';
-        textEl.style.display = '';
-        textEl.focus();
-      } else if (val) {
-        textEl.style.display = 'none';
-        const ann = this._announcements.find(a => a.entity_id === val);
-        const desc = ann?.attributes?.description;
-        if (desc) {
-          descEl.textContent = desc;
-          descEl.style.display = '';
+      if (!progress) return;
+
+      const total = data.steps_total || 1;
+      const completed = data.steps_completed || 0;
+      const pct = Math.round((completed / total) * 100);
+
+      if (fill) fill.style.width = `${pct}%`;
+      if (status) status.textContent = data.current_step || data.status;
+
+      // Highlight active step
+      const card = document.querySelector(`[data-sequence="${key}"]`);
+      if (card) {
+        card.querySelectorAll('.announce-seq-step').forEach((el, i) => {
+          el.classList.toggle('active-step', i === completed);
+          el.classList.toggle('completed-step', i < completed);
+        });
+      }
+
+      if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
+        if (playBtn) playBtn.style.display = '';
+        if (cancelBtn) cancelBtn.style.display = 'none';
+
+        if (data.status === 'completed') {
+          if (fill) fill.style.width = '100%';
+          if (status) status.textContent = 'Completed';
+          App.showToast('Announcement sequence completed', 3000);
+        } else if (data.status === 'cancelled') {
+          if (status) status.textContent = 'Cancelled';
+          App.showToast('Sequence cancelled', 2000);
         } else {
-          descEl.style.display = 'none';
+          if (status) status.textContent = `Failed: ${data.error || ''}`;
+          App.showToast(`Sequence failed: ${data.error || 'Unknown error'}`, 5000);
         }
+
+        // Reset step highlighting
+        if (card) {
+          card.querySelectorAll('.announce-seq-step').forEach(el => {
+            el.classList.remove('active-step');
+            if (data.status === 'completed') el.classList.add('completed-step');
+          });
+        }
+
+        // Hide progress after delay
+        setTimeout(() => {
+          if (progress) progress.style.display = 'none';
+          if (card) {
+            card.querySelectorAll('.announce-seq-step').forEach(el => {
+              el.classList.remove('completed-step', 'active-step');
+            });
+          }
+        }, 5000);
+      }
+    });
+  },
+
+  _wireCustomAnnounce() {
+    document.getElementById('btn-announce-custom')?.addEventListener('click', async () => {
+      const text = document.getElementById('announce-custom-text')?.value?.trim();
+      if (!text) {
+        App.showToast('Please type a message first', 2000);
+        return;
+      }
+      if (!await App.showConfirm(`Broadcast this announcement?\n\n"${text}"`)) return;
+
+      try {
+        const resp = await fetch('/api/announcements/text', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, voice: this._getSelectedVoice() }),
+          signal: AbortSignal.timeout(30000),
+        });
+        const data = await resp.json();
+        if (data.success) {
+          App.showToast('Announcement sent!', 3000);
+          document.getElementById('announce-custom-text').value = '';
+        } else {
+          App.showToast(`Failed: ${data.error || 'Unknown error'}`, 5000);
+        }
+      } catch (e) {
+        App.showToast('Announcement failed — network error', 4000);
+      }
+    });
+  },
+
+  _wireFileUpload() {
+    const fileInput = document.getElementById('announce-file-input');
+    const fileName = document.getElementById('announce-file-name');
+    const playBtn = document.getElementById('btn-announce-play-file');
+
+    fileInput?.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      if (file) {
+        fileName.textContent = file.name;
+        playBtn.disabled = false;
       } else {
-        descEl.style.display = 'none';
-        textEl.style.display = 'none';
+        fileName.textContent = 'No file selected';
+        playBtn.disabled = true;
       }
     });
 
-    // Announce button
-    document.getElementById('btn-announce')?.addEventListener('click', () => this._sendAnnouncement());
-  },
+    playBtn?.addEventListener('click', async () => {
+      const file = fileInput?.files?.[0];
+      if (!file) return;
 
-  async _sendAnnouncement() {
-    const select = document.getElementById('announce-select');
-    const textArea = document.getElementById('announce-custom-text');
-    const val = select?.value;
-    if (!val) {
-      App.showToast('Please select an announcement first', 2000);
-      return;
-    }
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('play', 'true');
 
-    const isCustom = val === '__custom__';
-    const customMsg = textArea?.value?.trim();
-    if (isCustom && !customMsg) {
-      App.showToast('Please type a message first', 2000);
-      return;
-    }
-
-    const label = isCustom ? `"${customMsg}"` : select.options[select.selectedIndex].text;
-    if (!await App.showConfirm(`Broadcast this announcement?\n\n${label}`)) return;
-
-    try {
-      // Ensure aux channels 3 and 4 are unmuted before announcing
-      await Promise.all([X32API.unmuteAux(3), X32API.unmuteAux(4)]);
-
-      let resp;
-      if (isCustom) {
-        resp = await fetch('/api/ha/service/notify/send_message', {
+      try {
+        playBtn.disabled = true;
+        const resp = await fetch('/api/announcements/upload', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            entity_id: 'notify.av_room_echo_dot_announce',
-            message: customMsg,
-          }),
-          signal: AbortSignal.timeout(15000),
+          body: formData,
+          signal: AbortSignal.timeout(30000),
         });
-      } else {
-        resp = await fetch('/api/ha/service/automation/trigger', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ entity_id: val }),
-          signal: AbortSignal.timeout(15000),
-        });
+        const data = await resp.json();
+        if (data.played) {
+          App.showToast(`Playing: ${file.name}`, 3000);
+        } else if (data.play_error) {
+          App.showToast(`Uploaded but playback failed: ${data.play_error}`, 5000);
+        } else if (data.error) {
+          App.showToast(`Upload failed: ${data.error}`, 5000);
+        } else {
+          App.showToast('File uploaded', 2000);
+        }
+      } catch (e) {
+        App.showToast('Upload failed — network error', 4000);
+      } finally {
+        playBtn.disabled = false;
       }
-      const body = await resp.json().catch(() => null);
-      if (resp.ok) {
-        App.showToast('Announcement sent!', 3000);
-        if (isCustom) textArea.value = '';
-      } else {
-        const detail = body?.error || body?.message || `HTTP ${resp.status}`;
-        console.error('Announcement HA error:', resp.status, body);
-        App.showToast(`Announcement failed: ${detail}`, 5000);
-      }
-    } catch (e) {
-      console.error('Announcement error:', e);
-      App.showToast('Announcement failed — network error', 4000);
-    }
+    });
   },
 
   // ---- TEST PANEL ----
@@ -586,19 +872,20 @@ const SourcePage = {
       console.error('Failed to load notify entities:', e);
     }
 
-    // Load automation presets (reuse from announcements)
-    if (!this._announcementsLoaded) {
+    // Load automation presets (for legacy test methods)
+    let legacyAutomations = [];
+    {
       try {
         const resp = await fetch('/api/ha/entities?domain=automation&q=alexaannounce', {
           signal: AbortSignal.timeout(10000),
         });
         const data = await resp.json();
         const entities = data.domains?.automation?.entities || [];
-        this._announcements = entities.filter(e =>
+        legacyAutomations = entities.filter(e =>
           e.entity_id.startsWith('automation.automation_alexaannounce_')
         );
       } catch (e) {
-        this._announcements = [];
+        legacyAutomations = [];
       }
     }
 
@@ -607,7 +894,7 @@ const SourcePage = {
       return `<option value="${e.entity_id}">${label}</option>`;
     }).join('');
 
-    const automationOptions = this._announcements.map(a => {
+    const automationOptions = legacyAutomations.map(a => {
       const label = a.friendly_name || a.entity_id.replace('automation.automation_alexaannounce_', '').replace(/_/g, ' ');
       return `<option value="${a.entity_id}">${label}</option>`;
     }).join('');
@@ -892,11 +1179,11 @@ const SourcePage = {
         <label class="announce-label">TTS Announcement</label>
         <div style="margin-bottom:8px;">
           <select id="wiim-tts-voice" class="routing-select" style="width:100%;margin-bottom:6px;">
+            <option value="en-US-AndrewNeural">Andrew (Male, US)</option>
             <option value="en-US-GuyNeural">Guy (Male, US)</option>
             <option value="en-US-JennyNeural">Jenny (Female, US)</option>
             <option value="en-US-AriaNeural">Aria (Female, US)</option>
             <option value="en-US-DavisNeural">Davis (Male, US)</option>
-            <option value="en-US-JaneNeural">Jane (Female, US)</option>
             <option value="en-GB-RyanNeural">Ryan (Male, UK)</option>
             <option value="en-GB-SoniaNeural">Sonia (Female, UK)</option>
           </select>
@@ -1336,33 +1623,42 @@ const SourcePage = {
 
           <div class="help-section">
             <h3>Announcements Tab</h3>
-            <p class="help-note">Broadcasts voice announcements through the church Alexa system.</p>
+            <p class="help-note">Broadcasts voice announcements through the WiiM Pro media player using text-to-speech (TTS). The WiiM feeds into the X32 mixer via Aux 3/4 for church-wide audio.</p>
             <dl class="help-list">
-              <dt>Preset Announcements</dt>
-              <dd>Select a pre-configured announcement from the dropdown. These are defined as Home Assistant automations and may include specific wording, timing, or multi-step sequences.</dd>
-              <dt>Custom Announcement</dt>
-              <dd>Choose "Custom Announcement" from the dropdown to type a free-form message. The text will be spoken by Alexa exactly as typed.</dd>
-              <dt><span class="material-icons">campaign</span> Announce</dt>
-              <dd>Sends the selected or custom announcement. A confirmation dialog will appear before broadcasting.</dd>
+              <dt>Voice Selector</dt>
+              <dd>Choose the TTS voice used for all announcements. Your selection is saved and persists across sessions. Uses Microsoft Edge TTS voices.</dd>
+              <dt><span class="material-icons">touch_app</span> Presets</dt>
+              <dd>One-tap preset announcements (e.g., "Church Closing", "Sunday School Starting"). Defined in announcements.yaml on the gateway. Tap a button, confirm, and the announcement plays immediately.</dd>
+              <dt><span class="material-icons">playlist_play</span> Sequences</dt>
+              <dd>Multi-step announcement workflows with delays between messages (e.g., "Sunday School Countdown" announces at 20, 10, 5, and 0 minutes). Shows real-time progress with step highlighting and countdown. Sequences can be cancelled mid-run. Can also be triggered from macros.</dd>
+              <dt><span class="material-icons">edit_note</span> Custom</dt>
+              <dd>Type any text and announce it immediately, or upload an MP3 audio file to play through the WiiM.</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3>Announcements in Macros</h3>
+            <p class="help-note">Presets, sequences, and custom text can be used as macro steps in macros.yaml using the <code>tts_announce</code> step type:</p>
+            <dl class="help-list">
+              <dt>Preset from macro</dt>
+              <dd><code>type: tts_announce, preset: church_closing</code></dd>
+              <dt>Sequence from macro</dt>
+              <dd><code>type: tts_announce, sequence: sunday_school_countdown</code></dd>
+              <dt>Inline text from macro</dt>
+              <dd><code>type: tts_announce, text: "The liturgy is beginning."</code></dd>
             </dl>
           </div>
 
           <div class="help-section">
             <h3>Test Tab</h3>
-            <p class="help-note">Compare different announcement delivery methods to find the most reliable approach. Each method calls Home Assistant differently:</p>
+            <p class="help-note">Legacy testing tools for comparing announcement delivery methods (Alexa, WiiM) and debugging.</p>
             <dl class="help-list">
-              <dt>Method 1: notify/send_message</dt>
-              <dd>Direct HA notify service call (same as current custom announcements).</dd>
-              <dt>Method 2: notify/send_message (type: announce)</dt>
-              <dd>Uses Alexa Media Player's "announce" mode which uses a different voice style.</dd>
-              <dt>Method 3: notify/send_message (type: tts)</dt>
-              <dd>Uses Alexa Media Player's TTS mode.</dd>
-              <dt>Method 4: automation/trigger</dt>
-              <dd>Triggers an HA automation (same as current preset announcements).</dd>
-              <dt>Method 5: script/turn_on</dt>
-              <dd>Calls an HA script entity directly.</dd>
+              <dt>Announcement Method Testing</dt>
+              <dd>Tests various HA notification methods (notify, automation, script).</dd>
+              <dt>WiiM Pro Testing</dt>
+              <dd>Direct WiiM media player controls: volume, transport, TTS, URL playback.</dd>
               <dt>Test Log</dt>
-              <dd>Shows timing and success/failure for each test to help identify the most reliable method.</dd>
+              <dd>Shows timing and success/failure for each test.</dd>
             </dl>
           </div>
 
@@ -1385,7 +1681,8 @@ const SourcePage = {
     this._closePreview();
     this._activeTab = 'video';
     this._announcementsLoaded = false;
-    this._announcements = [];
+    this._announceConfig = null;
+    this._announceProgressBound = false;
     this._testLoaded = false;
     this._testLog = [];
   }

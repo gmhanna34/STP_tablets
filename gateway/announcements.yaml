@@ -1,0 +1,132 @@
+# =============================================================================
+# STP Announcement Configuration
+# =============================================================================
+# Defines preset announcements and multi-step announcement sequences.
+#
+# PRESETS:
+#   Simple one-shot announcements triggered by a single button tap.
+#   Each preset has a label, icon, and the text to speak.
+#
+# SEQUENCES:
+#   Multi-step announcement workflows with delays between messages.
+#   Each sequence contains a list of steps:
+#     - type: announce    — Speak TTS text via WiiM
+#     - type: delay       — Wait N minutes (or seconds) before next step
+#
+# VOICE:
+#   The default TTS voice is set in defaults.voice below.
+#   Individual presets/steps can override the voice.
+#   Uses Microsoft Edge TTS voices (e.g., en-US-AndrewNeural).
+#   Run `edge-tts --list-voices` to see all available voices.
+#
+# USAGE FROM MACROS (macros.yaml):
+#   Presets, sequences, or inline text can be called from any macro
+#   using the tts_announce step type:
+#
+#     # Play a preset announcement:
+#     - type: tts_announce
+#       preset: church_closing
+#       message: "Announcing church closing"
+#
+#     # Run a full sequence:
+#     - type: tts_announce
+#       sequence: sunday_school_countdown
+#       message: "Running Sunday School countdown"
+#
+#     # Speak inline text:
+#     - type: tts_announce
+#       text: "The liturgy is beginning."
+#       message: "Announcing liturgy start"
+#
+# WIIM ENTITY:
+#   Announcements play through the WiiM Pro media player via Home Assistant.
+#   Entity: media_player.wiim_pro_new
+# =============================================================================
+
+defaults:
+  voice: "en-US-AndrewNeural"
+  wiim_entity: "media_player.wiim_pro_new"
+  announce_mode: true          # Use HA announce mode (ducks current audio)
+  unmute_aux: [3, 4]           # Unmute these X32 aux channels before announcing
+
+presets:
+  church_closing:
+    label: "Church Closing"
+    icon: "door_front"
+    text: "Attention please. The church building will be closing in 15 minutes. Please make sure you have all of your belongings before you leave. Thank you."
+
+  adult_class:
+    label: "Adult Class Starting"
+    icon: "school"
+    text: "The adult education class is starting now in the social hall. All are welcome to attend."
+
+  sunday_school:
+    label: "Sunday School Starting"
+    icon: "child_care"
+    text: "Sunday school is starting now. All children and teachers please proceed to your classrooms."
+
+  nursery_open:
+    label: "Nursery Open"
+    icon: "crib"
+    text: "The nursery is now open. Parents, you are welcome to bring your children to the nursery at any time."
+
+  choir_rehearsal:
+    label: "Choir Rehearsal"
+    icon: "music_note"
+    text: "Choir rehearsal is beginning now. All choir members please gather in the main church."
+
+  liturgy_starting:
+    label: "Liturgy Starting"
+    icon: "church"
+    text: "The Divine Liturgy is about to begin. Please take your seats in the main church."
+
+  meeting_starting:
+    label: "Meeting Starting"
+    icon: "groups"
+    text: "The meeting is starting now in the conference room. All attendees please make your way there."
+
+  building_emergency:
+    label: "Emergency"
+    icon: "warning"
+    text: "Attention. Please calmly proceed to the nearest exit and gather in the parking lot. Do not use the elevators."
+
+sequences:
+  sunday_school_countdown:
+    label: "Sunday School Countdown"
+    icon: "timer"
+    description: "Announces Sunday school at 20, 10, 5, and 0 minutes"
+    steps:
+      - type: announce
+        text: "Attention parents. Sunday school will begin in 20 minutes. Please start preparing your children."
+      - type: delay
+        minutes: 10
+      - type: announce
+        text: "Sunday school will begin in 10 minutes. Please bring your children to their classrooms."
+      - type: delay
+        minutes: 5
+      - type: announce
+        text: "Sunday school starts in 5 minutes."
+      - type: delay
+        minutes: 3
+      - type: announce
+        text: "Sunday school is about to begin. Please bring your children to their classrooms now."
+      - type: delay
+        minutes: 2
+      - type: announce
+        text: "Sunday school is starting now."
+
+  closing_countdown:
+    label: "Closing Countdown"
+    icon: "schedule"
+    description: "Announces building closing at 30, 15, and 5 minutes"
+    steps:
+      - type: announce
+        text: "Attention please. The church building will be closing in 30 minutes."
+      - type: delay
+        minutes: 15
+      - type: announce
+        text: "The church building will be closing in 15 minutes. Please begin to wrap up your activities."
+      - type: delay
+        minutes: 10
+      - type: announce
+        text: "The church building closes in 5 minutes. Please make sure you have all of your belongings. Thank you."

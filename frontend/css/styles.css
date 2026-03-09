@@ -1044,6 +1044,219 @@ body {
   max-width: 100px;
 }
 
+/* ── Announcements System ─────────────────────────────────── */
+
+.announce-voice-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.announce-sub-tabs {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.announce-sub-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.announce-sub-tab .material-icons {
+  font-size: 16px;
+}
+
+.announce-sub-tab.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
+/* Preset Grid */
+.announce-presets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.announce-preset-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 10px;
+  border-radius: 10px;
+  border: 2px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 80px;
+}
+
+.announce-preset-btn:hover {
+  border-color: var(--accent);
+  background: rgba(255, 140, 0, 0.08);
+}
+
+.announce-preset-btn:active {
+  transform: scale(0.96);
+}
+
+.announce-preset-btn.announcing {
+  border-color: var(--accent);
+  background: rgba(255, 140, 0, 0.15);
+  animation: announce-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes announce-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 140, 0, 0.3); }
+  50% { box-shadow: 0 0 0 8px rgba(255, 140, 0, 0); }
+}
+
+.announce-preset-icon {
+  font-size: 28px;
+  color: var(--accent);
+}
+
+.announce-preset-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* Sequence Cards */
+.announce-sequence-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.announce-seq-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.announce-seq-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.announce-seq-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.announce-seq-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.announce-seq-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.announce-seq-play-btn,
+.announce-seq-cancel-btn {
+  min-width: 40px;
+  padding: 6px 10px;
+}
+
+.announce-seq-cancel-btn {
+  border-color: #cc3333;
+  color: #cc3333;
+}
+
+.announce-seq-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+}
+
+.announce-seq-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.announce-seq-step.active-step {
+  background: rgba(255, 140, 0, 0.12);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.announce-seq-step.completed-step {
+  color: #00b050;
+}
+
+.announce-seq-step.completed-step .material-icons {
+  color: #00b050;
+}
+
+/* Sequence Progress */
+.announce-seq-progress {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.announce-seq-progress-bar {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.announce-seq-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  width: 0;
+  transition: width 0.5s ease;
+}
+
+.announce-seq-progress-text {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
 /* ── Camera Tab Bar ──────────────────────────────────────── */
 
 .cam-tab-bar {

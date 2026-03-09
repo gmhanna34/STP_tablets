@@ -1128,124 +1128,166 @@ def register_api_routes(ctx):
         except Exception as e:
             return jsonify({"error": str(e)}), 503
 
-    # ---- TTS: generate audio directly via edge-tts, serve from gateway ----
-    # The WiiM can't fetch HA's /api/tts_proxy/ URLs, so we generate TTS
-    # audio directly using Microsoft Edge TTS and serve from the gateway.
+    # ---- TTS & Announcements ----
+    # TTS generation via edge-tts, announcement presets/sequences, WiiM playback.
+    # The announcement module (announcement_module.py) handles all logic.
+    # Audio is cached in-memory and served without auth so WiiM can fetch it.
 
-    _tts_cache = {}  # filename -> {"bytes": bytes, "created": float}
-    _tts_cache_lock = threading.Lock()
-    _TTS_CACHE_MAX = 20
-    _TTS_CACHE_TTL = 300  # 5 minutes
+    ann = ctx.announcements
 
     @app.route("/api/tts/generate", methods=["POST"])
     def tts_generate():
-        """Generate TTS audio via edge-tts CLI subprocess, cache it, return a gateway-hosted URL."""
+        """Generate TTS audio via edge-tts, cache it, return a gateway-hosted URL."""
         if mock_mode:
             return jsonify({"url": "/api/tts/audio/mock.mp3", "mock": True}), 200
-
         data = request.get_json(silent=True) or {}
         message = data.get("message", "").strip()
         if not message:
             return jsonify({"error": "message is required"}), 400
-
-        voice = data.get("voice", "en-US-GuyNeural")  # Microsoft Edge TTS voice
-
-        try:
-            import subprocess
-            import tempfile
-
-            # Use edge-tts CLI as a subprocess to completely avoid eventlet conflicts
-            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
-                tmp_path = tmp.name
-
-            try:
-                result = subprocess.run(
-                    ["edge-tts", "--voice", voice, "--text", message, "--write-media", tmp_path],
-                    capture_output=True, text=True, timeout=30,
-                )
-                if result.returncode != 0:
-                    return jsonify({"error": f"edge-tts failed: {result.stderr[:300]}"}), 502
-
-                with open(tmp_path, "rb") as f:
-                    audio_bytes = f.read()
-            finally:
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
-
-            if not audio_bytes or len(audio_bytes) < 100:
-                return jsonify({"error": "edge-tts returned empty/invalid audio"}), 502
-
-            # Cache the audio and return a gateway URL
-            filename = hashlib.md5((message + voice + str(time.time())).encode()).hexdigest() + ".mp3"
-
-            with _tts_cache_lock:
-                now = time.time()
-                expired = [k for k, v in _tts_cache.items() if now - v["created"] > _TTS_CACHE_TTL]
-                for k in expired:
-                    del _tts_cache[k]
-                while len(_tts_cache) >= _TTS_CACHE_MAX:
-                    oldest = min(_tts_cache, key=lambda k: _tts_cache[k]["created"])
-                    del _tts_cache[oldest]
-                _tts_cache[filename] = {"bytes": audio_bytes, "created": now,
-                                        "content_type": "audio/mpeg"}
-
-            gateway_url = f"/api/tts/audio/{filename}"
-            logger.info("TTS generated (edge-tts): %s (%d bytes, voice=%s) -> %s",
-                        message[:50], len(audio_bytes), voice, gateway_url)
-            return jsonify({"url": gateway_url, "size": len(audio_bytes), "voice": voice}), 200
-
-        except FileNotFoundError:
-            return jsonify({"error": "edge-tts CLI not found. Run: pip install edge-tts"}), 503
-        except subprocess.TimeoutExpired:
-            return jsonify({"error": "edge-tts timed out (30s)"}), 504
-        except Exception as e:
-            logger.error("TTS generate error: %s", e)
-            return jsonify({"error": str(e)}), 503
+        voice = data.get("voice", ann.default_voice if ann else "en-US-AndrewNeural")
+        result = ann.generate_tts(message, voice)
+        if "error" in result:
+            return jsonify(result), 502
+        return jsonify(result), 200
 
     @app.route("/api/tts/voices")
     def tts_voices():
-        """List available edge-tts voices (filtered to English)."""
-        try:
-            import subprocess
-
-            result = subprocess.run(
-                ["edge-tts", "--list-voices"],
-                capture_output=True, text=True, timeout=15,
-            )
-            if result.returncode != 0:
-                return jsonify({"error": f"edge-tts --list-voices failed: {result.stderr[:200]}"}), 502
-
-            # Parse the output (format: "Name: en-US-GuyNeural\nGender: Male\n...")
-            voices = []
-            current = {}
-            for line in result.stdout.splitlines():
-                line = line.strip()
-                if line.startswith("Name:"):
-                    if current:
-                        voices.append(current)
-                    current = {"Name": line.split(":", 1)[1].strip()}
-                elif ":" in line and current:
-                    key, val = line.split(":", 1)
-                    current[key.strip()] = val.strip()
-            if current:
-                voices.append(current)
-
-            en_voices = [v for v in voices if v.get("Name", "").startswith("en-")]
-            return jsonify({"voices": en_voices, "total": len(en_voices)}), 200
-        except Exception as e:
-            return jsonify({"error": str(e)}), 503
+        """Return the curated list of supported TTS voices."""
+        from announcement_module import DEFAULT_VOICES
+        return jsonify({"voices": DEFAULT_VOICES, "total": len(DEFAULT_VOICES)}), 200
 
     @app.route("/api/tts/audio/<filename>")
     def tts_serve_audio(filename):
         """Serve cached TTS audio file (no auth required so WiiM can fetch it)."""
-        with _tts_cache_lock:
-            entry = _tts_cache.get(filename)
+        entry = ann.get_cached_audio(filename) if ann else None
         if not entry:
             return jsonify({"error": "TTS audio not found or expired"}), 404
         return Response(entry["bytes"], mimetype=entry.get("content_type", "audio/mpeg"),
                         headers={"Cache-Control": "no-cache"})
+
+    # ---- Announcement API ----
+
+    @app.route("/api/announcements/config")
+    def announcements_config():
+        """Return full announcement config (presets, sequences, voices, defaults)."""
+        if not ann:
+            return jsonify({"error": "Announcement module not available"}), 503
+        return jsonify(ann.get_config_summary()), 200
+
+    @app.route("/api/announcements/reload", methods=["POST"])
+    def announcements_reload():
+        """Reload announcements.yaml config."""
+        if not ann:
+            return jsonify({"error": "Announcement module not available"}), 503
+        ann.reload_config()
+        return jsonify({"success": True, "presets": len(ann.get_presets()),
+                        "sequences": len(ann.get_sequences())}), 200
+
+    @app.route("/api/announcements/preset/<preset_key>", methods=["POST"])
+    def announcements_play_preset(preset_key):
+        """Play a preset announcement."""
+        if not ann:
+            return jsonify({"error": "Announcement module not available"}), 503
+        data = request.get_json(silent=True) or {}
+        voice = data.get("voice")
+        gateway_origin = request.host_url.rstrip("/")
+        tablet = get_tablet_id(request, cfg)
+
+        result = ann.announce_preset(preset_key, voice, gateway_origin)
+        status = 200 if result.get("success") else 400
+        db.log_action(tablet, "announce:preset", preset_key,
+                      json.dumps({"voice": voice or ann.default_voice}),
+                      "OK" if result.get("success") else result.get("error", "FAILED"), 0)
+        return jsonify(result), status
+
+    @app.route("/api/announcements/text", methods=["POST"])
+    def announcements_play_text():
+        """Play a custom text announcement."""
+        if not ann:
+            return jsonify({"error": "Announcement module not available"}), 503
+        data = request.get_json(silent=True) or {}
+        text = data.get("text", "").strip()
+        if not text:
+            return jsonify({"error": "text is required"}), 400
+        voice = data.get("voice")
+        gateway_origin = request.host_url.rstrip("/")
+        tablet = get_tablet_id(request, cfg)
+
+        result = ann.announce_text(text, voice, gateway_origin)
+        status = 200 if result.get("success") else 502
+        db.log_action(tablet, "announce:text", text[:100],
+                      json.dumps({"voice": voice or ann.default_voice}),
+                      "OK" if result.get("success") else result.get("error", "FAILED"), 0)
+        return jsonify(result), status
+
+    @app.route("/api/announcements/sequence/<sequence_key>", methods=["POST"])
+    def announcements_play_sequence(sequence_key):
+        """Start a multi-step announcement sequence (runs in background thread)."""
+        if not ann:
+            return jsonify({"error": "Announcement module not available"}), 503
+        data = request.get_json(silent=True) or {}
+        voice = data.get("voice")
+        gateway_origin = request.host_url.rstrip("/")
+        tablet = get_tablet_id(request, cfg)
+
+        def _run():
+            result = ann.run_sequence(sequence_key, voice, gateway_origin, tablet)
+            db.log_action(tablet, "announce:sequence", sequence_key,
+                          json.dumps({"voice": voice or ann.default_voice}),
+                          "OK" if result.get("success") else result.get("error", "FAILED"), 0)
+
+        import eventlet
+        eventlet.spawn(_run)
+        return jsonify({"success": True, "message": f"Sequence '{sequence_key}' started"}), 200
+
+    @app.route("/api/announcements/sequence/<sequence_key>/cancel", methods=["POST"])
+    def announcements_cancel_sequence(sequence_key):
+        """Cancel a running announcement sequence."""
+        if not ann:
+            return jsonify({"error": "Announcement module not available"}), 503
+        result = ann.cancel_sequence(sequence_key)
+        return jsonify(result), 200 if result.get("success") else 404
+
+    @app.route("/api/announcements/active")
+    def announcements_active():
+        """Return list of currently running sequences."""
+        if not ann:
+            return jsonify({"active": []}), 200
+        return jsonify({"active": ann.get_active_sequences()}), 200
+
+    @app.route("/api/announcements/upload", methods=["POST"])
+    def announcements_upload_audio():
+        """Upload an MP3/audio file, cache it, and optionally play it on WiiM."""
+        if not ann:
+            return jsonify({"error": "Announcement module not available"}), 503
+
+        if "file" not in request.files:
+            return jsonify({"error": "No file uploaded"}), 400
+        file = request.files["file"]
+        if not file.filename:
+            return jsonify({"error": "No filename"}), 400
+
+        audio_bytes = file.read()
+        result = ann.cache_uploaded_audio(audio_bytes, file.filename)
+        if "error" in result:
+            return jsonify(result), 400
+
+        # Auto-play if requested
+        play = request.form.get("play", "false").lower() == "true"
+        if play:
+            ann.pre_announce()
+            gateway_origin = request.host_url.rstrip("/")
+            play_result = ann.play_on_wiim(gateway_origin + result["url"])
+            if "error" in play_result:
+                result["play_error"] = play_result["error"]
+            else:
+                result["played"] = True
+
+        tablet = get_tablet_id(request, cfg)
+        db.log_action(tablet, "announce:upload", file.filename,
+                      json.dumps({"size": len(audio_bytes)}),
+                      "OK", 0)
+        return jsonify(result), 200
 
     @app.route("/api/ha/entities")
     def ha_entities():
