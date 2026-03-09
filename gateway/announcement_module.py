@@ -119,6 +119,8 @@ class AnnouncementModule:
         if voice in _BLOCKED_VOICES:
             return {"error": f"Voice {voice} is not supported. Please choose a different voice."}
 
+        self.logger.info("[ANNOUNCE] TTS generate: voice=%s text='%s'", voice, message[:80])
+
         try:
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
                 tmp_path = tmp.name
@@ -129,6 +131,7 @@ class AnnouncementModule:
                     capture_output=True, text=True, timeout=30,
                 )
                 if result.returncode != 0:
+                    self.logger.error("[ANNOUNCE] edge-tts failed: %s", result.stderr[:300])
                     return {"error": f"edge-tts failed: {result.stderr[:300]}"}
 
                 with open(tmp_path, "rb") as f:
@@ -140,6 +143,7 @@ class AnnouncementModule:
                     pass
 
             if not audio_bytes or len(audio_bytes) < 100:
+                self.logger.error("[ANNOUNCE] edge-tts returned empty/invalid audio")
                 return {"error": "edge-tts returned empty/invalid audio"}
 
             # Cache the audio
@@ -162,16 +166,17 @@ class AnnouncementModule:
                 }
 
             url = f"/api/tts/audio/{filename}"
-            self.logger.info("TTS generated: %s (%d bytes, voice=%s) -> %s",
-                             message[:50], len(audio_bytes), voice, url)
+            self.logger.info("[ANNOUNCE] TTS cached: %d bytes -> %s", len(audio_bytes), url)
             return {"url": url, "size": len(audio_bytes), "voice": voice}
 
         except FileNotFoundError:
+            self.logger.error("[ANNOUNCE] edge-tts CLI not found")
             return {"error": "edge-tts CLI not found. Run: pip install edge-tts"}
         except subprocess.TimeoutExpired:
+            self.logger.error("[ANNOUNCE] edge-tts timed out (30s)")
             return {"error": "edge-tts timed out (30s)"}
         except Exception as e:
-            self.logger.error("TTS generate error: %s", e)
+            self.logger.error("[ANNOUNCE] TTS generate error: %s", e)
             return {"error": str(e)}
 
     def get_cached_audio(self, filename: str) -> Optional[dict]:
@@ -182,12 +187,18 @@ class AnnouncementModule:
     # ---- WiiM Playback ----
 
     def play_on_wiim(self, audio_url: str, announce: bool = None) -> dict:
-        """Play audio URL on WiiM via HA media_player.play_media."""
+        """Play audio URL on WiiM via HA media_player.play_media.
+
+        Uses the same HA REST API format as the gateway's /api/ha/service proxy.
+        The 'announce' flag is passed in 'extra' (not top-level) per HA convention.
+        """
         if announce is None:
             announce = self.announce_mode
 
         ha_cfg = self._get_ha_cfg()
         if not ha_cfg.get("url") or not ha_cfg.get("token"):
+            self.logger.error("[ANNOUNCE] play_on_wiim: HA not configured (url=%s, token=%s)",
+                              bool(ha_cfg.get("url")), bool(ha_cfg.get("token")))
             return {"error": "Home Assistant not configured"}
 
         play_data = {
@@ -196,11 +207,15 @@ class AnnouncementModule:
             "media_content_type": "music",
         }
         if announce:
-            play_data["announce"] = True
+            play_data["extra"] = {"announce": True}
+
+        ha_url = f"{ha_cfg['url']}/api/services/media_player/play_media"
+        self.logger.info("[ANNOUNCE] play_on_wiim: entity=%s url=%s announce=%s ha_url=%s",
+                         self.wiim_entity, audio_url, announce, ha_url)
 
         try:
             resp = http_requests.post(
-                f"{ha_cfg['url']}/api/services/media_player/play_media",
+                ha_url,
                 headers={
                     "Authorization": f"Bearer {ha_cfg['token']}",
                     "Content-Type": "application/json",
@@ -208,10 +223,15 @@ class AnnouncementModule:
                 json=play_data,
                 timeout=ha_cfg.get("timeout", 10),
             )
+            self.logger.info("[ANNOUNCE] play_on_wiim: HA responded %d (%d bytes)",
+                             resp.status_code, len(resp.content))
             if resp.status_code < 400:
-                return {"success": True}
+                return {"success": True, "ha_status": resp.status_code}
+            self.logger.error("[ANNOUNCE] play_on_wiim: HA error %d: %s",
+                              resp.status_code, resp.text[:200])
             return {"error": f"HA play_media returned {resp.status_code}"}
         except Exception as e:
+            self.logger.error("[ANNOUNCE] play_on_wiim failed: %s", e)
             return {"error": f"WiiM playback failed: {e}"}
 
     # ---- Pre-announce Actions ----
@@ -223,6 +243,7 @@ class AnnouncementModule:
         for aux_ch in self.unmute_aux_channels:
             try:
                 self.ctx.x32.mute_aux(aux_ch, "off")
+                self.logger.debug("[ANNOUNCE] Unmuted aux %d", aux_ch)
             except Exception as e:
                 self.logger.debug(f"Pre-announce unmute aux {aux_ch} failed: {e}")
 
@@ -230,22 +251,31 @@ class AnnouncementModule:
 
     def announce_text(self, text: str, voice: str = None, gateway_origin: str = "") -> dict:
         """Generate TTS and play on WiiM. Returns result dict."""
+        self.logger.info("[ANNOUNCE] announce_text: text='%s' voice=%s origin=%s",
+                         text[:60], voice or self.default_voice, gateway_origin)
         self.pre_announce()
 
         gen_result = self.generate_tts(text, voice)
         if "error" in gen_result:
+            self.logger.error("[ANNOUNCE] announce_text: TTS failed: %s", gen_result["error"])
             return gen_result
 
         audio_url = gateway_origin + gen_result["url"]
+        self.logger.info("[ANNOUNCE] announce_text: audio_url=%s (%d bytes)",
+                         audio_url, gen_result["size"])
+
         play_result = self.play_on_wiim(audio_url)
         if "error" in play_result:
+            self.logger.error("[ANNOUNCE] announce_text: play failed: %s", play_result["error"])
             return play_result
 
+        self.logger.info("[ANNOUNCE] announce_text: SUCCESS text='%s'", text[:60])
         return {
             "success": True,
             "text": text,
             "voice": gen_result["voice"],
             "audio_url": gen_result["url"],
+            "audio_url_full": audio_url,
             "size": gen_result["size"],
         }
 
@@ -256,12 +286,14 @@ class AnnouncementModule:
         """Play a preset announcement by key."""
         preset = self._presets.get(preset_key)
         if not preset:
+            self.logger.error("[ANNOUNCE] Unknown preset: %s", preset_key)
             return {"error": f"Unknown preset: {preset_key}"}
 
         text = preset.get("text", "")
         if not text:
             return {"error": f"Preset {preset_key} has no text"}
 
+        self.logger.info("[ANNOUNCE] Playing preset '%s': %s", preset_key, text[:60])
         result = self.announce_text(text, voice, gateway_origin)
         if result.get("success"):
             result["preset"] = preset_key
@@ -311,12 +343,14 @@ class AnnouncementModule:
             data.update(extra)
             socketio.emit("announce:progress", data)
 
+        self.logger.info("[ANNOUNCE] Sequence '%s' started (%d steps)", sequence_key, len(steps))
         _broadcast("started")
         self.pre_announce()
 
         completed = 0
         for i, step in enumerate(steps):
             if cancel_event.is_set():
+                self.logger.info("[ANNOUNCE] Sequence '%s' cancelled at step %d", sequence_key, i)
                 _broadcast("cancelled", completed, "Cancelled by user")
                 with self._seq_lock:
                     self._active_sequences.pop(sequence_key, None)
@@ -327,10 +361,14 @@ class AnnouncementModule:
             if step_type == "announce":
                 text = step.get("text", "")
                 step_voice = step.get("voice", voice)
+                self.logger.info("[ANNOUNCE] Sequence '%s' step %d: announce '%s'",
+                                 sequence_key, i, text[:50])
                 _broadcast("in_progress", completed, f"Announcing: {text[:60]}")
 
                 result = self.announce_text(text, step_voice, gateway_origin)
                 if "error" in result:
+                    self.logger.error("[ANNOUNCE] Sequence '%s' step %d failed: %s",
+                                     sequence_key, i, result["error"])
                     _broadcast("failed", completed, error=result["error"])
                     with self._seq_lock:
                         self._active_sequences.pop(sequence_key, None)
@@ -343,6 +381,8 @@ class AnnouncementModule:
                 seconds = step.get("seconds", 0)
                 total_seconds = (minutes * 60) + seconds
                 delay_label = f"{minutes} min" if minutes else f"{seconds}s"
+                self.logger.info("[ANNOUNCE] Sequence '%s' step %d: delay %s",
+                                 sequence_key, i, delay_label)
                 _broadcast("in_progress", completed,
                            f"Waiting {delay_label}",
                            delay_seconds=total_seconds,
@@ -351,6 +391,7 @@ class AnnouncementModule:
                 # Sleep in 1-second increments for cancellation responsiveness
                 for elapsed in range(total_seconds):
                     if cancel_event.is_set():
+                        self.logger.info("[ANNOUNCE] Sequence '%s' cancelled during delay", sequence_key)
                         _broadcast("cancelled", completed, "Cancelled by user")
                         with self._seq_lock:
                             self._active_sequences.pop(sequence_key, None)
@@ -365,6 +406,7 @@ class AnnouncementModule:
                                    delay_remaining=remaining)
                 completed += 1
 
+        self.logger.info("[ANNOUNCE] Sequence '%s' completed (%d steps)", sequence_key, completed)
         _broadcast("completed", completed)
         with self._seq_lock:
             self._active_sequences.pop(sequence_key, None)
@@ -377,6 +419,7 @@ class AnnouncementModule:
             cancel = self._active_sequences.get(sequence_key)
             if cancel:
                 cancel.set()
+                self.logger.info("[ANNOUNCE] Cancelling sequence '%s'", sequence_key)
                 return {"success": True, "message": f"Cancelling {sequence_key}"}
         return {"success": False, "error": f"No active sequence: {sequence_key}"}
 
@@ -418,7 +461,7 @@ class AnnouncementModule:
             }
 
         url = f"/api/tts/audio/{filename}"
-        self.logger.info("Audio uploaded: %s (%d bytes) -> %s",
+        self.logger.info("[ANNOUNCE] Audio uploaded: %s (%d bytes) -> %s",
                          original_filename, len(audio_bytes), url)
         return {"url": url, "size": len(audio_bytes), "filename": original_filename}
 

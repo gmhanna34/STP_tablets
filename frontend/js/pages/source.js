@@ -607,7 +607,7 @@ const SourcePage = {
       const data = await resp.json();
       if (data.success) {
         this._announceLog[0].status = 'ok';
-        this._announceLog[0].detail = `"${preset.label}" (${data.voice || 'default'}, ${data.size || '?'} bytes)`;
+        this._announceLog[0].detail = `"${preset.label}" (${data.voice || 'default'}, ${data.size || '?'} bytes) → ${data.audio_url_full || data.audio_url || '?'}`;
         this._renderAnnounceLog();
         App.showToast(`Announced: ${preset.label}`, 3000);
       } else {
@@ -838,7 +838,7 @@ const SourcePage = {
         const data = await resp.json();
         if (data.success) {
           this._announceLog[0].status = 'ok';
-          this._announceLog[0].detail = `"${shortText}" (${data.voice || 'default'}, ${data.size || '?'} bytes)`;
+          this._announceLog[0].detail = `"${shortText}" (${data.voice || 'default'}, ${data.size || '?'} bytes) → ${data.audio_url_full || data.audio_url || '?'}`;
           this._renderAnnounceLog();
           App.showToast('Announcement sent!', 3000);
           document.getElementById('announce-custom-text').value = '';
