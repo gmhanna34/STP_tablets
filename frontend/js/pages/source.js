@@ -7,6 +7,7 @@ const SourcePage = {
   _announcementsLoaded: false,
   _announceConfig: null,
   _announceProgressBound: false,
+  _announceLog: [],
   _testLoaded: false,
   _testLog: [],
   _wiimLoaded: false,
@@ -187,6 +188,20 @@ const SourcePage = {
                 <span class="material-icons">play_circle</span>
                 <span class="btn-label">Upload &amp; Play</span>
               </button>
+            </div>
+          </div>
+
+          <!-- ACTIVITY LOG -->
+          <div class="control-section">
+            <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
+              <span>Activity Log</span>
+              <button class="btn" id="btn-announce-clear-log" style="min-width:auto;padding:4px 10px;font-size:11px;">
+                <span class="material-icons" style="font-size:14px;">delete_sweep</span>
+                <span class="btn-label">Clear</span>
+              </button>
+            </div>
+            <div id="announce-log-container" style="max-height:250px;overflow-y:auto;font-size:12px;font-family:monospace;">
+              <div class="text-center" style="opacity:0.4;">No announcements yet</div>
             </div>
           </div>
         </div>
@@ -538,6 +553,12 @@ const SourcePage = {
     this._wireCustomAnnounce();
     this._wireFileUpload();
     this._listenAnnounceProgress();
+    this._renderAnnounceLog();
+
+    document.getElementById('btn-announce-clear-log')?.addEventListener('click', () => {
+      this._announceLog = [];
+      this._renderAnnounceLog();
+    });
   },
 
   _getSelectedVoice() {
@@ -574,6 +595,8 @@ const SourcePage = {
     const btn = document.querySelector(`[data-preset="${presetKey}"]`);
     if (btn) btn.classList.add('announcing');
 
+    this._logAnnounce('Preset', `"${preset.label}" — sending...`, 'pending');
+
     try {
       const resp = await fetch(`/api/announcements/preset/${presetKey}`, {
         method: 'POST',
@@ -583,11 +606,18 @@ const SourcePage = {
       });
       const data = await resp.json();
       if (data.success) {
+        this._announceLog[0].status = 'ok';
+        this._announceLog[0].detail = `"${preset.label}" (${data.voice || 'default'}, ${data.size || '?'} bytes)`;
+        this._renderAnnounceLog();
         App.showToast(`Announced: ${preset.label}`, 3000);
       } else {
+        this._announceLog[0].status = 'error';
+        this._announceLog[0].error = data.error || 'Unknown error';
+        this._renderAnnounceLog();
         App.showToast(`Failed: ${data.error || 'Unknown error'}`, 5000);
       }
     } catch (e) {
+      this._logAnnounce('Preset', `"${preset.label}"`, 'error', e.message || 'Network error');
       App.showToast('Announcement failed — network error', 4000);
     } finally {
       if (btn) btn.classList.remove('announcing');
@@ -671,6 +701,8 @@ const SourcePage = {
     if (cancelBtn) cancelBtn.style.display = '';
     if (progress) progress.style.display = '';
 
+    this._logAnnounce('Sequence', `"${seq.label}" — starting (${seq.steps?.length || 0} steps)`, 'pending');
+
     try {
       const resp = await fetch(`/api/announcements/sequence/${sequenceKey}`, {
         method: 'POST',
@@ -679,13 +711,21 @@ const SourcePage = {
         signal: AbortSignal.timeout(10000),
       });
       const data = await resp.json();
-      if (!data.success) {
+      if (data.success) {
+        this._announceLog[0].status = 'ok';
+        this._announceLog[0].detail = `"${seq.label}" — running`;
+        this._renderAnnounceLog();
+      } else {
+        this._announceLog[0].status = 'error';
+        this._announceLog[0].error = data.error;
+        this._renderAnnounceLog();
         App.showToast(`Failed to start sequence: ${data.error}`, 5000);
         if (playBtn) playBtn.style.display = '';
         if (cancelBtn) cancelBtn.style.display = 'none';
         if (progress) progress.style.display = 'none';
       }
     } catch (e) {
+      this._logAnnounce('Sequence', `"${seq.label}"`, 'error', e.message || 'Network error');
       App.showToast('Failed to start sequence — network error', 4000);
       if (playBtn) playBtn.style.display = '';
       if (cancelBtn) cancelBtn.style.display = 'none';
@@ -743,12 +783,15 @@ const SourcePage = {
         if (data.status === 'completed') {
           if (fill) fill.style.width = '100%';
           if (status) status.textContent = 'Completed';
+          this._logAnnounce('Sequence', `"${data.label}" completed (${data.steps_completed}/${data.steps_total} steps)`);
           App.showToast('Announcement sequence completed', 3000);
         } else if (data.status === 'cancelled') {
           if (status) status.textContent = 'Cancelled';
+          this._logAnnounce('Sequence', `"${data.label}" cancelled`, 'error', 'Cancelled by user');
           App.showToast('Sequence cancelled', 2000);
         } else {
           if (status) status.textContent = `Failed: ${data.error || ''}`;
+          this._logAnnounce('Sequence', `"${data.label}" failed`, 'error', data.error);
           App.showToast(`Sequence failed: ${data.error || 'Unknown error'}`, 5000);
         }
 
@@ -782,6 +825,9 @@ const SourcePage = {
       }
       if (!await App.showConfirm(`Broadcast this announcement?\n\n"${text}"`)) return;
 
+      const shortText = text.length > 50 ? text.substring(0, 50) + '...' : text;
+      this._logAnnounce('Custom', `"${shortText}" — sending...`, 'pending');
+
       try {
         const resp = await fetch('/api/announcements/text', {
           method: 'POST',
@@ -791,12 +837,19 @@ const SourcePage = {
         });
         const data = await resp.json();
         if (data.success) {
+          this._announceLog[0].status = 'ok';
+          this._announceLog[0].detail = `"${shortText}" (${data.voice || 'default'}, ${data.size || '?'} bytes)`;
+          this._renderAnnounceLog();
           App.showToast('Announcement sent!', 3000);
           document.getElementById('announce-custom-text').value = '';
         } else {
+          this._announceLog[0].status = 'error';
+          this._announceLog[0].error = data.error || 'Unknown error';
+          this._renderAnnounceLog();
           App.showToast(`Failed: ${data.error || 'Unknown error'}`, 5000);
         }
       } catch (e) {
+        this._logAnnounce('Custom', `"${shortText}"`, 'error', e.message || 'Network error');
         App.showToast('Announcement failed — network error', 4000);
       }
     });
@@ -835,12 +888,16 @@ const SourcePage = {
         });
         const data = await resp.json();
         if (data.played) {
+          this._logAnnounce('Upload', `"${file.name}" (${data.size || '?'} bytes) — playing`);
           App.showToast(`Playing: ${file.name}`, 3000);
         } else if (data.play_error) {
+          this._logAnnounce('Upload', `"${file.name}"`, 'error', data.play_error);
           App.showToast(`Uploaded but playback failed: ${data.play_error}`, 5000);
         } else if (data.error) {
+          this._logAnnounce('Upload', `"${file.name}"`, 'error', data.error);
           App.showToast(`Upload failed: ${data.error}`, 5000);
         } else {
+          this._logAnnounce('Upload', `"${file.name}" cached (${data.size || '?'} bytes)`);
           App.showToast('File uploaded', 2000);
         }
       } catch (e) {
@@ -849,6 +906,43 @@ const SourcePage = {
         playBtn.disabled = false;
       }
     });
+  },
+
+  // ---- ANNOUNCEMENT ACTIVITY LOG ----
+
+  _logAnnounce(action, detail, status = 'ok', error = null) {
+    this._announceLog.unshift({
+      time: new Date().toLocaleTimeString(),
+      action,
+      detail,
+      status,
+      error,
+    });
+    // Keep last 50 entries
+    if (this._announceLog.length > 50) this._announceLog.length = 50;
+    this._renderAnnounceLog();
+  },
+
+  _renderAnnounceLog() {
+    const container = document.getElementById('announce-log-container');
+    if (!container) return;
+
+    if (this._announceLog.length === 0) {
+      container.innerHTML = '<div class="text-center" style="opacity:0.4;">No announcements yet</div>';
+      return;
+    }
+
+    container.innerHTML = this._announceLog.map(e => {
+      const icon = e.status === 'ok' ? '&#10003;' : e.status === 'pending' ? '&#8230;' : '&#10007;';
+      const color = e.status === 'ok' ? '#00b050' : e.status === 'error' ? '#cc0000' : '#f0a030';
+      const err = e.error ? ` &mdash; ${e.error}` : '';
+      return `<div style="padding:4px 8px;border-bottom:1px solid var(--border);color:${color};">
+        <span>${icon}</span>
+        <span style="color:var(--text-secondary);">${e.time}</span>
+        <strong>${e.action}</strong>
+        &rarr; ${e.detail}${err}
+      </div>`;
+    }).join('');
   },
 
   // ---- TEST PANEL ----
@@ -1688,6 +1782,7 @@ const SourcePage = {
     this._announcementsLoaded = false;
     this._announceConfig = null;
     this._announceProgressBound = false;
+    this._announceLog = [];
     this._testLoaded = false;
     this._testLog = [];
   }

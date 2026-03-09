@@ -1222,7 +1222,7 @@ def register_api_routes(ctx):
         data = request.get_json(silent=True) or {}
         voice = data.get("voice")
         gateway_origin = request.host_url.rstrip("/")
-        tablet = get_tablet_id(request, cfg)
+        tablet = get_tablet_id()
 
         result = ann.announce_preset(preset_key, voice, gateway_origin)
         status = 200 if result.get("success") else 400
@@ -1242,7 +1242,7 @@ def register_api_routes(ctx):
             return jsonify({"error": "text is required"}), 400
         voice = data.get("voice")
         gateway_origin = request.host_url.rstrip("/")
-        tablet = get_tablet_id(request, cfg)
+        tablet = get_tablet_id()
 
         result = ann.announce_text(text, voice, gateway_origin)
         status = 200 if result.get("success") else 502
@@ -1259,7 +1259,7 @@ def register_api_routes(ctx):
         data = request.get_json(silent=True) or {}
         voice = data.get("voice")
         gateway_origin = request.host_url.rstrip("/")
-        tablet = get_tablet_id(request, cfg)
+        tablet = get_tablet_id()
 
         def _run():
             result = ann.run_sequence(sequence_key, voice, gateway_origin, tablet)
@@ -1314,7 +1314,7 @@ def register_api_routes(ctx):
             else:
                 result["played"] = True
 
-        tablet = get_tablet_id(request, cfg)
+        tablet = get_tablet_id()
         db.log_action(tablet, "announce:upload", file.filename,
                       json.dumps({"size": len(audio_bytes)}),
                       "OK", 0)
