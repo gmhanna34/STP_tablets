@@ -350,7 +350,17 @@ const App = {
           init.signal = AbortSignal.timeout(10000);
         }
       }
-      return originalFetch.call(this, input, init);
+      return originalFetch.call(this, input, init).then(resp => {
+        // Auto-redirect to login on 401 (session expired) for API requests
+        if (resp.status === 401 && (url.startsWith('/api/') || url.startsWith('api/'))) {
+          // Avoid redirect loops — don't redirect if already on login page
+          if (window.location.pathname !== '/login') {
+            console.warn('[AUTH] Session expired (401) — redirecting to login');
+            window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname);
+          }
+        }
+        return resp;
+      });
     };
   },
 
@@ -459,13 +469,85 @@ const App = {
       }
     }
 
-    // Show/hide user logout button
-    const logoutBtn = document.getElementById('user-logout-btn');
-    if (logoutBtn) {
-      logoutBtn.style.display = Auth.isUserSession() ? '' : 'none';
+    // Show/hide user menu (change password + sign out)
+    const userMenuWrapper = document.getElementById('user-menu-wrapper');
+    if (userMenuWrapper) {
+      userMenuWrapper.style.display = Auth.isUserSession() ? '' : 'none';
     }
+    this._initUserMenu();
 
     this.setConnectionStatus('Connecting...', false);
+  },
+
+  _initUserMenu() {
+    const btn = document.getElementById('user-menu-btn');
+    const dropdown = document.getElementById('user-menu-dropdown');
+    const changePwBtn = document.getElementById('user-change-pw-btn');
+    if (!btn || !dropdown) return;
+    if (btn._wired) return;  // avoid double-wiring
+    btn._wired = true;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', () => { dropdown.style.display = 'none'; });
+    if (changePwBtn) {
+      changePwBtn.addEventListener('click', () => {
+        dropdown.style.display = 'none';
+        this._showChangePasswordForm();
+      });
+    }
+  },
+
+  _showChangePasswordForm() {
+    const overlay = document.createElement('div');
+    overlay.id = 'change-pw-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.innerHTML = `
+      <div style="background:var(--bg-secondary,#1e1e2e);border-radius:12px;padding:24px;max-width:380px;width:100%;">
+        <h3 style="margin:0 0 16px 0;">Change Password</h3>
+        <label style="display:block;margin-bottom:4px;font-size:13px;">Current Password</label>
+        <input id="cp-current" type="password" autocomplete="current-password"
+               style="width:100%;padding:10px;border-radius:6px;border:1px solid #444;background:#111;color:#fff;margin-bottom:12px;font-size:15px;">
+        <label style="display:block;margin-bottom:4px;font-size:13px;">New Password</label>
+        <input id="cp-new" type="password" autocomplete="new-password"
+               style="width:100%;padding:10px;border-radius:6px;border:1px solid #444;background:#111;color:#fff;margin-bottom:12px;font-size:15px;">
+        <label style="display:block;margin-bottom:4px;font-size:13px;">Confirm New Password</label>
+        <input id="cp-confirm" type="password" autocomplete="new-password"
+               style="width:100%;padding:10px;border-radius:6px;border:1px solid #444;background:#111;color:#fff;margin-bottom:16px;font-size:15px;">
+        <div id="cp-error" style="color:var(--danger);font-size:13px;margin-bottom:8px;display:none;"></div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" id="cp-cancel" style="flex:1;"><span class="btn-label">Cancel</span></button>
+          <button class="btn active" id="cp-save" style="flex:1;"><span class="btn-label">Change</span></button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    document.getElementById('cp-cancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+
+    document.getElementById('cp-save').addEventListener('click', async () => {
+      const errEl = document.getElementById('cp-error');
+      errEl.style.display = 'none';
+      const current = document.getElementById('cp-current').value;
+      const newPw = document.getElementById('cp-new').value;
+      const confirm = document.getElementById('cp-confirm').value;
+      if (!current) { errEl.textContent = 'Enter your current password'; errEl.style.display = 'block'; return; }
+      if (newPw.length < 4) { errEl.textContent = 'New password must be at least 4 characters'; errEl.style.display = 'block'; return; }
+      if (newPw !== confirm) { errEl.textContent = 'Passwords do not match'; errEl.style.display = 'block'; return; }
+      try {
+        const resp = await fetch('/api/users/me/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ current_password: current, new_password: newPw }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) { errEl.textContent = data.error || 'Failed'; errEl.style.display = 'block'; return; }
+        overlay.remove();
+        this.showToast('Password changed successfully', 3000);
+      } catch (e) { errEl.textContent = 'Network error'; errEl.style.display = 'block'; }
+    });
   },
 
   startClock() {

@@ -35,10 +35,22 @@
     </div>
 
     <div id="status-right" class="status-section">
-      <button id="user-logout-btn" title="Sign out" style="display:none;background:none;border:none;color:inherit;cursor:pointer;padding:4px;"
-              onclick="window.location.href='/logout'">
-        <span class="material-icons" style="font-size:20px;">logout</span>
-      </button>
+      <div id="user-menu-wrapper" style="display:none;position:relative;">
+        <button id="user-menu-btn" title="User menu" style="background:none;border:none;color:inherit;cursor:pointer;padding:4px;">
+          <span class="material-icons" style="font-size:20px;">account_circle</span>
+        </button>
+        <div id="user-menu-dropdown" style="display:none;position:absolute;right:0;top:100%;background:var(--bg-secondary,#1e1e2e);border:1px solid var(--input-border,#444);border-radius:8px;min-width:180px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);overflow:hidden;">
+          <button id="user-change-pw-btn" style="width:100%;padding:10px 14px;background:none;border:none;color:var(--text,#fff);cursor:pointer;text-align:left;font-size:14px;display:flex;align-items:center;gap:8px;"
+                  onmouseover="this.style.background='var(--bg-tertiary,#2a2a3a)'" onmouseout="this.style.background='none'">
+            <span class="material-icons" style="font-size:18px;">lock</span> Change Password
+          </button>
+          <button id="user-signout-btn" style="width:100%;padding:10px 14px;background:none;border:none;color:var(--text,#fff);cursor:pointer;text-align:left;font-size:14px;display:flex;align-items:center;gap:8px;border-top:1px solid var(--input-border,#333);"
+                  onmouseover="this.style.background='var(--bg-tertiary,#2a2a3a)'" onmouseout="this.style.background='none'"
+                  onclick="window.location.href='/logout'">
+            <span class="material-icons" style="font-size:18px;">logout</span> Sign Out
+          </button>
+        </div>
+      </div>
       <button id="notif-bell" title="Notifications" class="notif-bell-btn">
         <span class="material-icons">notifications</span>
         <span id="notif-badge" class="notif-badge hidden">0</span>

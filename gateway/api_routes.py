@@ -18,7 +18,7 @@ import requests as http_requests
 import yaml
 from flask import Response, jsonify, request, send_file, send_from_directory
 
-from auth import get_tablet_id, get_actor, check_permission
+from auth import get_tablet_id, get_actor, check_permission, revoke_user_sessions
 from macro_engine import (
     execute_macro, fetch_ha_button_states, fetch_all_ha_entities, step_summary,
 )
@@ -1565,6 +1565,11 @@ def register_api_routes(ctx):
     def audit_sessions():
         return jsonify(db.get_sessions()), 200
 
+    @app.route("/api/audit/actors")
+    def audit_actors():
+        """Return distinct actor values for the audit log filter dropdown."""
+        return jsonify({"actors": db.get_distinct_actors()}), 200
+
     # ---- Macros API ----
 
     macro_defs = ctx.macro_defs
@@ -2329,6 +2334,9 @@ def register_api_routes(ctx):
 
         try:
             user = user_module.update_user(username, **fields)
+            # Invalidate active sessions if user was disabled
+            if fields.get("enabled") is False:
+                revoke_user_sessions(username)
             actor = get_actor()
             db.log_action(get_tablet_id(), "user:update", username,
                           json.dumps(fields), "OK", 0, actor=actor)
@@ -2343,6 +2351,7 @@ def register_api_routes(ctx):
             return jsonify({"error": "User module not available"}), 503
         try:
             user_module.delete_user(username)
+            revoke_user_sessions(username)
             actor = get_actor()
             db.log_action(get_tablet_id(), "user:delete", username, "", "OK", 0, actor=actor)
             return jsonify({"success": True})
@@ -2360,6 +2369,30 @@ def register_api_routes(ctx):
             user_module.reset_password(username, new_password)
             actor = get_actor()
             db.log_action(get_tablet_id(), "user:reset_password", username,
+                          "", "OK", 0, actor=actor)
+            return jsonify({"success": True})
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+
+    @app.route("/api/users/me/password", methods=["POST"])
+    def api_users_change_own_password():
+        """Allow a logged-in user to change their own password."""
+        from flask import session as flask_session
+        if not user_module:
+            return jsonify({"error": "User module not available"}), 503
+        username = flask_session.get("user")
+        if not username:
+            return jsonify({"error": "Not logged in as a user"}), 403
+        data = request.get_json(silent=True) or {}
+        current_password = data.get("current_password", "")
+        new_password = data.get("new_password", "")
+        # Verify current password
+        if not user_module.authenticate(username, current_password):
+            return jsonify({"error": "Current password is incorrect"}), 401
+        try:
+            user_module.reset_password(username, new_password)
+            actor = get_actor()
+            db.log_action(get_tablet_id(), "user:change_password", username,
                           "", "OK", 0, actor=actor)
             return jsonify({"success": True})
         except ValueError as e:

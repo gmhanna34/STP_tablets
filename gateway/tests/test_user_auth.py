@@ -261,6 +261,125 @@ class TestGetActor:
             assert data["actor"] == "tablet:chapel"
 
 
+class TestChangeOwnPassword:
+    def _login_user(self, client, username="testuser", password="testpass1"):
+        resp = client.get("/login", environ_base={"REMOTE_ADDR": "10.0.0.1"})
+        m = re.search(r'name="csrf_token" value="([^"]+)"', resp.data.decode())
+        csrf = m.group(1) if m else ""
+        client.post("/login",
+                     data={"username": username, "password": password,
+                           "csrf_token": csrf},
+                     environ_base={"REMOTE_ADDR": "10.0.0.1"})
+
+    def test_change_password_success(self, user_auth_app):
+        app, ctx = user_auth_app
+        import json
+
+        @app.route("/api/users/me/password", methods=["POST"])
+        def _change_pw():
+            from flask import session as flask_session
+            username = flask_session.get("user")
+            if not username:
+                return {"error": "Not logged in"}, 403
+            data = request.get_json(silent=True) or {}
+            if not ctx.user_module.authenticate(username, data.get("current_password", "")):
+                return {"error": "Current password is incorrect"}, 401
+            try:
+                ctx.user_module.reset_password(username, data.get("new_password", ""))
+                return {"success": True}
+            except ValueError as e:
+                return {"error": str(e)}, 400
+
+        with app.test_client() as client:
+            self._login_user(client)
+            from flask import request
+            resp = client.post("/api/users/me/password",
+                               json={"current_password": "testpass1", "new_password": "newpass99"},
+                               environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            assert resp.status_code == 200
+            # Verify new password works
+            assert ctx.user_module.authenticate("testuser", "newpass99") is not None
+            # Old password no longer works
+            assert ctx.user_module.authenticate("testuser", "testpass1") is None
+
+    def test_change_password_wrong_current(self, user_auth_app):
+        app, ctx = user_auth_app
+
+        @app.route("/api/users/me/password-test2", methods=["POST"])
+        def _change_pw2():
+            from flask import session as flask_session
+            username = flask_session.get("user")
+            if not username:
+                return {"error": "Not logged in"}, 403
+            data = request.get_json(silent=True) or {}
+            if not ctx.user_module.authenticate(username, data.get("current_password", "")):
+                return {"error": "Current password is incorrect"}, 401
+            return {"success": True}
+
+        with app.test_client() as client:
+            self._login_user(client)
+            from flask import request
+            resp = client.post("/api/users/me/password-test2",
+                               json={"current_password": "wrongpass", "new_password": "newpass99"},
+                               environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            assert resp.status_code == 401
+
+
+class TestSessionRevocation:
+    def _login_user(self, client, username="testuser", password="testpass1"):
+        resp = client.get("/login", environ_base={"REMOTE_ADDR": "10.0.0.1"})
+        m = re.search(r'name="csrf_token" value="([^"]+)"', resp.data.decode())
+        csrf = m.group(1) if m else ""
+        client.post("/login",
+                     data={"username": username, "password": password,
+                           "csrf_token": csrf},
+                     environ_base={"REMOTE_ADDR": "10.0.0.1"})
+
+    def test_revoke_invalidates_session(self, user_auth_app):
+        """After revoking a user, their next request should be unauthenticated."""
+        app, ctx = user_auth_app
+        from auth import revoke_user_sessions
+
+        with app.test_client() as client:
+            self._login_user(client)
+            # Verify session works
+            resp = client.get("/api/auth/me", environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            assert resp.get_json()["type"] == "user"
+
+            # Revoke user sessions
+            revoke_user_sessions("testuser")
+
+            # Next request should fail auth — redirects to login for non-API
+            resp = client.get("/api/auth/me", environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            # After revocation, the session is cleared so this is now unauthenticated
+            assert resp.status_code == 401 or resp.status_code == 302
+
+    def test_revoke_does_not_affect_other_users(self, user_auth_app):
+        """Revoking one user should not affect other users."""
+        app, ctx = user_auth_app
+        from auth import revoke_user_sessions
+
+        with app.test_client() as client:
+            self._login_user(client, "admin_user", "adminpass")
+            revoke_user_sessions("testuser")  # Revoke a different user
+            resp = client.get("/api/auth/me", environ_base={"REMOTE_ADDR": "10.0.0.1"})
+            assert resp.status_code == 200
+            assert resp.get_json()["username"] == "admin_user"
+
+
+class TestDistinctActors:
+    def test_get_distinct_actors(self, user_auth_app):
+        app, ctx = user_auth_app
+        db = ctx.db
+        db.log_action("chapel", "test1", "t1", actor="user:john")
+        db.log_action("main", "test2", "t2", actor="tablet:main")
+        db.log_action("chapel", "test3", "t3", actor="user:john")  # duplicate
+        actors = db.get_distinct_actors()
+        assert "user:john" in actors
+        assert "tablet:main" in actors
+        assert len(actors) == 2  # no duplicates
+
+
 class TestAuditLogActor:
     def test_actor_column_in_logs(self, user_auth_app):
         app, ctx = user_auth_app

@@ -160,6 +160,19 @@ class _RateLimiter:
 # Shared rate limiter for auth endpoints (5 attempts per 60s per IP)
 _auth_limiter = _RateLimiter(max_attempts=5, window_seconds=60)
 
+# Revoked user sessions — usernames whose sessions should be invalidated immediately
+_revoked_users: set = set()
+
+
+def revoke_user_sessions(username: str):
+    """Mark a username for immediate session invalidation (called on disable/delete)."""
+    _revoked_users.add(username.lower())
+
+
+def _clear_revocation(username: str):
+    """Remove a user from the revocation set (called after their session is cleared)."""
+    _revoked_users.discard(username.lower())
+
 # ---------------------------------------------------------------------------
 # LOGIN HTML
 # ---------------------------------------------------------------------------
@@ -346,6 +359,13 @@ def register_auth(ctx):
         if not exp:
             return False
         if time.time() > float(exp):
+            session.clear()
+            return False
+        # Check if this user's sessions have been revoked (admin disabled/deleted them)
+        user = session.get("user")
+        if user and user.lower() in _revoked_users:
+            logger.info(f"Session revoked for user={user}")
+            _clear_revocation(user.lower())
             session.clear()
             return False
         # Refresh expiry on activity (idle timeout)

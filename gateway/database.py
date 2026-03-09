@@ -150,6 +150,14 @@ class Database:
         rows = conn.execute("SELECT * FROM sessions ORDER BY last_seen DESC").fetchall()
         return [dict(r) for r in rows]
 
+    def get_distinct_actors(self) -> list:
+        """Return a sorted list of distinct actor values from the audit log."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT DISTINCT actor FROM audit_log WHERE actor IS NOT NULL AND actor != '' ORDER BY actor"
+        ).fetchall()
+        return [row[0] for row in rows]
+
     # --- Schedule CRUD ---
 
     def get_schedules(self) -> list:

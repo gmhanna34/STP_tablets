@@ -256,6 +256,9 @@ const SettingsPage = {
                   <option value="settings:">Settings</option>
                   <option value="__errors__">Errors Only</option>
                 </select>
+                <select id="audit-actor-filter" style="padding:6px;border-radius:4px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;">
+                  <option value="">All Users</option>
+                </select>
                 <div class="switch-search-bar" style="flex:1;min-width:150px;margin:0;">
                   <span class="material-icons" style="opacity:0.5;font-size:16px;">search</span>
                   <input type="text" class="switch-search-input" id="audit-search" placeholder="Search logs..." style="font-size:12px;">
@@ -499,6 +502,7 @@ const SettingsPage = {
     // ── Logs tab ───────────────────────────────────────────────────
     document.getElementById('btn-load-audit')?.addEventListener('click', () => this.loadAuditLog());
     document.getElementById('audit-filter')?.addEventListener('change', () => this.filterAuditLog());
+    document.getElementById('audit-actor-filter')?.addEventListener('change', () => this.filterAuditLog());
     document.getElementById('audit-search')?.addEventListener('input', () => this.filterAuditLog());
 
     // ── Config tab ────────────────────────────────────────────────
@@ -1405,12 +1409,22 @@ const SettingsPage = {
     try {
       const tabletId = localStorage.getItem('tabletId') || 'WebApp';
       const limit = document.getElementById('audit-limit')?.value || '500';
-      const [logsResp, sessionsResp] = await Promise.all([
+      const [logsResp, sessionsResp, actorsResp] = await Promise.all([
         fetch(`/api/audit/logs?limit=${limit}`, {}),
         fetch('/api/audit/sessions', {}),
+        fetch('/api/audit/actors', {}),
       ]);
       this._auditData = await logsResp.json();
       const sessions = await sessionsResp.json();
+      const actorsData = await actorsResp.json();
+
+      // Populate actor filter dropdown
+      const actorSelect = document.getElementById('audit-actor-filter');
+      if (actorSelect && actorsData.actors) {
+        const current = actorSelect.value;
+        actorSelect.innerHTML = '<option value="">All Users</option>' +
+          actorsData.actors.map(a => `<option value="${this._escAttr(a)}"${a === current ? ' selected' : ''}>${this._escHtml(a)}</option>`).join('');
+      }
 
       document.getElementById('audit-container')?.classList.remove('hidden');
       this.filterAuditLog();
@@ -1493,6 +1507,7 @@ const SettingsPage = {
 
   filterAuditLog() {
     const typeFilter = document.getElementById('audit-filter')?.value || '';
+    const actorFilter = document.getElementById('audit-actor-filter')?.value || '';
     const searchTerm = (document.getElementById('audit-search')?.value || '').toLowerCase();
 
     let filtered = this._auditData;
@@ -1501,6 +1516,9 @@ const SettingsPage = {
       filtered = filtered.filter(log => /FAIL|ERROR|TIMEOUT|CONNECTION_ERROR/i.test(log.result || ''));
     } else if (typeFilter) {
       filtered = filtered.filter(log => (log.action || '').startsWith(typeFilter));
+    }
+    if (actorFilter) {
+      filtered = filtered.filter(log => (log.actor || '') === actorFilter);
     }
     if (searchTerm) {
       filtered = filtered.filter(log => {
