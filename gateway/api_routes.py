@@ -613,7 +613,8 @@ def register_api_routes(ctx):
         if mock_mode:
             return jsonify({
                 "success": True, "mock": True,
-                "stream_url": preview_cfg.get("mjpeg_url", ""),
+                "stream_url": preview_cfg.get("stream_url", preview_cfg.get("mjpeg_url", "")),
+                "stream_type": preview_cfg.get("stream_type", "mjpeg"),
                 "switch_delay_ms": preview_cfg.get("switch_delay_ms", 1500),
             }), 200
 
@@ -631,7 +632,8 @@ def register_api_routes(ctx):
 
         return jsonify({
             "success": True,
-            "stream_url": preview_cfg.get("mjpeg_url", ""),
+            "stream_url": preview_cfg.get("stream_url", preview_cfg.get("mjpeg_url", "")),
+            "stream_type": preview_cfg.get("stream_type", "mjpeg"),
             "switch_delay_ms": preview_cfg.get("switch_delay_ms", 1500),
             "transmitter": tx,
             "transmitter_name": tx_name,

@@ -68,6 +68,9 @@ const SourcePage = {
             <div class="moip-preview-header">
               <span class="material-icons" style="vertical-align:middle;">visibility</span>
               <span id="moip-preview-title">Preview</span>
+              <button class="btn" id="btn-preview-mute" title="Unmute audio" style="margin-left:auto;margin-right:8px;min-width:36px;padding:6px;">
+                <span class="material-icons" style="font-size:20px;">volume_off</span>
+              </button>
               <button class="moip-preview-close" id="btn-preview-close">
                 <span class="material-icons">close</span>
               </button>
@@ -77,7 +80,7 @@ const SourcePage = {
                 <span class="material-icons spinning" style="font-size:40px;opacity:0.5;">sync</span>
                 <div style="margin-top:8px;opacity:0.5;">Switching source...</div>
               </div>
-              <img id="moip-preview-stream" style="display:none;width:100%;border-radius:4px;" />
+              <video id="moip-preview-stream" style="display:none;width:100%;border-radius:4px;background:#000;" muted autoplay playsinline></video>
               <div id="moip-preview-error" class="text-center" style="display:none;padding:30px;color:#cc0000;"></div>
             </div>
             <div class="moip-preview-footer">
@@ -1592,10 +1595,23 @@ const SourcePage = {
       if (sel?.value) this._switchPreview(parseInt(sel.value));
     });
 
+    // Mute/unmute toggle
+    document.getElementById('btn-preview-mute')?.addEventListener('click', () => {
+      const vid = document.getElementById('moip-preview-stream');
+      const btn = document.getElementById('btn-preview-mute');
+      if (!vid || !btn) return;
+      vid.muted = !vid.muted;
+      btn.querySelector('.material-icons').textContent = vid.muted ? 'volume_off' : 'volume_up';
+      btn.title = vid.muted ? 'Unmute audio' : 'Mute audio';
+    });
+
     // Close on overlay click (outside modal)
     document.getElementById('moip-preview-overlay')?.addEventListener('click', (e) => {
       if (e.target.id === 'moip-preview-overlay') this._closePreview();
     });
+
+    // Track HLS.js instance for cleanup
+    this._hlsInstance = null;
   },
 
   _openPreview(txId) {
@@ -1620,11 +1636,22 @@ const SourcePage = {
     const stream = document.getElementById('moip-preview-stream');
     const error = document.getElementById('moip-preview-error');
     const title = document.getElementById('moip-preview-title');
+    const muteBtn = document.getElementById('btn-preview-mute');
 
     // Show loading, hide others
     if (loading) loading.style.display = '';
-    if (stream) { stream.style.display = 'none'; stream.src = ''; }
+    if (stream) { stream.style.display = 'none'; stream.pause(); }
     if (error) error.style.display = 'none';
+
+    // Destroy previous HLS instance
+    if (this._hlsInstance) { this._hlsInstance.destroy(); this._hlsInstance = null; }
+
+    // Reset mute button state (starts muted)
+    if (stream) stream.muted = true;
+    if (muteBtn) {
+      muteBtn.querySelector('.material-icons').textContent = 'volume_off';
+      muteBtn.title = 'Unmute audio';
+    }
 
     try {
       const resp = await fetch('/api/moip/preview', {
@@ -1644,16 +1671,41 @@ const SourcePage = {
       await new Promise(r => setTimeout(r, data.switch_delay_ms || this._previewSwitchDelay));
 
       if (loading) loading.style.display = 'none';
-      if (stream) {
+      if (!stream) return;
+
+      const showError = (msg) => {
+        stream.style.display = 'none';
+        if (error) { error.textContent = msg; error.style.display = ''; }
+      };
+
+      if (data.stream_type === 'hls') {
+        // HLS stream — use HLS.js on Chrome/Android, native on Safari/iOS
+        if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+          const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+          this._hlsInstance = hls;
+          hls.loadSource(data.stream_url);
+          hls.attachMedia(stream);
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            stream.style.display = '';
+            stream.play().catch(() => {});
+          });
+          hls.on(Hls.Events.ERROR, (_event, errData) => {
+            if (errData.fatal) showError('Stream unavailable. Check encoder connection.');
+          });
+        } else if (stream.canPlayType('application/vnd.apple.mpegurl')) {
+          // Safari native HLS
+          stream.src = data.stream_url;
+          stream.style.display = '';
+          stream.play().catch(() => {});
+          stream.onerror = () => showError('Stream unavailable. Check encoder connection.');
+        } else {
+          showError('HLS playback not supported on this browser.');
+        }
+      } else {
+        // Legacy MJPEG fallback — swap to <img> behavior via poster/src
         stream.src = data.stream_url;
         stream.style.display = '';
-        stream.onerror = () => {
-          stream.style.display = 'none';
-          if (error) {
-            error.textContent = 'Stream unavailable. Check encoder connection.';
-            error.style.display = '';
-          }
-        };
+        stream.onerror = () => showError('Stream unavailable. Check encoder connection.');
       }
     } catch (e) {
       if (loading) loading.style.display = 'none';
@@ -1668,8 +1720,9 @@ const SourcePage = {
     const overlay = document.getElementById('moip-preview-overlay');
     const stream = document.getElementById('moip-preview-stream');
     if (overlay) overlay.style.display = 'none';
-    // Disconnect MJPEG stream
-    if (stream) { stream.src = ''; stream.style.display = 'none'; }
+    // Destroy HLS instance and stop video
+    if (this._hlsInstance) { this._hlsInstance.destroy(); this._hlsInstance = null; }
+    if (stream) { stream.pause(); stream.removeAttribute('src'); stream.load(); stream.style.display = 'none'; }
   },
 
   _showHelp() {
