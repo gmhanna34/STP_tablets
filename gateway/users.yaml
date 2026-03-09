@@ -1,17 +1,11 @@
-# STP Gateway — User Accounts
-# Managed via Settings > Users tab or by editing this file directly.
-# Passwords are bcrypt-hashed. Roles reference permissions.json role keys.
-#
-# To add a user manually:
-#   1. Generate a bcrypt hash: python3 -c "import bcrypt; print(bcrypt.hashpw(b'password', bcrypt.gensalt()).decode())"
-#   2. Add an entry below under 'users:'
-#
-# Example:
-#   users:
-#     john:
-#       display_name: "John Smith"
-#       password_hash: "$2b$12$..."
-#       role: "full_access"
-#       enabled: true
-
-users: {}
+users:
+  gmhanna:
+    display_name: George Hanna
+    password_hash: $2b$12$Nk1hSBZ3HG56FyMpuZ8PPeBQCEduIpXdpsetiDT9FxSr/PTJZCUsm
+    role: full_access
+    enabled: true
+  mguirguis:
+    display_name: Michael Guirguis
+    password_hash: $2b$12$w./F8OPURrK41/79Tjr26OE0u91fFaUak4dz9teBYb3AvWlmgFL72
+    role: full_access
+    enabled: true
