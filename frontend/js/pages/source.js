@@ -826,23 +826,6 @@ const SourcePage = {
       console.error('Failed to fetch WiiM state:', e);
     }
 
-    // Load available TTS services
-    let ttsServices = [];
-    try {
-      const resp = await fetch('/api/ha/entities?domain=tts', {
-        signal: AbortSignal.timeout(10000),
-      });
-      const data = await resp.json();
-      ttsServices = data.domains?.tts?.entities || [];
-    } catch (e) {
-      console.error('Failed to load TTS entities:', e);
-    }
-
-    const ttsOptions = ttsServices.map(e => {
-      const label = e.friendly_name || e.entity_id;
-      return `<option value="${e.entity_id}">${label}</option>`;
-    }).join('');
-
     const stateStr = state?.state || 'unknown';
     const volume = state?.attributes?.volume_level != null
       ? Math.round(state.attributes.volume_level * 100)
@@ -908,27 +891,22 @@ const SourcePage = {
         <!-- TTS Announcement -->
         <label class="announce-label">TTS Announcement</label>
         <div style="margin-bottom:8px;">
-          <select id="wiim-tts-service" class="routing-select" style="width:100%;margin-bottom:6px;">
-            <option value="tts.speak">tts.speak (generic)</option>
-            ${ttsOptions}
+          <select id="wiim-tts-voice" class="routing-select" style="width:100%;margin-bottom:6px;">
+            <option value="en-US-GuyNeural">Guy (Male, US)</option>
+            <option value="en-US-JennyNeural">Jenny (Female, US)</option>
+            <option value="en-US-AriaNeural">Aria (Female, US)</option>
+            <option value="en-US-DavisNeural">Davis (Male, US)</option>
+            <option value="en-US-JaneNeural">Jane (Female, US)</option>
+            <option value="en-GB-RyanNeural">Ryan (Male, UK)</option>
+            <option value="en-GB-SoniaNeural">Sonia (Female, UK)</option>
           </select>
           <input type="text" id="wiim-tts-message" class="announce-textarea" style="min-height:auto;padding:8px 10px;"
             value="This is a test announcement from the WiiM Pro" />
         </div>
-        <div class="test-methods-grid" style="margin-bottom:12px;">
-          <button class="btn" id="btn-wiim-tts" style="flex:1;">
-            <span class="material-icons">record_voice_over</span>
-            <span class="btn-label">Send TTS (Direct)</span>
-          </button>
-          <button class="btn" id="btn-wiim-tts-proxy" style="flex:1;">
-            <span class="material-icons">cloud_download</span>
-            <span class="btn-label">Send TTS (via Gateway)</span>
-          </button>
-        </div>
-        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">
-          <strong>Direct:</strong> HA tells WiiM to fetch TTS audio from HA (may fail if WiiM can't reach HA).<br/>
-          <strong>Via Gateway:</strong> Gateway fetches TTS audio from HA, serves it to WiiM (recommended).
-        </div>
+        <button class="btn" id="btn-wiim-tts-proxy" style="max-width:200px;margin-bottom:12px;">
+          <span class="material-icons">record_voice_over</span>
+          <span class="btn-label">Send TTS</span>
+        </button>
 
         <!-- Announce option for play_media -->
         <div style="margin-bottom:12px;">
@@ -1000,39 +978,17 @@ const SourcePage = {
       }, 'unmute');
     });
 
-    // TTS (direct via HA — may not work if WiiM can't fetch HA's TTS proxy URL)
-    document.getElementById('btn-wiim-tts')?.addEventListener('click', () => {
-      const message = document.getElementById('wiim-tts-message')?.value?.trim();
-      if (!message) { App.showToast('Enter a TTS message', 2000); return; }
-      const ttsEntity = document.getElementById('wiim-tts-service')?.value || 'tts.speak';
-
-      if (ttsEntity === 'tts.speak') {
-        // Generic tts.speak — no specific TTS engine entity, use default
-        this._callWiimService('tts', 'speak', {
-          media_player_entity_id: entity,
-          message,
-        }, `TTS(default): "${message.substring(0, 40)}${message.length > 40 ? '…' : ''}"`);
-      } else {
-        // Specific TTS engine entity (e.g., tts.edge_tts)
-        this._callWiimService('tts', 'speak', {
-          entity_id: ttsEntity,
-          media_player_entity_id: entity,
-          message,
-        }, `TTS(${ttsEntity}): "${message.substring(0, 40)}${message.length > 40 ? '…' : ''}"`);
-      }
-    });
-
-    // TTS via Gateway Proxy (recommended — gateway fetches audio from HA, serves to WiiM)
+    // TTS via Gateway (edge-tts generates audio on gateway, plays via media_player)
     document.getElementById('btn-wiim-tts-proxy')?.addEventListener('click', async () => {
       const message = document.getElementById('wiim-tts-message')?.value?.trim();
       if (!message) { App.showToast('Enter a TTS message', 2000); return; }
-      const ttsEntity = document.getElementById('wiim-tts-service')?.value;
+      const voice = document.getElementById('wiim-tts-voice')?.value || 'en-US-GuyNeural';
       const announce = document.getElementById('wiim-announce-mode')?.checked || false;
-      const label = `TTS-proxy: "${message.substring(0, 40)}${message.length > 40 ? '…' : ''}"`;
+      const label = `TTS: "${message.substring(0, 40)}${message.length > 40 ? '…' : ''}" (${voice})`;
 
       const entry = {
         time: new Date().toLocaleTimeString(),
-        method: 'wiim/tts-proxy',
+        method: 'wiim/tts',
         message: label,
         entity: this._wiimEntity,
         status: 'pending',
@@ -1045,14 +1001,11 @@ const SourcePage = {
       try {
         const start = performance.now();
 
-        // Step 1: Generate TTS audio via gateway proxy
+        // Step 1: Generate TTS audio on gateway via edge-tts
         const genResp = await fetch('/api/tts/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message,
-            engine: ttsEntity && ttsEntity !== 'tts.speak' ? ttsEntity : null,
-          }),
+          body: JSON.stringify({ message, voice }),
           signal: AbortSignal.timeout(20000),
         });
         const genData = await genResp.json().catch(() => null);

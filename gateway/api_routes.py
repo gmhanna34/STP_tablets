@@ -1159,10 +1159,9 @@ def register_api_routes(ctx):
         except Exception as e:
             return jsonify({"error": str(e)}), 503
 
-    # ---- TTS proxy: generate audio via HA, serve from gateway ----
-    # The WiiM can't fetch HA's /api/tts_proxy/ URLs directly.
-    # This endpoint generates TTS via HA, downloads the audio, and serves
-    # it from the gateway so the WiiM can reach it.
+    # ---- TTS: generate audio directly via edge-tts, serve from gateway ----
+    # The WiiM can't fetch HA's /api/tts_proxy/ URLs, so we generate TTS
+    # audio directly using Microsoft Edge TTS and serve from the gateway.
 
     _tts_cache = {}  # filename -> {"bytes": bytes, "created": float}
     _tts_cache_lock = threading.Lock()
@@ -1171,8 +1170,7 @@ def register_api_routes(ctx):
 
     @app.route("/api/tts/generate", methods=["POST"])
     def tts_generate():
-        """Generate TTS audio via HA, cache it, return a gateway-hosted URL."""
-        ha_cfg = cfg.get("home_assistant", {})
+        """Generate TTS audio directly via edge-tts, cache it, return a gateway-hosted URL."""
         if mock_mode:
             return jsonify({"url": "/api/tts/audio/mock.mp3", "mock": True}), 200
 
@@ -1181,103 +1179,42 @@ def register_api_routes(ctx):
         if not message:
             return jsonify({"error": "message is required"}), 400
 
-        tts_entity = data.get("engine", None)  # e.g. "tts.edge_tts" or None for default
-        language = data.get("language", "en")
-
-        headers = {"Authorization": f"Bearer {ha_cfg['token']}", "Content-Type": "application/json"}
-        ha_url = ha_cfg["url"]
+        voice = data.get("voice", "en-US-GuyNeural")  # Microsoft Edge TTS voice
+        # Common voices: en-US-GuyNeural, en-US-JennyNeural, en-US-AriaNeural
 
         try:
-            # Determine engine/platform name
-            engine = None
-            if tts_entity:
-                engine = tts_entity.replace("tts.", "") if tts_entity.startswith("tts.") else tts_entity
+            import asyncio
+            import concurrent.futures
+            import edge_tts
+            import io
 
-            # Try multiple HA API approaches to generate TTS audio
-            proxy_url = None
-            last_error = None
+            def _generate_in_thread():
+                """Run edge-tts in a native thread to avoid eventlet monkey-patch conflicts."""
+                async def _generate():
+                    communicate = edge_tts.Communicate(message, voice)
+                    audio_data = io.BytesIO()
+                    async for chunk in communicate.stream():
+                        if chunk["type"] == "audio":
+                            audio_data.write(chunk["data"])
+                    return audio_data.getvalue()
 
-            # Approach 1: /api/tts_get_url with engine_id (HA 2024.7+)
-            if not proxy_url:
-                payload = {"message": message, "language": language}
-                if engine:
-                    payload["engine_id"] = engine
+                loop = asyncio.new_event_loop()
                 try:
-                    resp = http_requests.post(f"{ha_url}/api/tts_get_url", headers=headers,
-                                              json=payload, timeout=15)
-                    if resp.ok:
-                        result = resp.json()
-                        proxy_url = result.get("url", "") or result.get("path", "")
-                    else:
-                        last_error = f"tts_get_url(engine_id): {resp.status_code} {resp.text[:200]}"
-                        logger.warning("TTS approach 1 failed: %s", last_error)
-                except Exception as e:
-                    last_error = f"tts_get_url(engine_id): {e}"
+                    return loop.run_until_complete(_generate())
+                finally:
+                    loop.close()
 
-            # Approach 2: /api/tts_get_url with platform (older HA)
-            if not proxy_url:
-                payload = {"message": message, "language": language}
-                if engine:
-                    payload["platform"] = engine
-                try:
-                    resp = http_requests.post(f"{ha_url}/api/tts_get_url", headers=headers,
-                                              json=payload, timeout=15)
-                    if resp.ok:
-                        result = resp.json()
-                        proxy_url = result.get("url", "") or result.get("path", "")
-                    else:
-                        last_error = f"tts_get_url(platform): {resp.status_code} {resp.text[:200]}"
-                        logger.warning("TTS approach 2 failed: %s", last_error)
-                except Exception as e:
-                    last_error = f"tts_get_url(platform): {e}"
+            # Run in a real OS thread to avoid eventlet's monkey-patched sockets
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                audio_bytes = pool.submit(_generate_in_thread).result(timeout=30)
 
-            # Approach 3: Call tts.speak service targeting media_player.wiim,
-            # then read its media_content_id attribute to get the TTS proxy URL
-            if not proxy_url:
-                try:
-                    speak_data = {"message": message, "media_player_entity_id": "media_player.wiim_pro_new"}
-                    if tts_entity and tts_entity != "tts.speak":
-                        speak_data["entity_id"] = tts_entity
-                    resp = http_requests.post(f"{ha_url}/api/services/tts/speak", headers=headers,
-                                              json=speak_data, timeout=15)
-                    if resp.ok:
-                        # Give HA a moment to process, then read media_player state
-                        time.sleep(1)
-                        state_resp = http_requests.get(
-                            f"{ha_url}/api/states/media_player.wiim_pro_new",
-                            headers=headers, timeout=10)
-                        if state_resp.ok:
-                            state = state_resp.json()
-                            content_id = state.get("attributes", {}).get("media_content_id", "")
-                            if content_id and "tts_proxy" in content_id:
-                                proxy_url = content_id
-                                logger.info("TTS approach 3: got URL from media_player state: %s", proxy_url)
-                            else:
-                                last_error = f"tts/speak OK but media_content_id={content_id!r}"
-                    else:
-                        last_error = f"tts/speak: {resp.status_code} {resp.text[:200]}"
-                        logger.warning("TTS approach 3 failed: %s", last_error)
-                except Exception as e:
-                    last_error = f"tts/speak: {e}"
-
-            if not proxy_url:
-                return jsonify({"error": f"All TTS generation approaches failed", "detail": last_error}), 502
-
-            # Make relative URL absolute
-            if proxy_url.startswith("/"):
-                proxy_url = f"{ha_url}{proxy_url}"
-
-            # Download the audio from HA's TTS proxy
-            audio_resp = http_requests.get(proxy_url, headers=headers, timeout=15)
-            if not audio_resp.ok:
-                return jsonify({"error": f"Failed to fetch TTS audio: {audio_resp.status_code}",
-                                "proxy_url": proxy_url}), 502
+            if not audio_bytes:
+                return jsonify({"error": "edge-tts returned empty audio"}), 502
 
             # Cache the audio and return a gateway URL
-            filename = hashlib.md5((message + str(tts_entity) + str(time.time())).encode()).hexdigest() + ".mp3"
+            filename = hashlib.md5((message + voice + str(time.time())).encode()).hexdigest() + ".mp3"
 
             with _tts_cache_lock:
-                # Evict old entries
                 now = time.time()
                 expired = [k for k, v in _tts_cache.items() if now - v["created"] > _TTS_CACHE_TTL]
                 for k in expired:
@@ -1285,15 +1222,43 @@ def register_api_routes(ctx):
                 while len(_tts_cache) >= _TTS_CACHE_MAX:
                     oldest = min(_tts_cache, key=lambda k: _tts_cache[k]["created"])
                     del _tts_cache[oldest]
-                _tts_cache[filename] = {"bytes": audio_resp.content, "created": now,
-                                        "content_type": audio_resp.headers.get("Content-Type", "audio/mpeg")}
+                _tts_cache[filename] = {"bytes": audio_bytes, "created": now,
+                                        "content_type": "audio/mpeg"}
 
             gateway_url = f"/api/tts/audio/{filename}"
-            logger.info("TTS generated: %s (%d bytes) -> %s", message[:50], len(audio_resp.content), gateway_url)
-            return jsonify({"url": gateway_url, "size": len(audio_resp.content)}), 200
+            logger.info("TTS generated (edge-tts): %s (%d bytes, voice=%s) -> %s",
+                        message[:50], len(audio_bytes), voice, gateway_url)
+            return jsonify({"url": gateway_url, "size": len(audio_bytes), "voice": voice}), 200
 
+        except ImportError:
+            return jsonify({"error": "edge-tts package not installed. Run: pip install edge-tts"}), 503
         except Exception as e:
             logger.error("TTS generate error: %s", e)
+            return jsonify({"error": str(e)}), 503
+
+    @app.route("/api/tts/voices")
+    def tts_voices():
+        """List available edge-tts voices (filtered to English)."""
+        try:
+            import asyncio
+            import concurrent.futures
+            import edge_tts
+
+            def _list_in_thread():
+                async def _list():
+                    return await edge_tts.list_voices()
+                loop = asyncio.new_event_loop()
+                try:
+                    return loop.run_until_complete(_list())
+                finally:
+                    loop.close()
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                all_voices = pool.submit(_list_in_thread).result(timeout=15)
+
+            en_voices = [v for v in all_voices if v.get("Locale", "").startswith("en-")]
+            return jsonify({"voices": en_voices, "total": len(en_voices)}), 200
+        except Exception as e:
             return jsonify({"error": str(e)}), 503
 
     @app.route("/api/tts/audio/<filename>")
