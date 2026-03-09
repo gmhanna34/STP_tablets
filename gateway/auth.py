@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
 import time
 from collections import defaultdict
 
-from flask import Response, jsonify, redirect, request, session, url_for
+from flask import Response, current_app, jsonify, redirect, request, session, url_for
 
 logger = logging.getLogger("stp-gateway")
 
@@ -70,20 +72,32 @@ def check_permission(tablet_id: str, required_page: str, permissions_data: dict)
 # CSRF token helpers
 # ---------------------------------------------------------------------------
 
+_CSRF_MAX_AGE = 3600  # token valid for 1 hour
+
+
 def _generate_csrf_token() -> str:
-    """Generate and store a CSRF token in the session."""
-    token = os.urandom(32).hex()
-    session["csrf_token"] = token
-    return token
+    """Create an HMAC-signed, timestamped CSRF token (no session required)."""
+    ts = str(int(time.time()))
+    key = current_app.config["SECRET_KEY"].encode() or b"fallback-csrf-key"
+    sig = hmac.new(key, ts.encode(), hashlib.sha256).hexdigest()[:32]
+    return f"{ts}.{sig}"
 
 
 def _validate_csrf_token() -> bool:
-    """Check if the submitted CSRF token matches the session token."""
-    expected = session.get("csrf_token", "")
+    """Verify the HMAC signature and age of the submitted CSRF token."""
     submitted = request.form.get("csrf_token", "")
-    if not expected or not submitted:
+    if not submitted or "." not in submitted:
         return False
-    return expected == submitted
+    ts, sig = submitted.split(".", 1)
+    try:
+        age = time.time() - int(ts)
+    except ValueError:
+        return False
+    if age < 0 or age > _CSRF_MAX_AGE:
+        return False
+    key = current_app.config["SECRET_KEY"].encode() or b"fallback-csrf-key"
+    expected_sig = hmac.new(key, ts.encode(), hashlib.sha256).hexdigest()[:32]
+    return hmac.compare_digest(sig, expected_sig)
 
 
 # ---------------------------------------------------------------------------
@@ -277,10 +291,22 @@ def register_auth(ctx):
     db = ctx.db
 
     allowed_ips = ctx.allowed_ips
+    trusted_proxy_prefixes = ctx.trusted_proxy_prefixes
     settings_pin = ctx.settings_pin
     secure_pin = ctx.secure_pin
     remote_auth = ctx.remote_auth
     session_timeout = ctx.session_timeout
+
+    def _get_client_ip() -> str:
+        """Return the real client IP, respecting X-Forwarded-For from trusted proxies."""
+        remote_addr = request.remote_addr or ""
+        forwarded_for = request.headers.get("X-Forwarded-For", "")
+        if forwarded_for and (
+            not trusted_proxy_prefixes
+            or any(remote_addr.startswith(pfx) for pfx in trusted_proxy_prefixes)
+        ):
+            return forwarded_for.split(",")[0].strip()
+        return remote_addr
 
     def _ip_allowed(ip: str) -> bool:
         return any(ip.startswith(pfx) for pfx in allowed_ips)
@@ -297,7 +323,7 @@ def register_auth(ctx):
         return bool(session.get("authed"))
 
     def _is_authed() -> bool:
-        return _ip_allowed(request.remote_addr or "") or _session_is_authed()
+        return _ip_allowed(_get_client_ip()) or _session_is_authed()
 
     # Store on ctx so other modules can use it
     ctx._is_authed = _is_authed
@@ -316,7 +342,7 @@ def register_auth(ctx):
         if _is_authed():
             return None
 
-        client_ip = request.remote_addr or ""
+        client_ip = _get_client_ip()
 
         # If remote_auth is configured, redirect browsers / return 401 for API
         if remote_auth.get("password"):
@@ -335,7 +361,7 @@ def register_auth(ctx):
             return resp
         if not request.path.startswith("/api/"):
             return resp
-        client_ip = request.remote_addr or ""
+        client_ip = _get_client_ip()
         logger.info(
             f"[{get_tablet_id()}] ip={client_ip} {request.method} {request.path} -> {resp.status_code}"
         )
@@ -351,7 +377,7 @@ def register_auth(ctx):
 
         error_html = ""
         if request.method == "POST":
-            client_ip = request.remote_addr or "unknown"
+            client_ip = _get_client_ip()
             # Rate limiting
             if not _auth_limiter.is_allowed(client_ip):
                 logger.warning(f"LOGIN_RATE_LIMITED ip={client_ip}")
@@ -375,6 +401,7 @@ def register_auth(ctx):
             configured_pw = remote_auth.get("password", "")
 
             if pw and pw == configured_pw:
+                session.permanent = True
                 session["authed"] = True
                 session["auth_exp"] = time.time() + session_timeout * 60
                 logger.info(f"LOGIN_OK ip={client_ip}")
@@ -398,7 +425,7 @@ def register_auth(ctx):
 
     @app.route("/api/auth/verify-pin", methods=["POST"])
     def verify_pin():
-        client_ip = request.remote_addr or "unknown"
+        client_ip = _get_client_ip()
         if not _auth_limiter.is_allowed(f"pin:{client_ip}"):
             return jsonify({"success": False, "error": "Too many attempts"}), 429
         data = request.get_json(silent=True) or {}
@@ -409,7 +436,7 @@ def register_auth(ctx):
 
     @app.route("/api/auth/verify-secure-pin", methods=["POST"])
     def verify_secure_pin():
-        client_ip = request.remote_addr or "unknown"
+        client_ip = _get_client_ip()
         if not _auth_limiter.is_allowed(f"secure_pin:{client_ip}"):
             return jsonify({"success": False, "error": "Too many attempts"}), 429
         data = request.get_json(silent=True) or {}

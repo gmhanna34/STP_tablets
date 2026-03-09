@@ -786,8 +786,8 @@ class HealthModule:
             import shutil
             self._ffprobe_available = shutil.which(ffprobe) is not None
             if not self._ffprobe_available:
-                self.log.warning(f"[health] ffprobe not found ('{ffprobe}'). "
-                                 f"Camera checks will use TCP fallback.")
+                self._logger.warning(f"[health] ffprobe not found ('{ffprobe}'). "
+                                     f"Camera checks will use TCP fallback.")
 
         if not self._ffprobe_available:
             return self._check_rtsp_tcp_fallback(svc)
@@ -1059,6 +1059,10 @@ class HealthModule:
             return
 
         if (now - state["last_alert_at"]) < cooldown:
+            return
+
+        # Only re-alert if level escalated (warning → down), not on repeat
+        if state["last_alert_at"] > 0 and level == state["last_level"]:
             return
 
         # Fire alert

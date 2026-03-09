@@ -1,0 +1,37 @@
+#!/bin/bash
+# Pre-commit hook: runs gateway tests, then auto-increments version
+# Version format: YY-NNN (e.g. 26-022 -> 26-023)
+
+# --- 1. Run gateway tests ---
+cd "$(git rev-parse --show-toplevel)/gateway" || exit 0
+echo "Running gateway tests..."
+python -m pytest tests/ -q --tb=short 2>&1
+if [ $? -ne 0 ]; then
+    echo ""
+    echo "Tests failed — commit aborted."
+    echo "Fix the failing tests or use 'git commit --no-verify' to skip."
+    exit 1
+fi
+
+# --- 2. Auto-increment version ---
+cd "$(git rev-parse --show-toplevel)"
+SETTINGS="frontend/config/settings.json"
+
+if [ ! -f "$SETTINGS" ]; then
+    exit 0
+fi
+
+CURRENT=$(grep -oP '"version":\s*"\K[^"]+' "$SETTINGS")
+if [ -z "$CURRENT" ]; then
+    exit 0
+fi
+
+PREFIX=$(echo "$CURRENT" | cut -d'-' -f1)
+NUM=$(echo "$CURRENT" | cut -d'-' -f2)
+NEXT=$(printf "%03d" $((10#$NUM + 1)))
+NEW_VERSION="${PREFIX}-${NEXT}"
+
+sed -i "s/\"version\": \"$CURRENT\"/\"version\": \"$NEW_VERSION\"/" "$SETTINGS"
+git add "$SETTINGS"
+
+echo "Version bumped: $CURRENT -> $NEW_VERSION"

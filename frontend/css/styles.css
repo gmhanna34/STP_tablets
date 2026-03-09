@@ -2813,10 +2813,13 @@ body {
   position: relative;
   background: none;
   border: none;
-  color: var(--text);
+  color: var(--text-on-nav);
   cursor: pointer;
   padding: 4px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
 }
+.notif-bell-btn:hover { opacity: 1; }
 .notif-badge {
   position: absolute;
   top: 0;
