@@ -312,6 +312,9 @@ def register_auth(ctx):
         # Allow readiness probe without auth
         if request.path == "/api/readiness":
             return None
+        # Allow TTS audio serving without auth (WiiM speaker fetches these directly)
+        if request.path.startswith("/api/tts/audio/"):
+            return None
 
         if _is_authed():
             return None
