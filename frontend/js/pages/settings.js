@@ -11,6 +11,9 @@ const SettingsPage = {
     container.innerHTML = `
       <div class="page-header">
         <h1>SETTINGS</h1>
+        <button class="help-icon-btn" id="settings-help-btn" title="Page Help">
+          <span class="material-icons">help_outline</span>
+        </button>
       </div>
 
       <div class="cam-tab-bar" id="settings-tabs">
@@ -175,21 +178,21 @@ const SettingsPage = {
                 <span class="btn-label">Add Schedule</span>
               </button>
             </div>
-            <div id="schedule-form" class="hidden" style="margin-top:12px;background:#1a1a2e;padding:12px;border-radius:8px;">
+            <div id="schedule-form" class="hidden" style="margin-top:12px;background:var(--surface);padding:12px;border-radius:8px;border:1px solid var(--border);">
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                 <div>
                   <label style="font-size:11px;opacity:0.7;">Name</label>
                   <input type="text" id="sched-name" placeholder="e.g. Sunday Morning Setup"
-                    style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;font-family:inherit;">
+                    style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
                 </div>
                 <div>
                   <label style="font-size:11px;opacity:0.7;">Macro</label>
-                  <select id="sched-macro" style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;font-family:inherit;"></select>
+                  <select id="sched-macro" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;"></select>
                 </div>
                 <div>
                   <label style="font-size:11px;opacity:0.7;">Time</label>
                   <input type="time" id="sched-time" value="08:00"
-                    style="width:100%;padding:6px;border-radius:4px;border:1px solid #444;background:#222;color:#fff;font-size:13px;font-family:inherit;">
+                    style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
                 </div>
                 <div>
                   <label style="font-size:11px;opacity:0.7;">Days</label>
@@ -204,11 +207,11 @@ const SettingsPage = {
                   </div>
                 </div>
               </div>
-              <div id="sched-macro-details" class="hidden" style="margin-top:8px;background:#111;border:1px solid #333;border-radius:6px;padding:10px;font-size:12px;">
-                <div id="sched-macro-desc" style="color:#ccc;margin-bottom:6px;"></div>
+              <div id="sched-macro-details" class="hidden" style="margin-top:8px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;">
+                <div id="sched-macro-desc" style="color:var(--text-secondary);margin-bottom:6px;"></div>
                 <details>
-                  <summary style="cursor:pointer;color:#ff8c00;font-size:11px;user-select:none;">Show steps</summary>
-                  <div id="sched-macro-steps" style="margin-top:6px;color:#aaa;font-size:11px;line-height:1.6;"></div>
+                  <summary style="cursor:pointer;color:var(--accent);font-size:11px;user-select:none;">Show steps</summary>
+                  <div id="sched-macro-steps" style="margin-top:6px;color:var(--text-secondary);font-size:11px;line-height:1.6;"></div>
                 </details>
               </div>
               <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end;">
@@ -378,7 +381,7 @@ const SettingsPage = {
             <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
               This tablet's location is determined by its URL. Change by updating the Fully Kiosk start URL.
             </div>
-            <div style="padding:12px;background:#1a1a2e;border-radius:8px;font-size:16px;font-weight:bold;text-align:center;">
+            <div style="padding:12px;background:var(--surface);border-radius:8px;font-size:16px;font-weight:bold;text-align:center;">
               <span class="material-icons" style="vertical-align:middle;margin-right:6px;">place</span>
               ${locationName}
             </div>
@@ -456,7 +459,7 @@ const SettingsPage = {
             <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
               Verbose logging adds detailed request/response info to the server log for troubleshooting AV control issues.
             </div>
-            <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:#1a1a2e;border-radius:8px;">
+            <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--surface);border-radius:8px;">
               <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:15px;">
                 <input type="checkbox" id="toggle-verbose-logging" style="width:20px;height:20px;cursor:pointer;">
                 <span>Verbose Logging</span>
@@ -470,6 +473,9 @@ const SettingsPage = {
   },
 
   init() {
+    // ── Help ──────────────────────────────────────────────────────
+    document.getElementById('settings-help-btn')?.addEventListener('click', () => this._showHelp());
+
     // ── Tab switching ──────────────────────────────────────────────
     this._activeTab = 'admin';
     document.querySelectorAll('[data-settings-tab]').forEach(btn => {
@@ -1564,7 +1570,7 @@ const SettingsPage = {
         const name = (s.tablet_id || '').replace('Tablet_', '');
         const page = s.current_page || '--';
         const seen = s.last_seen ? s.last_seen.replace('T', ' ').substring(5, 19) : '--';
-        return `<div style="background:#1a1a2e;padding:8px;border-radius:6px;">
+        return `<div style="background:var(--surface);padding:8px;border-radius:6px;">
           <div style="font-weight:bold;color:#4fc3f7;">${name}</div>
           <div style="color:#aaa;">Page: ${page}</div>
           <div style="color:#666;font-size:11px;">Seen: ${seen}</div>
@@ -3206,6 +3212,194 @@ const SettingsPage = {
 
   _escAttr(str) {
     return (str || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  },
+
+  // =====================================================================
+  // Help
+  // =====================================================================
+
+  _showHelp() {
+    App.showPanel('Settings - Help', (body) => {
+      body.innerHTML = `
+        <div class="help-content">
+          <div class="help-intro">
+            <p>The Settings page provides administrative controls for the entire AV system. It is organized into tabs across the top, each covering a specific area of configuration.</p>
+          </div>
+
+          <div class="help-section">
+            <h3><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">admin_panel_settings</span> Admin Tab</h3>
+            <p class="help-note">General administration and system information. This is the default tab when entering Settings.</p>
+            <dl class="help-list">
+              <dt><span class="material-icons">place</span> Tablet Location</dt>
+              <dd>Shows this tablet's assigned location (determined by its URL). To change it, update the Fully Kiosk start URL for this tablet.</dd>
+              <dt><span class="material-icons">admin_panel_settings</span> Permission Role</dt>
+              <dd>Controls which navigation menu items are visible. Each tablet has a default role based on its location, but you can override it here. An override is indicated in orange. Use "Reset to Default Role" to revert.</dd>
+              <dt><span class="material-icons">monitor_heart</span> System Health</dt>
+              <dd>Opens the Health Dashboard panel showing real-time status of all 30+ monitored services (gateway, mixer, OBS, cameras, projectors, etc.).</dd>
+              <dt><span class="material-icons">search</span> Browse Entities</dt>
+              <dd>Opens a searchable panel of all Home Assistant entities grouped by domain (switches, sensors, lights, etc.). Useful for finding entity IDs.</dd>
+              <dt><span class="material-icons">download</span> Download YAML</dt>
+              <dd>Exports the full Home Assistant entity registry as a YAML file for offline reference or documentation.</dd>
+              <dt><span class="material-icons">info</span> System Information</dt>
+              <dd>Displays the current app version, tablet location, Socket.IO connection status, OBS status, and X32 mixer status.</dd>
+              <dt><span class="material-icons">lock</span> Change PIN</dt>
+              <dd>Changes the PIN required to access the Settings page.</dd>
+              <dt><span class="material-icons">logout</span> Lock Settings</dt>
+              <dd>Locks the Settings page and returns to the Home screen. The PIN will be required to re-enter.</dd>
+              <dt><span class="material-icons">refresh</span> Reload App</dt>
+              <dd>Forces a full page reload of the tablet UI. Useful if the interface becomes unresponsive.</dd>
+              <dt><span class="material-icons">bug_report</span> Verbose Logging</dt>
+              <dd>Toggles detailed request/response logging on the gateway server. Enable temporarily when troubleshooting AV control issues, then disable to reduce log noise.</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">power</span> Power Tab</h3>
+            <p class="help-note">Controls power outlets and battery packs via Home Assistant and direct WattBox connections.</p>
+            <dl class="help-list">
+              <dt><span class="material-icons">power</span> SmartThings Switches</dt>
+              <dd>Opens a searchable panel of all SmartThings-connected power outlets (prefixed SW_). Toggle individual switches on/off. Auto-refreshes every 5 seconds.</dd>
+              <dt><span class="material-icons">electrical_services</span> WattBox Outlets</dt>
+              <dd>Opens a searchable panel of WattBox IP power distribution outlets (prefixed WB_). Toggle individual outlets on/off. Auto-refreshes every 5 seconds.</dd>
+              <dt><span class="material-icons">battery_charging_full</span> EcoFlow Batteries</dt>
+              <dd>Shows battery levels and lets you toggle AC and DC 12V outputs for each EcoFlow battery pack (Chapel TVs, Main Church TVs). Color-coded: green (>50%), yellow (20-50%), red (&lt;20%).</dd>
+              <dt><span class="material-icons">emergency</span> Break-Glass: Direct Power Control</dt>
+              <dd>Emergency device control that bypasses Home Assistant entirely. Sends commands directly to WattBox outlets. Use only when HA is down or unresponsive. Supports Reboot (power cycle), Off, and On actions with confirmation prompts.</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">equalizer</span> Audio Tab</h3>
+            <p class="help-note">Full control of the Behringer X32 audio mixer including channels, buses, DCAs, and scenes.</p>
+            <dl class="help-list">
+              <dt><span class="material-icons">volume_off</span> Mute All</dt>
+              <dd>Mutes every named input channel on the mixer. Asks for confirmation first.</dd>
+              <dt><span class="material-icons">volume_up</span> Unmute All</dt>
+              <dd>Unmutes every named input channel on the mixer. Asks for confirmation first.</dd>
+              <dt><span class="material-icons">refresh</span> Reload Scene</dt>
+              <dd>Reloads the currently active mixer scene, resetting all channel levels and routing to the saved state.</dd>
+              <dt><span class="material-icons">music_off</span> Mute Music</dt>
+              <dd>Toggles mute on channels whose names match music/band patterns (guitar, bass, drums, keyboard, etc.). If any are unmuted, it mutes all; if all are muted, it unmutes all.</dd>
+              <dt><span class="material-icons">tune</span> Mixer Scenes</dt>
+              <dd>Shows saved mixer scenes. Tap a scene to load it. The active scene is highlighted.</dd>
+              <dt><span class="material-icons">mic</span> Input Channels</dt>
+              <dd>Shows all named input channels with vertical faders and mute buttons. Channels with no name are hidden. Tap the mute button to toggle mute state.</dd>
+              <dt><span class="material-icons">input</span> Aux Inputs</dt>
+              <dd>Shows auxiliary input channels with volume levels and mute toggles.</dd>
+              <dt><span class="material-icons">call_split</span> Mix Buses</dt>
+              <dd>Shows mix bus outputs (monitor mixes, effects sends) with volume and mute controls.</dd>
+              <dt><span class="material-icons">group_work</span> DCA Groups</dt>
+              <dd>Shows DCA (Digitally Controlled Amplifier) groups for controlling multiple channels at once with volume and mute toggles.</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">thermostat</span> Thermostats Tab</h3>
+            <p class="help-note">Controls HVAC thermostats for four zones via Home Assistant.</p>
+            <dl class="help-list">
+              <dt><span class="material-icons">thermostat</span> Thermostat Dial</dt>
+              <dd>Each zone shows a circular dial with current temperature, target temperature, and HVAC mode. Drag the dot or use +/- buttons to adjust the target. Shows current humidity when available.</dd>
+              <dt><span class="material-icons">ac_unit</span> HVAC Modes</dt>
+              <dd>Buttons below each dial to switch between Off, Heat, Cool, and other available modes. The active mode is highlighted (orange for heat, blue for cool).</dd>
+            </dl>
+            <p class="help-note">Zones: Chapel & Main Hallway, Main Church, Social Hall, Sunday School. Dials auto-refresh every 10 seconds.</p>
+          </div>
+
+          <div class="help-section">
+            <h3><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">tv</span> TV's Tab</h3>
+            <p class="help-note">Direct power and input control for all TVs and projectors across the building.</p>
+            <dl class="help-list">
+              <dt><span class="material-icons">settings_remote</span> Quick Actions</dt>
+              <dd>"All Projectors On/Off" controls all four Main Church Epson projectors simultaneously.</dd>
+              <dt><span class="material-icons">power_settings_new</span> Power On / Off</dt>
+              <dd>Sends IR power commands via MoIP receivers to individual TVs, or HTTP commands to Epson projectors.</dd>
+              <dt>H1 / H2</dt>
+              <dd>Switches a TV's input to HDMI 1 or HDMI 2 via IR command (Samsung and Vizio TVs only).</dd>
+            </dl>
+            <p class="help-note">TVs are grouped by room: Main Church (4 projectors + 2 TVs), Social Hall (8 video wall panels), Chapel, Conference Room, Sunday School (11 rooms), Gym, and Other.</p>
+          </div>
+
+          <div class="help-section">
+            <h3><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">schedule</span> Schedule Tab</h3>
+            <p class="help-note">Create and manage timed automation schedules that run macros on specific days and times.</p>
+            <dl class="help-list">
+              <dt><span class="material-icons">add_alarm</span> Add Schedule</dt>
+              <dd>Opens the schedule form to create a new automation. Set a name, choose a macro, pick a time, and select which days of the week it should run.</dd>
+              <dt><span class="material-icons">edit</span> Edit</dt>
+              <dd>Modifies an existing schedule's name, macro, time, or days.</dd>
+              <dt><span class="material-icons">play_circle</span> Run Now</dt>
+              <dd>Immediately executes the schedule's macro without waiting for its scheduled time.</dd>
+              <dt><span class="material-icons">pause</span> Enable / Disable</dt>
+              <dd>Toggles whether the schedule is active. Disabled schedules are shown but will not run automatically.</dd>
+              <dt><span class="material-icons">delete</span> Delete</dt>
+              <dd>Permanently removes a schedule after confirmation.</dd>
+            </dl>
+            <p class="help-note">The schedule form shows the selected macro's description and steps (expandable) so you can verify what will run.</p>
+          </div>
+
+          <div class="help-section">
+            <h3><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">history</span> Logs Tab</h3>
+            <p class="help-note">View the system audit log and see which tablets are currently connected.</p>
+            <dl class="help-list">
+              <dt><span class="material-icons">history</span> Load Recent Activity</dt>
+              <dd>Fetches the audit log from the gateway. Choose how many entries to load (500 to 5,000). Each entry shows timestamp, user/tablet, action, target, latency, and result.</dd>
+              <dt><span class="material-icons">filter_list</span> Filters</dt>
+              <dd>Filter by action type (Macros, Schedules, MoIP, OBS, PTZ, Projectors, HA, X32, Occupancy, Settings, Errors Only), by specific user, or search by keyword.</dd>
+              <dt><span class="material-icons">expand_more</span> Expandable Rows</dt>
+              <dd>Click a log entry to expand it and see the full request data and result details. Error entries are highlighted in red.</dd>
+              <dt><span class="material-icons">devices</span> Connected Tablets</dt>
+              <dd>Shows all tablets currently connected via Socket.IO with their name, current page, and last seen timestamp.</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">settings_applications</span> Config Tab</h3>
+            <p class="help-note">Edit gateway configuration and macro entity IDs. Requires secure PIN entry.</p>
+            <dl class="help-list">
+              <dt><span class="material-icons">settings</span> Configuration Editor</dt>
+              <dd>Displays editable configuration sections from the gateway's config.yaml. Changes are saved with automatic backup.</dd>
+              <dt><span class="material-icons">find_replace</span> Entity Find & Replace</dt>
+              <dd>Bulk-replace Home Assistant entity IDs in macros.yaml. Useful when migrating devices or renaming entities. Creates a backup automatically before making changes.</dd>
+              <dt><span class="material-icons">save</span> Save Config</dt>
+              <dd>Writes changes to config.yaml on the server. A backup of the previous config is created automatically.</dd>
+              <dt><span class="material-icons">restart_alt</span> Restart Gateway</dt>
+              <dd>Restarts the gateway process. Required for most config changes to take effect. All tablets will briefly disconnect and reconnect.</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">people</span> Users Tab</h3>
+            <p class="help-note">Manage user accounts and roles for remote access. Requires secure PIN entry.</p>
+            <dl class="help-list">
+              <dt><span class="material-icons">person_add</span> Add User</dt>
+              <dd>Creates a new user account with a username, password, and assigned role. Users log in from personal devices (phones, laptops) with their own credentials.</dd>
+              <dt><span class="material-icons">edit</span> Edit User</dt>
+              <dd>Change a user's role or reset their password.</dd>
+              <dt><span class="material-icons">delete</span> Delete User</dt>
+              <dd>Permanently removes a user account after confirmation.</dd>
+              <dt><span class="material-icons">admin_panel_settings</span> Roles & Permissions</dt>
+              <dd>Define custom roles that control which pages each user or tablet can access. Add new roles, edit existing ones, or delete unused roles. Roles are assigned to both user accounts and tablet locations.</dd>
+            </dl>
+          </div>
+
+          <div class="help-section">
+            <h3>Tab Access</h3>
+            <p class="help-note">Most tabs are freely accessible after entering the Settings PIN. The <strong>Config</strong> and <strong>Users</strong> tabs require an additional secure PIN entry each time they are opened, as they contain sensitive system configuration.</p>
+          </div>
+
+          <div class="help-section" style="border-bottom:none;text-align:center;padding-top:16px;">
+            <button class="btn" id="help-ask-chat" style="display:inline-flex;max-width:320px;">
+              <span class="material-icons">support_agent</span>
+              <span class="btn-label">Ask a Question</span>
+            </button>
+          </div>
+        </div>
+      `;
+      body.querySelector('#help-ask-chat')?.addEventListener('click', () => {
+        App.closePanel();
+        App.openChat('settings');
+      });
+    });
   },
 
   destroy() {
