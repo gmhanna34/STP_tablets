@@ -4,7 +4,7 @@ const HealthPage = {
   _services: [],
   _currentLogsServiceId: null,
   _userToggled: new Set(),   // cards user has manually toggled — don't auto-collapse/expand these
-  _initialLoadDone: false,
+  _prevLevels: {},           // previous severity per service — detect transitions
 
   render(container) {
     container.innerHTML = `
@@ -101,7 +101,7 @@ const HealthPage = {
       this._pollTimer = null;
     }
     this._userToggled = new Set();
-    this._initialLoadDone = false;
+    this._prevLevels = {};
   },
 
   // --- Data Loading ---
@@ -213,11 +213,8 @@ const HealthPage = {
         this._updateCard(id, result);
       }
 
-      // On first load, auto-collapse all-green parents
-      if (!this._initialLoadDone) {
-        this._applyAutoCollapse(results);
-        this._initialLoadDone = true;
-      }
+      // Auto-collapse cards that become healthy, auto-expand cards that become unhealthy
+      this._applyAutoCollapse(results);
 
       // Sort cards by severity: red first, then yellow, then green
       this._sortCards();
@@ -531,19 +528,27 @@ const HealthPage = {
   },
 
   _applyAutoCollapse(results) {
-    // On initial load, collapse healthy parents and expand non-healthy
+    // On every poll, auto-collapse cards that transition to healthy
+    // and auto-expand cards that transition to unhealthy.
+    // Handles gateway warmup: services start "down" then go green once synced.
     for (const svc of this._services) {
       const safe = this._safeId(svc.id);
       if (this._userToggled.has(safe)) continue;  // respect manual toggles
 
       const result = results[svc.id];
       const level = result?.status?.level || 'down';
+      const prev = this._prevLevels[svc.id];  // undefined on first poll
 
-      if (level === 'healthy') {
-        this._collapseCard(safe);
-      } else {
-        this._expandCard(safe);
+      // Act on transitions (or first load when prev is undefined)
+      if (level !== prev) {
+        if (level === 'healthy') {
+          this._collapseCard(safe);
+        } else {
+          this._expandCard(safe);
+        }
       }
+
+      this._prevLevels[svc.id] = level;
     }
   },
 
