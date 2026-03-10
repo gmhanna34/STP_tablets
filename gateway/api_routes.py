@@ -680,6 +680,9 @@ def register_api_routes(ctx):
         try:
             if stream_type == "hls":
                 from urllib.parse import urljoin, quote
+                # Cache-buster propagated from frontend to ensure unique URLs per switch
+                cb = request.args.get("_cb", "")
+                cb_suffix = f"&_cb={cb}" if cb else ""
                 # Proxy HLS manifest — rewrite URLs to go through our proxy
                 upstream = http_requests.get(stream_url, timeout=5)
                 upstream.raise_for_status()
@@ -691,10 +694,10 @@ def register_api_routes(ctx):
                         abs_url = urljoin(base_url, line.strip())
                         if abs_url.endswith(".m3u8"):
                             # Sub-playlist — route back through this same endpoint
-                            lines.append(f"/api/moip/preview/stream?url={quote(abs_url, safe='')}")
+                            lines.append(f"/api/moip/preview/stream?url={quote(abs_url, safe='')}{cb_suffix}")
                         else:
                             # Segment (.ts) — route through segment endpoint
-                            lines.append(f"/api/moip/preview/segment?url={quote(abs_url, safe='')}")
+                            lines.append(f"/api/moip/preview/segment?url={quote(abs_url, safe='')}{cb_suffix}")
                     else:
                         lines.append(line)
                 manifest = "\n".join(lines) + "\n"
@@ -733,6 +736,7 @@ def register_api_routes(ctx):
             return Response(
                 upstream.iter_content(chunk_size=8192),
                 content_type=content_type,
+                headers={"Cache-Control": "no-cache, no-store", "Pragma": "no-cache"},
             )
         except Exception as e:
             log.warning("Preview segment proxy failed: %s", e)

@@ -1947,11 +1947,13 @@ const SourcePage = {
         if (error) { error.textContent = msg; error.style.display = ''; }
       };
 
+      // Append cache-buster to avoid stale segments after TX switch
+      const cbUrl = data.stream_url + (data.stream_url.includes('?') ? '&' : '?') + '_cb=' + Date.now();
       if (data.stream_type === 'hls') {
-        this._startHls(stream, data.stream_url, showError);
+        this._startHls(stream, cbUrl, showError);
       } else {
         // Legacy MJPEG fallback — swap to <img> behavior via poster/src
-        stream.src = data.stream_url;
+        stream.src = cbUrl;
         stream.style.display = '';
         stream.onerror = () => showError('Stream unavailable. Check encoder connection.');
       }
@@ -1994,11 +1996,23 @@ const SourcePage = {
         }
       }, 4000);
     } else if (stream.canPlayType('application/vnd.apple.mpegurl')) {
-      // Safari native HLS
+      // Safari native HLS — clear old source first to prevent stale cache
+      stream.removeAttribute('src');
+      stream.load();
       stream.src = url;
       stream.style.display = '';
       stream.play().catch(() => {});
       stream.onerror = () => showError('Stream unavailable. Check encoder connection.');
+      // Safety net: reload from live edge after 4s to flush any stale segments
+      this._hlsRefreshTimer = setTimeout(() => {
+        if (stream.src && stream.src.includes('_cb=')) {
+          const currentSrc = stream.src;
+          stream.removeAttribute('src');
+          stream.load();
+          stream.src = currentSrc;
+          stream.play().catch(() => {});
+        }
+      }, 4000);
     } else {
       showError('HLS playback not supported on this browser.');
     }
