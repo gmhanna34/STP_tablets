@@ -53,42 +53,32 @@ presets:
   church_closing:
     label: "Church Closing"
     icon: "door_front"
-    text: "Attention please. The church building will be closing in 15 minutes. Please make sure you have all of your belongings before you leave. Thank you."
+    text: "The church will be closing in 5 minutes, please make your way to the exists.  Again, the church is closing."
 
   adult_class:
     label: "Adult Class Starting"
     icon: "school"
-    text: "The adult education class is starting now in the social hall. All are welcome to attend."
+    text: "The adult now, please make your way to the Social Hall."
 
   sunday_school:
     label: "Sunday School Starting"
     icon: "child_care"
-    text: "Sunday school is starting now. All children and teachers please proceed to your classrooms."
-
-  nursery_open:
-    label: "Nursery Open"
-    icon: "crib"
-    text: "The nursery is now open. Parents, you are welcome to bring your children to the nursery at any time."
-
-  choir_rehearsal:
-    label: "Choir Rehearsal"
-    icon: "music_note"
-    text: "Choir rehearsal is beginning now. All choir members please gather in the main church."
-
-  liturgy_starting:
-    label: "Liturgy Starting"
-    icon: "church"
-    text: "The Divine Liturgy is about to begin. Please take your seats in the main church."
+    text: "Sunday school is starting now. Kids you be in their classes now."
 
   meeting_starting:
     label: "Meeting Starting"
     icon: "groups"
-    text: "The meeting is starting now in the conference room. All attendees please make your way there."
+    text: "The meeting is starting now."
 
   building_emergency:
     label: "Emergency"
     icon: "warning"
-    text: "Attention. Please calmly proceed to the nearest exit and gather in the parking lot. Do not use the elevators."
+    text: "Attention. Please calmly proceed to the nearest exit and gather in the parking lot. This is not a drill."
+    
+  test_message:
+    label: "Test"
+    icon: "question"
+    text: "This is a test message.  This is only a test."    
 
 sequences:
   sunday_school_countdown:
@@ -97,23 +87,20 @@ sequences:
     description: "Announces Sunday school at 20, 10, 5, and 0 minutes"
     steps:
       - type: announce
-        text: "Attention parents. Sunday school will begin in 20 minutes. Please start preparing your children."
+        text: "Sunday School is starting in 20 minutes.  Again, Sunday School starts in 20 minutes."
       - type: delay
         minutes: 10
       - type: announce
-        text: "Sunday school will begin in 10 minutes. Please bring your children to their classrooms."
+        text: "Sunday School is starting in 10 minutes, please start cleaning up."
       - type: delay
         minutes: 5
       - type: announce
-        text: "Sunday school starts in 5 minutes."
+        text: "Sunday School is starting in less that 5 minutes, kids, please finish cleaning up and get to your class.."
       - type: delay
-        minutes: 3
+        minutes: 4
       - type: announce
-        text: "Sunday school is about to begin. Please bring your children to their classrooms now."
-      - type: delay
-        minutes: 2
-      - type: announce
-        text: "Sunday school is starting now."
+        text: "Sunday School is starting now.  All kids should have their trash thrown away and be in their class."
+
 
   closing_countdown:
     label: "Closing Countdown"
@@ -121,7 +108,7 @@ sequences:
     description: "Announces building closing at 30, 15, and 5 minutes"
     steps:
       - type: announce
-        text: "Attention please. The church building will be closing in 30 minutes."
+        text: "Attention please. The church building will be closing in less than 30 minutes."
       - type: delay
         minutes: 15
       - type: announce
