@@ -14,9 +14,8 @@ const App = {
     // This eliminates [Unknown] in gateway logs for pages that call fetch() directly.
     this._patchFetch();
 
-    // Apply saved theme and density before anything renders
+    // Apply saved theme before anything renders
     this.initTheme();
-    this.initDensity();
 
     // Load configuration from gateway
     let config = null;
@@ -79,7 +78,6 @@ const App = {
     this.updateStatusBar();
     this.startClock();
     this.startHealthPolling();
-    this.startDeviceInfoPolling();
 
     // Setup PIN overlays
     this.setupPINOverlay();
@@ -148,16 +146,6 @@ const App = {
           session_count: this._sessionCount,
           downtime_ms: this._disconnectedAt ? Date.now() - this._disconnectedAt : null,
         };
-        // Include WiFi info from Fully Kiosk if available
-        if (this._lastDeviceInfo) {
-          diagData.wifi_signal = this._lastDeviceInfo.wifiSignalLevel;
-          diagData.wifi_freq = this._lastDeviceInfo.wifiFrequency;
-          diagData.wifi_ssid = this._lastDeviceInfo.ssid;
-          diagData.wifi_bssid = this._lastDeviceInfo.bssid;
-          diagData.wifi_rssi = this._lastDeviceInfo.wifiRssi;
-          diagData.wifi_link_speed = this._lastDeviceInfo.wifiLinkSpeed;
-          diagData.ip4 = this._lastDeviceInfo.ip4Address;
-        }
         // Measure round-trip latency to gateway
         const rttStart = Date.now();
         fetch('/api/health', { signal: AbortSignal.timeout(5000) })
@@ -311,13 +299,6 @@ const App = {
           role: Auth.currentRole,
           currentPage: Router.currentPage,
         };
-        // Include WiFi quality in heartbeat for continuous monitoring
-        if (this._lastDeviceInfo) {
-          hb.wifi_signal = this._lastDeviceInfo.wifiSignalLevel;
-          hb.wifi_rssi = this._lastDeviceInfo.wifiRssi;
-          hb.wifi_freq = this._lastDeviceInfo.wifiFrequency;
-          hb.wifi_link_speed = this._lastDeviceInfo.wifiLinkSpeed;
-        }
         hb.session_count = this._sessionCount;
         this.socket.emit('heartbeat', hb);
       }
@@ -610,67 +591,6 @@ const App = {
         healthSection.style.opacity = '';
         healthSection.title = '';
       }
-    }
-  },
-
-  _deviceInfoFailCount: 0,
-
-  startDeviceInfoPolling() {
-    const update = async () => {
-      try {
-        const resp = await fetch('http://127.0.0.1:2323/?password=admin&cmd=deviceInfo&type=json',
-          { signal: AbortSignal.timeout(3000) });
-        const info = await resp.json();
-        this._deviceInfoFailCount = 0;
-        this._lastDeviceInfo = info;  // store for WiFi diag reporting on reconnect
-        this._updateBattery(info.batteryLevel, info.isPlugged);
-        this._updateWifi(info.wifiSignalLevel);
-      } catch {
-        this._deviceInfoFailCount++;
-        // Only hide after 3 consecutive failures (not a one-off glitch)
-        if (this._deviceInfoFailCount >= 3) {
-          const bat = document.getElementById('status-battery');
-          const wifi = document.getElementById('status-wifi');
-          if (bat) bat.style.display = 'none';
-          if (wifi) wifi.style.display = 'none';
-        }
-        // Keep polling — Fully Kiosk may come back online
-      }
-    };
-    update();
-    this._deviceInfoTimer = setInterval(update, 30000);
-  },
-
-  _updateBattery(level, isPlugged) {
-    const pctEl = document.getElementById('battery-pct');
-    const batEl = document.getElementById('status-battery');
-    if (!batEl) return;
-    const icon = batEl.querySelector('.material-icons');
-    if (level == null) { batEl.style.display = 'none'; return; }
-    batEl.style.display = '';
-    if (pctEl) pctEl.textContent = `${Math.round(level)}%`;
-    if (icon) {
-      if (isPlugged) icon.textContent = 'battery_charging_full';
-      else if (level > 80) icon.textContent = 'battery_full';
-      else if (level > 50) icon.textContent = 'battery_5_bar';
-      else if (level > 20) icon.textContent = 'battery_3_bar';
-      else icon.textContent = 'battery_1_bar';
-    }
-    if (level <= 15) batEl.style.color = 'var(--down)';
-    else batEl.style.color = '';
-  },
-
-  _updateWifi(signalLevel) {
-    const wifiEl = document.getElementById('status-wifi');
-    if (!wifiEl) return;
-    const icon = wifiEl.querySelector('.material-icons');
-    if (signalLevel == null) { wifiEl.style.display = 'none'; return; }
-    wifiEl.style.display = '';
-    if (icon) {
-      if (signalLevel >= 3) icon.textContent = 'wifi';
-      else if (signalLevel >= 2) icon.textContent = 'wifi_2_bar';
-      else if (signalLevel >= 1) icon.textContent = 'wifi_1_bar';
-      else icon.textContent = 'wifi_off';
     }
   },
 
@@ -980,28 +900,6 @@ const App = {
   _updateThemeIcon(theme) {
     const icon = document.querySelector('#theme-toggle .material-icons');
     if (icon) icon.textContent = theme === 'light' ? 'dark_mode' : 'light_mode';
-  },
-
-  // -----------------------------------------------------------------------
-  // Density toggle (comfortable / compact)
-  // -----------------------------------------------------------------------
-
-  initDensity() {
-    const saved = localStorage.getItem('density') || 'comfortable';
-    if (saved === 'compact') document.body.classList.add('compact');
-    this._updateDensityIcon(saved);
-
-    document.getElementById('density-toggle')?.addEventListener('click', () => {
-      const isCompact = document.body.classList.toggle('compact');
-      const mode = isCompact ? 'compact' : 'comfortable';
-      localStorage.setItem('density', mode);
-      this._updateDensityIcon(mode);
-    });
-  },
-
-  _updateDensityIcon(mode) {
-    const icon = document.querySelector('#density-toggle .material-icons');
-    if (icon) icon.textContent = mode === 'compact' ? 'density_small' : 'density_medium';
   },
 
   // -----------------------------------------------------------------------

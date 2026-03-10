@@ -35,6 +35,13 @@
     </div>
 
     <div id="status-right" class="status-section">
+      <button id="notif-bell" title="Notifications" class="notif-bell-btn">
+        <span class="material-icons">notifications</span>
+        <span id="notif-badge" class="notif-badge hidden">0</span>
+      </button>
+      <button id="theme-toggle" title="Toggle light/dark mode">
+        <span class="material-icons">dark_mode</span>
+      </button>
       <div id="user-menu-wrapper" style="display:none;position:relative;">
         <button id="user-menu-btn" title="User menu" style="background:none;border:none;color:inherit;cursor:pointer;padding:4px;">
           <span class="material-icons" style="font-size:20px;">account_circle</span>
@@ -49,23 +56,6 @@
           </button>
         </div>
       </div>
-      <button id="notif-bell" title="Notifications" class="notif-bell-btn">
-        <span class="material-icons">notifications</span>
-        <span id="notif-badge" class="notif-badge hidden">0</span>
-      </button>
-      <button id="density-toggle" title="Toggle compact mode">
-        <span class="material-icons">density_medium</span>
-      </button>
-      <button id="theme-toggle" title="Toggle light/dark mode">
-        <span class="material-icons">dark_mode</span>
-      </button>
-      <span id="status-wifi" class="status-device-info" title="WiFi">
-        <span class="material-icons" style="font-size:16px;">wifi</span>
-      </span>
-      <span id="status-battery" class="status-device-info" title="Battery">
-        <span class="material-icons" style="font-size:16px;">battery_full</span>
-        <span id="battery-pct"></span>
-      </span>
       <span id="clock"></span>
     </div>
   </header>
