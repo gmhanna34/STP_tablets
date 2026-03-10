@@ -368,11 +368,15 @@ const SourcePage = {
       btn.addEventListener('click', async () => {
         const chId = parseInt(btn.dataset.muteCh);
         const ch = state.channels.find(c => c.id === chId);
-        if (ch && ch.muted === 'muted') {
+        const wasMuted = ch && ch.muted === 'muted';
+        // Optimistic toggle + feedback
+        this._muteButtonFeedback(btn, wasMuted);
+        if (wasMuted) {
           await X32API.unmuteChannel(chId);
         } else {
           await X32API.muteChannel(chId);
         }
+        btn.disabled = false;
         setTimeout(() => this.loadMixer(), 500);
       });
     });
@@ -417,11 +421,14 @@ const SourcePage = {
         btn.addEventListener('click', async () => {
           const auxId = parseInt(btn.dataset.muteAux);
           const aux = state.auxChannels.find(a => a.id === auxId);
-          if (aux && aux.muted === 'muted') {
+          const wasMuted = aux && aux.muted === 'muted';
+          this._muteButtonFeedback(btn, wasMuted);
+          if (wasMuted) {
             await X32API.unmuteAux(auxId);
           } else {
             await X32API.muteAux(auxId);
           }
+          btn.disabled = false;
           setTimeout(() => this.loadMixer(), 500);
         });
       });
@@ -448,11 +455,14 @@ const SourcePage = {
         btn.addEventListener('click', async () => {
           const busId = parseInt(btn.dataset.muteBus);
           const bus = state.buses.find(b => b.id === busId);
-          if (bus && bus.muted === 'muted') {
+          const wasMuted = bus && bus.muted === 'muted';
+          this._muteButtonFeedback(btn, wasMuted);
+          if (wasMuted) {
             await X32API.unmuteBus(busId);
           } else {
             await X32API.muteBus(busId);
           }
+          btn.disabled = false;
           setTimeout(() => this.loadMixer(), 500);
         });
       });
@@ -479,11 +489,14 @@ const SourcePage = {
         btn.addEventListener('click', async () => {
           const dcaId = parseInt(btn.dataset.muteDca);
           const dca = state.dcas.find(d => d.id === dcaId);
-          if (dca && dca.muted === 'muted') {
+          const wasMuted = dca && dca.muted === 'muted';
+          this._muteButtonFeedback(btn, wasMuted);
+          if (wasMuted) {
             await X32API.unmuteDca(dcaId);
           } else {
             await X32API.muteDca(dcaId);
           }
+          btn.disabled = false;
           setTimeout(() => this.loadMixer(), 500);
         });
       });
@@ -501,38 +514,71 @@ const SourcePage = {
     });
   },
 
+  /** Optimistic toggle + flash animation for channel-mute buttons */
+  _muteButtonFeedback(btn, wasMuted) {
+    btn.disabled = true;
+    // Instant visual toggle
+    btn.classList.toggle('muted', !wasMuted);
+    btn.classList.toggle('unmuted', wasMuted);
+    btn.textContent = wasMuted ? 'ON' : 'MUTED';
+    // Flash animation
+    btn.classList.remove('mute-flash');
+    void btn.offsetWidth; // force reflow to restart animation
+    btn.classList.add('mute-flash');
+  },
+
+  /** Add press feedback to a .btn element during an async action */
+  _btnWorking(btn) {
+    btn.classList.add('btn-pressed');
+    btn.classList.add('btn-working');
+  },
+
+  _btnDone(btn) {
+    btn.classList.remove('btn-pressed');
+    btn.classList.remove('btn-working');
+  },
+
   _wireX32QuickActions() {
     document.getElementById('x32-mute-all')?.addEventListener('click', async () => {
       if (!await App.showConfirm('Mute ALL input channels?')) return;
+      const btn = document.getElementById('x32-mute-all');
+      this._btnWorking(btn);
       const state = X32API.state;
       for (const ch of state.channels) {
         if (ch.name && ch.name.trim() !== '' && ch.muted !== 'muted') {
           await X32API.muteChannel(ch.id);
         }
       }
+      this._btnDone(btn);
       App.showToast('All channels muted');
       setTimeout(() => this.loadMixer(), 500);
     });
 
     document.getElementById('x32-unmute-all')?.addEventListener('click', async () => {
       if (!await App.showConfirm('Unmute ALL input channels?')) return;
+      const btn = document.getElementById('x32-unmute-all');
+      this._btnWorking(btn);
       const state = X32API.state;
       for (const ch of state.channels) {
         if (ch.name && ch.name.trim() !== '' && ch.muted === 'muted') {
           await X32API.unmuteChannel(ch.id);
         }
       }
+      this._btnDone(btn);
       App.showToast('All channels unmuted');
       setTimeout(() => this.loadMixer(), 500);
     });
 
     document.getElementById('x32-reload-scene')?.addEventListener('click', async () => {
+      const btn = document.getElementById('x32-reload-scene');
       const scene = X32API.state.currentScene;
       if (!scene && scene !== 0) {
         App.showToast('No active scene to reload', 2000, 'error');
         return;
       }
+      this._btnWorking(btn);
       await X32API.loadScene(parseInt(scene));
+      this._btnDone(btn);
       App.showToast('Reloading current scene...');
       setTimeout(() => this.loadMixer(), 1000);
     });
@@ -548,6 +594,8 @@ const SourcePage = {
       const anyUnmuted = musicChs.some(ch => ch.muted !== 'muted');
       const action = anyUnmuted ? 'Mute' : 'Unmute';
       if (!await App.showConfirm(`${action} ${musicChs.length} music/band channels?`)) return;
+      const btn = document.getElementById('x32-mute-band');
+      this._btnWorking(btn);
       for (const ch of musicChs) {
         if (anyUnmuted) {
           if (ch.muted !== 'muted') await X32API.muteChannel(ch.id);
@@ -555,6 +603,7 @@ const SourcePage = {
           if (ch.muted === 'muted') await X32API.unmuteChannel(ch.id);
         }
       }
+      this._btnDone(btn);
       App.showToast(`Music channels ${action.toLowerCase()}d`);
       setTimeout(() => this.loadMixer(), 500);
     });
@@ -617,10 +666,15 @@ const SourcePage = {
           <thead>
             <tr>
               <th class="routing-matrix-corner"></th>
-              ${destinations.map(d => `<th class="routing-matrix-dest-header">
-                <span class="material-icons" style="font-size:16px;">${d.icon || 'speaker'}</span>
-                <span>${d.name}</span>
-              </th>`).join('')}
+              ${destinations.map(d => {
+                const busLabel = (d.buses || [d.bus]).join('+');
+                const desc = d.description ? `\n${d.description}` : '';
+                return `<th class="routing-matrix-dest-header" title="Bus ${busLabel}${desc}">
+                  <span class="material-icons" style="font-size:16px;">${d.icon || 'speaker'}</span>
+                  <span>${d.name}</span>
+                  <span class="routing-bus-label">Bus ${busLabel}</span>
+                </th>`;
+              }).join('')}
             </tr>
           </thead>
           <tbody>
@@ -635,11 +689,11 @@ const SourcePage = {
                   </div>
                 </td>
                 ${destinations.map(d => {
-                  const cell = matrix[g.name]?.[String(d.bus)];
+                  const cell = matrix[g.name]?.[d.name];
                   const active = cell?.active || false;
                   return `<td class="routing-matrix-cell">
                     <button class="routing-toggle ${active ? 'active' : ''}"
-                      data-route-group="${g.name}" data-route-bus="${d.bus}"
+                      data-route-group="${g.name}" data-route-dest="${d.name}"
                       title="${g.name} → ${d.name}">
                       ${active ? 'ON' : '—'}
                     </button>
@@ -667,10 +721,10 @@ const SourcePage = {
             </div>
             <div class="routing-dest-chips">
               ${destinations.map(d => {
-                const cell = matrix[g.name]?.[String(d.bus)];
+                const cell = matrix[g.name]?.[d.name];
                 const active = cell?.active || false;
                 return `<button class="routing-chip ${active ? 'active' : ''}"
-                  data-route-group="${g.name}" data-route-bus="${d.bus}">
+                  data-route-group="${g.name}" data-route-dest="${d.name}">
                   <span class="material-icons" style="font-size:14px;">${d.icon || 'speaker'}</span>
                   ${d.name}
                 </button>`;
@@ -689,9 +743,9 @@ const SourcePage = {
         const preset = btn.dataset.routingPreset;
         const presetData = presets[preset];
         if (!await App.showConfirm(`Apply routing preset?\n\n${presetData?.name || preset}\n${presetData?.description || ''}`)) return;
-        btn.disabled = true;
+        this._btnWorking(btn);
         const result = await X32API.applyRoutingPreset(preset);
-        btn.disabled = false;
+        this._btnDone(btn);
         if (result?.success) {
           App.showToast(`Applied: ${presetData?.name || preset}`);
           setTimeout(() => this._loadAudioRouting(), 500);
@@ -702,22 +756,17 @@ const SourcePage = {
     });
 
     // Wire toggle buttons (both matrix and card layouts share data attributes)
-    container.querySelectorAll('[data-route-group][data-route-bus]').forEach(btn => {
+    container.querySelectorAll('[data-route-group][data-route-dest]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const group = btn.dataset.routeGroup;
-        const bus = parseInt(btn.dataset.routeBus);
+        const dest = btn.dataset.routeDest;
         const currentlyActive = btn.classList.contains('active');
         btn.disabled = true;
-        const result = await X32API.setGroupRouting(group, bus, !currentlyActive);
+        const result = await X32API.setGroupRouting(group, dest, !currentlyActive);
         btn.disabled = false;
         if (result?.success) {
-          // Update UI immediately
-          btn.classList.toggle('active', !currentlyActive);
-          if (btn.classList.contains('routing-toggle')) {
-            btn.textContent = !currentlyActive ? 'ON' : '—';
-          }
-          // Also update the matching button in the other layout
-          container.querySelectorAll(`[data-route-group="${group}"][data-route-bus="${bus}"]`).forEach(b => {
+          // Update both layouts simultaneously
+          container.querySelectorAll(`[data-route-group="${group}"][data-route-dest="${dest}"]`).forEach(b => {
             b.classList.toggle('active', !currentlyActive);
             if (b.classList.contains('routing-toggle')) {
               b.textContent = !currentlyActive ? 'ON' : '—';

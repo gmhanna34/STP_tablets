@@ -124,12 +124,12 @@ const X32API = {
     }
   },
 
-  async setGroupRouting(group, bus, enabled) {
+  async setGroupRouting(group, destination, enabled) {
     try {
       const resp = await fetch('/api/x32/routing/group', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ group, bus, enabled }),
+        body: JSON.stringify({ group, destination, enabled }),
         signal: AbortSignal.timeout(10000),
       });
       return await resp.json();

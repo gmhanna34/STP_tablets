@@ -943,16 +943,16 @@ def register_api_routes(ctx):
             return perm_err
         data = request.get_json(silent=True) or {}
         group_name = data.get("group")
-        bus = data.get("bus")
+        destination = data.get("destination")
         enabled = data.get("enabled", True)
         level = data.get("level")
-        if not group_name or bus is None:
-            return jsonify({"error": "Required: group, bus"}), 400
+        if not group_name or not destination:
+            return jsonify({"error": "Required: group, destination"}), 400
         if mock_mode:
-            return jsonify({"success": True, "group": group_name, "bus": bus, "enabled": enabled, "mock": True}), 200
-        result, status = ctx.x32.set_group_routing(group_name, int(bus), bool(enabled), level)
+            return jsonify({"success": True, "group": group_name, "destination": destination, "enabled": enabled, "mock": True}), 200
+        result, status = ctx.x32.set_group_routing(group_name, destination, bool(enabled), level)
         if status < 400:
-            socketio.emit("state:x32", {"event": "routing_change", "group": group_name, "bus": bus, "enabled": enabled}, room="x32")
+            socketio.emit("state:x32", {"event": "routing_change", "group": group_name, "destination": destination, "enabled": enabled}, room="x32")
         return jsonify(result), status
 
     @app.route("/api/x32/routing/preset/<preset_name>", methods=["POST"])

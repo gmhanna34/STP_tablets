@@ -549,7 +549,21 @@ body {
 }
 
 .btn:active {
-  transform: scale(0.97);
+  transform: scale(0.92);
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.35);
+  transition: transform 0.06s, box-shadow 0.06s;
+}
+
+.btn.btn-pressed {
+  transform: scale(0.92);
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.35);
+  filter: brightness(0.85);
+  transition: transform 0.06s, box-shadow 0.06s, filter 0.06s;
+}
+
+.btn.btn-working {
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 /* Active / On state (green) */
@@ -884,20 +898,44 @@ body {
   font-family: inherit;
   text-transform: uppercase;
   font-weight: bold;
-  transition: all 0.2s;
+  transition: transform 0.08s, box-shadow 0.08s, background 0.15s, border-color 0.15s;
   -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.channel-mute:active {
+  transform: scale(0.88);
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.4);
+  transition: transform 0.05s, box-shadow 0.05s;
 }
 
 .channel-mute.muted {
   background: var(--danger);
   border-color: var(--danger);
   color: #fff;
+  box-shadow: 0 0 0 2px rgba(239,68,68,0.25);
 }
 
 .channel-mute.unmuted {
   background: var(--ok);
   border-color: var(--ok);
   color: #fff;
+  box-shadow: 0 0 0 2px rgba(34,197,94,0.25);
+}
+
+.channel-mute:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.channel-mute.mute-flash {
+  animation: mute-flash-anim 0.25s ease-out;
+}
+
+@keyframes mute-flash-anim {
+  0% { filter: brightness(1.6); transform: scale(0.88); }
+  50% { filter: brightness(1.3); transform: scale(1.02); }
+  100% { filter: brightness(1); transform: scale(1); }
 }
 
 .channel-volume {
@@ -946,6 +984,13 @@ body {
 .routing-matrix-dest-header .material-icons {
   display: block;
   margin: 0 auto 2px;
+}
+
+.routing-bus-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 400;
+  opacity: 0.5;
 }
 
 .routing-matrix-source {

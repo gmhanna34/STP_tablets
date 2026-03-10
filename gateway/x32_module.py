@@ -640,6 +640,19 @@ class X32Module:
             "send_level": self._routing_cfg.get("send_level", 0.75),
         }
 
+    def _dest_buses(self, dest: dict) -> List[int]:
+        """Get bus list from a destination (supports both 'bus' and 'buses' keys)."""
+        buses = dest.get("buses")
+        if buses:
+            return list(buses)
+        bus = dest.get("bus")
+        return [bus] if bus else []
+
+    def _dest_name_to_buses(self) -> Dict[str, List[int]]:
+        """Build lookup: destination name → list of bus numbers."""
+        destinations = self._routing_cfg.get("destinations", [])
+        return {d["name"]: self._dest_buses(d) for d in destinations}
+
     def _match_channels_to_groups(self, snap: Dict[str, Any]) -> List[dict]:
         """Match current channel/aux names to configured source group patterns."""
         groups = self._routing_cfg.get("source_groups", [])
@@ -665,6 +678,27 @@ class X32Module:
             })
         return result
 
+    def _query_send_level(self, m, ch_type: str, ch_id: int, bus_num: int) -> float:
+        """Query a single channel→bus send level."""
+        bus_fmt = _fmt_ch(bus_num)
+        if ch_type == "aux":
+            path = f"/auxin/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
+        else:
+            path = f"/ch/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
+        try:
+            return float(m.query(path)[0])
+        except Exception:
+            return 0.0
+
+    def _set_send_level(self, m, ch_type: str, ch_id: int, bus_num: int, level: float) -> None:
+        """Set a single channel→bus send level."""
+        bus_fmt = _fmt_ch(bus_num)
+        if ch_type == "aux":
+            path = f"/auxin/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
+        else:
+            path = f"/ch/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
+        m.send(path, level)
+
     def get_routing_state(self) -> Tuple[dict, int]:
         """Return current routing matrix: which source groups are routed to which destinations."""
         snap, _, online, err = self._poller.snapshot()
@@ -674,29 +708,19 @@ class X32Module:
         groups = self._match_channels_to_groups(snap)
         destinations = self._routing_cfg.get("destinations", [])
 
-        # Query bus send levels for all matched channels → all destinations
         def do(m):
             matrix = {}
             for group in groups:
                 group_routes = {}
                 for dest in destinations:
-                    bus_num = dest["bus"]
-                    bus_fmt = _fmt_ch(bus_num)
+                    buses = self._dest_buses(dest)
                     levels = []
-                    for ch_info in group["channels"]:
-                        ch_id = ch_info["id"]
-                        ch_type = ch_info["type"]
-                        if ch_type == "aux":
-                            path = f"/auxin/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
-                        else:
-                            path = f"/ch/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
-                        try:
-                            lvl = float(m.query(path)[0])
+                    for bus_num in buses:
+                        for ch_info in group["channels"]:
+                            lvl = self._query_send_level(m, ch_info["type"], ch_info["id"], bus_num)
                             levels.append(lvl)
-                        except Exception:
-                            levels.append(0.0)
                     avg_level = sum(levels) / len(levels) if levels else 0.0
-                    group_routes[str(bus_num)] = {
+                    group_routes[dest["name"]] = {
                         "active": avg_level > 0.05,
                         "level": round(avg_level, 3),
                     }
@@ -715,9 +739,9 @@ class X32Module:
             "send_level": self._routing_cfg.get("send_level", 0.75),
         }, 200
 
-    def set_group_routing(self, group_name: str, bus: int, enabled: bool,
+    def set_group_routing(self, group_name: str, dest_name: str, enabled: bool,
                           level: Optional[float] = None) -> Tuple[dict, int]:
-        """Toggle routing of a source group to a destination bus."""
+        """Toggle routing of a source group to a destination (all buses in that destination)."""
         snap, _, online, err = self._poller.snapshot()
         if not online or not snap:
             return {"error": err or "offline"}, 503
@@ -733,26 +757,29 @@ class X32Module:
         if not target["channels"]:
             return {"error": f"No channels matched for group '{group_name}'"}, 404
 
+        dest_map = self._dest_name_to_buses()
+        buses = dest_map.get(dest_name)
+        if not buses:
+            return {"error": f"Destination '{dest_name}' not found"}, 404
+
         send_level = level if level is not None else self._routing_cfg.get("send_level", 0.75)
         target_level = send_level if enabled else 0.0
 
         def do(m):
-            bus_fmt = _fmt_ch(bus)
-            for ch_info in target["channels"]:
-                ch_id = ch_info["id"]
-                ch_type = ch_info["type"]
-                if ch_type == "aux":
-                    path = f"/auxin/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
-                else:
-                    path = f"/ch/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
-                m.send(path, target_level)
+            count = 0
+            for bus_num in buses:
+                for ch_info in target["channels"]:
+                    self._set_send_level(m, ch_info["type"], ch_info["id"], bus_num, target_level)
+                    count += 1
             return {
                 "success": True,
                 "group": group_name,
-                "bus": bus,
+                "destination": dest_name,
+                "buses": buses,
                 "enabled": enabled,
                 "level": round(target_level, 3),
                 "channels_affected": len(target["channels"]),
+                "sends_changed": count,
             }
 
         res, cmd_err = self._poller.command(do)
@@ -773,26 +800,32 @@ class X32Module:
 
         groups = self._match_channels_to_groups(snap)
         destinations = self._routing_cfg.get("destinations", [])
-        dest_buses = [d["bus"] for d in destinations]
+        dest_map = self._dest_name_to_buses()
         preset_routes = preset.get("routes", {})
         send_level = self._routing_cfg.get("send_level", 0.75)
+
+        # Resolve preset dest names to bus sets per source group
+        active_buses_by_group: Dict[str, set] = {}
+        for group_name, dest_names in preset_routes.items():
+            bus_set: set = set()
+            for dn in dest_names:
+                bus_set.update(dest_map.get(dn, []))
+            active_buses_by_group[group_name] = bus_set
+
+        # Collect all buses across all destinations
+        all_buses: set = set()
+        for dest in destinations:
+            all_buses.update(self._dest_buses(dest))
 
         def do(m):
             changes = 0
             for group in groups:
-                group_name = group["name"]
-                active_buses = preset_routes.get(group_name, [])
-                for bus_num in dest_buses:
-                    bus_fmt = _fmt_ch(bus_num)
-                    target_level = send_level if bus_num in active_buses else 0.0
+                gname = group["name"]
+                active = active_buses_by_group.get(gname, set())
+                for bus_num in all_buses:
+                    target_level = send_level if bus_num in active else 0.0
                     for ch_info in group["channels"]:
-                        ch_id = ch_info["id"]
-                        ch_type = ch_info["type"]
-                        if ch_type == "aux":
-                            path = f"/auxin/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
-                        else:
-                            path = f"/ch/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
-                        m.send(path, target_level)
+                        self._set_send_level(m, ch_info["type"], ch_info["id"], bus_num, target_level)
                         changes += 1
             return {
                 "success": True,

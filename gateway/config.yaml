@@ -66,48 +66,52 @@ x32:
     destinations:
       - name: "Main Church"
         icon: "church"
-        bus: 1
+        buses: [1, 2]
       - name: "Social Hall"
         icon: "groups"
-        bus: 3
+        buses: [3, 4]
       - name: "Chapel"
         icon: "meeting_room"
-        bus: 5
+        buses: [5, 6]
       - name: "Gym"
         icon: "fitness_center"
-        bus: 7
+        buses: [7]
       - name: "Cry Room"
         icon: "child_care"
-        bus: 9
+        buses: [9]
+      - name: "PA Group"
+        icon: "campaign"
+        buses: [11, 12]
+        description: "Sunday School Rooms + Hallways"
     presets:
       normal_sunday:
         name: "Normal Sunday"
         icon: "church"
         description: "Church Mics to Main + Chapel + Cry Room, Music to Main"
         routes:
-          "Church Mics": [1, 5, 9]
-          "Music/Band": [1]
+          "Church Mics": ["Main Church", "Chapel", "Cry Room"]
+          "Music/Band": ["Main Church"]
       overflow:
         name: "Overflow to Social"
         icon: "groups"
         description: "Church Mics + Music to all rooms"
         routes:
-          "Church Mics": [1, 3, 5, 7, 9]
-          "Music/Band": [1, 3]
+          "Church Mics": ["Main Church", "Social Hall", "Chapel", "Gym", "Cry Room", "PA Group"]
+          "Music/Band": ["Main Church", "Social Hall"]
       social_event:
         name: "Social Hall Event"
         icon: "celebration"
         description: "Social Hall Mics to Social Hall only"
         routes:
-          "Social Hall Mics": [3]
+          "Social Hall Mics": ["Social Hall"]
       broadcast_all:
         name: "Broadcast All"
         icon: "spatial_audio"
         description: "All sources to all rooms"
         routes:
-          "Church Mics": [1, 3, 5, 7, 9]
-          "Music/Band": [1, 3, 5, 7, 9]
-          "Social Hall Mics": [1, 3, 5, 7, 9]
+          "Church Mics": ["Main Church", "Social Hall", "Chapel", "Gym", "Cry Room", "PA Group"]
+          "Music/Band": ["Main Church", "Social Hall", "Chapel", "Gym", "Cry Room", "PA Group"]
+          "Social Hall Mics": ["Main Church", "Social Hall", "Chapel", "Gym", "Cry Room", "PA Group"]
 ptz_cameras:
   BaptismRoom:
     ip: 192.168.1.207
