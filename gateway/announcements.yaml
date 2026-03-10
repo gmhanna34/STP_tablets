@@ -77,7 +77,7 @@ presets:
     
   test_message:
     label: "Test"
-    icon: "ab-testing"
+    icon: "system_security_update_good"
     text: "This is a test message.  This is only a test."    
 
 sequences:
