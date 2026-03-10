@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import copy
 import logging
+import re
 import threading
 import time
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import xair_api
 
@@ -367,6 +368,7 @@ class X32Module:
         self._logger = logger
         self._mixer_ip = cfg.get("mixer_ip", "192.168.1.231")
         self._mixer_type = cfg.get("mixer_type", "X32")
+        self._routing_cfg = cfg.get("routing", {})
         self._poller = X32Poller(
             mixer_type=self._mixer_type,
             ip=self._mixer_ip,
@@ -625,4 +627,181 @@ class X32Module:
         res, err = self._poller.command(do)
         if err:
             return {"error": err}, 503
+        return res, 200
+
+    # --- Audio Routing (channel → bus sends) ---
+
+    def get_routing_config(self) -> dict:
+        """Return the routing configuration (source groups, destinations, presets)."""
+        return {
+            "source_groups": self._routing_cfg.get("source_groups", []),
+            "destinations": self._routing_cfg.get("destinations", []),
+            "presets": self._routing_cfg.get("presets", {}),
+            "send_level": self._routing_cfg.get("send_level", 0.75),
+        }
+
+    def _match_channels_to_groups(self, snap: Dict[str, Any]) -> List[dict]:
+        """Match current channel/aux names to configured source group patterns."""
+        groups = self._routing_cfg.get("source_groups", [])
+        result = []
+        for group in groups:
+            patterns = group.get("patterns", [])
+            is_aux = group.get("type") == "aux"
+            matched = []
+            if is_aux:
+                for i in range(1, 9):
+                    name = snap.get(f"aux{i}_name", "")
+                    if name and any(re.search(p, name, re.IGNORECASE) for p in patterns):
+                        matched.append({"id": i, "name": name, "type": "aux"})
+            else:
+                for i in range(1, 33):
+                    name = snap.get(f"ch{i}name", "")
+                    if name and any(re.search(p, name, re.IGNORECASE) for p in patterns):
+                        matched.append({"id": i, "name": name, "type": "ch"})
+            result.append({
+                "name": group["name"],
+                "icon": group.get("icon", "mic"),
+                "channels": matched,
+            })
+        return result
+
+    def get_routing_state(self) -> Tuple[dict, int]:
+        """Return current routing matrix: which source groups are routed to which destinations."""
+        snap, _, online, err = self._poller.snapshot()
+        if not online or not snap:
+            return {"error": err or "offline"}, 503
+
+        groups = self._match_channels_to_groups(snap)
+        destinations = self._routing_cfg.get("destinations", [])
+
+        # Query bus send levels for all matched channels → all destinations
+        def do(m):
+            matrix = {}
+            for group in groups:
+                group_routes = {}
+                for dest in destinations:
+                    bus_num = dest["bus"]
+                    bus_fmt = _fmt_ch(bus_num)
+                    levels = []
+                    for ch_info in group["channels"]:
+                        ch_id = ch_info["id"]
+                        ch_type = ch_info["type"]
+                        if ch_type == "aux":
+                            path = f"/auxin/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
+                        else:
+                            path = f"/ch/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
+                        try:
+                            lvl = float(m.query(path)[0])
+                            levels.append(lvl)
+                        except Exception:
+                            levels.append(0.0)
+                    avg_level = sum(levels) / len(levels) if levels else 0.0
+                    group_routes[str(bus_num)] = {
+                        "active": avg_level > 0.05,
+                        "level": round(avg_level, 3),
+                    }
+                matrix[group["name"]] = group_routes
+            return matrix
+
+        matrix, cmd_err = self._poller.command(do)
+        if cmd_err:
+            return {"error": cmd_err}, 503
+
+        return {
+            "groups": groups,
+            "destinations": destinations,
+            "matrix": matrix,
+            "presets": self._routing_cfg.get("presets", {}),
+            "send_level": self._routing_cfg.get("send_level", 0.75),
+        }, 200
+
+    def set_group_routing(self, group_name: str, bus: int, enabled: bool,
+                          level: Optional[float] = None) -> Tuple[dict, int]:
+        """Toggle routing of a source group to a destination bus."""
+        snap, _, online, err = self._poller.snapshot()
+        if not online or not snap:
+            return {"error": err or "offline"}, 503
+
+        groups = self._match_channels_to_groups(snap)
+        target = None
+        for g in groups:
+            if g["name"] == group_name:
+                target = g
+                break
+        if not target:
+            return {"error": f"Source group '{group_name}' not found or has no matched channels"}, 404
+        if not target["channels"]:
+            return {"error": f"No channels matched for group '{group_name}'"}, 404
+
+        send_level = level if level is not None else self._routing_cfg.get("send_level", 0.75)
+        target_level = send_level if enabled else 0.0
+
+        def do(m):
+            bus_fmt = _fmt_ch(bus)
+            for ch_info in target["channels"]:
+                ch_id = ch_info["id"]
+                ch_type = ch_info["type"]
+                if ch_type == "aux":
+                    path = f"/auxin/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
+                else:
+                    path = f"/ch/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
+                m.send(path, target_level)
+            return {
+                "success": True,
+                "group": group_name,
+                "bus": bus,
+                "enabled": enabled,
+                "level": round(target_level, 3),
+                "channels_affected": len(target["channels"]),
+            }
+
+        res, cmd_err = self._poller.command(do)
+        if cmd_err:
+            return {"error": cmd_err}, 503
+        return res, 200
+
+    def apply_routing_preset(self, preset_name: str) -> Tuple[dict, int]:
+        """Apply a named routing preset — sets all configured routes and clears others."""
+        presets = self._routing_cfg.get("presets", {})
+        preset = presets.get(preset_name)
+        if not preset:
+            return {"error": f"Preset '{preset_name}' not found"}, 404
+
+        snap, _, online, err = self._poller.snapshot()
+        if not online or not snap:
+            return {"error": err or "offline"}, 503
+
+        groups = self._match_channels_to_groups(snap)
+        destinations = self._routing_cfg.get("destinations", [])
+        dest_buses = [d["bus"] for d in destinations]
+        preset_routes = preset.get("routes", {})
+        send_level = self._routing_cfg.get("send_level", 0.75)
+
+        def do(m):
+            changes = 0
+            for group in groups:
+                group_name = group["name"]
+                active_buses = preset_routes.get(group_name, [])
+                for bus_num in dest_buses:
+                    bus_fmt = _fmt_ch(bus_num)
+                    target_level = send_level if bus_num in active_buses else 0.0
+                    for ch_info in group["channels"]:
+                        ch_id = ch_info["id"]
+                        ch_type = ch_info["type"]
+                        if ch_type == "aux":
+                            path = f"/auxin/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
+                        else:
+                            path = f"/ch/{_fmt_ch(ch_id)}/mix/{bus_fmt}/level"
+                        m.send(path, target_level)
+                        changes += 1
+            return {
+                "success": True,
+                "preset": preset_name,
+                "preset_label": preset.get("name", preset_name),
+                "changes": changes,
+            }
+
+        res, cmd_err = self._poller.command(do)
+        if cmd_err:
+            return {"error": cmd_err}, 503
         return res, 200

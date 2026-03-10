@@ -109,6 +109,18 @@ const SourcePage = {
             <div class="scene-grid" id="x32-scenes"></div>
           </div>
           <div class="control-section">
+            <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
+              <span><span class="material-icons" style="font-size:18px;vertical-align:middle;margin-right:4px;">route</span>Audio Routing</span>
+              <button class="btn" id="btn-refresh-routing-audio" style="min-width:auto;padding:4px 10px;font-size:11px;">
+                <span class="material-icons" style="font-size:14px;">refresh</span>
+                <span class="btn-label">Refresh</span>
+              </button>
+            </div>
+            <div id="audio-routing-container">
+              <div class="text-center" style="opacity:0.5;">Loading routing matrix...</div>
+            </div>
+          </div>
+          <div class="control-section">
             <div class="section-title">Input Channels</div>
             <div id="mixer-container">
               <div class="text-center" style="opacity:0.5;">Loading mixer status...</div>
@@ -290,7 +302,9 @@ const SourcePage = {
 
   _initAudio() {
     this.loadMixer();
+    this._loadAudioRouting();
     this._wireX32QuickActions();
+    document.getElementById('btn-refresh-routing-audio')?.addEventListener('click', () => this._loadAudioRouting());
   },
 
   // UI-only refresh — reads from cached API state without HTTP calls.
@@ -543,6 +557,176 @@ const SourcePage = {
       }
       App.showToast(`Music channels ${action.toLowerCase()}d`);
       setTimeout(() => this.loadMixer(), 500);
+    });
+  },
+
+  // ---- AUDIO ROUTING MATRIX ----
+
+  _routingState: null,
+
+  async _loadAudioRouting() {
+    const container = document.getElementById('audio-routing-container');
+    if (!container) return;
+    const data = await X32API.getRoutingState();
+    if (!data || data.error) {
+      container.innerHTML = `<div class="text-center" style="color:var(--text-secondary);">
+        ${data?.error === 'offline' ? 'X32 Mixer Offline' : 'Could not load routing state'}
+      </div>`;
+      return;
+    }
+    this._routingState = data;
+    this._renderAudioRouting(data);
+  },
+
+  _renderAudioRouting(data) {
+    const container = document.getElementById('audio-routing-container');
+    if (!container) return;
+
+    const { groups, destinations, matrix, presets } = data;
+
+    if (!groups.length || !destinations.length) {
+      container.innerHTML = '<div class="text-center" style="opacity:0.5;">No routing groups or destinations configured</div>';
+      return;
+    }
+
+    // Filter to groups that have matched channels
+    const activeGroups = groups.filter(g => g.channels.length > 0);
+    if (!activeGroups.length) {
+      container.innerHTML = '<div class="text-center" style="opacity:0.5;">No channels matched any source group patterns</div>';
+      return;
+    }
+
+    // Presets row
+    const presetKeys = Object.keys(presets || {});
+    const presetsHtml = presetKeys.length ? `
+      <div class="routing-preset-bar">
+        ${presetKeys.map(key => {
+          const p = presets[key];
+          return `<button class="btn routing-preset-btn" data-routing-preset="${key}" title="${p.description || ''}">
+            <span class="material-icons">${p.icon || 'tune'}</span>
+            <span class="btn-label">${p.name || key}</span>
+          </button>`;
+        }).join('')}
+      </div>
+    ` : '';
+
+    // Matrix table (wide screens)
+    const matrixHtml = `
+      <div class="routing-matrix">
+        <table class="routing-matrix-table">
+          <thead>
+            <tr>
+              <th class="routing-matrix-corner"></th>
+              ${destinations.map(d => `<th class="routing-matrix-dest-header">
+                <span class="material-icons" style="font-size:16px;">${d.icon || 'speaker'}</span>
+                <span>${d.name}</span>
+              </th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${activeGroups.map(g => {
+              const chLabel = g.channels.map(c => `${c.type === 'aux' ? 'Aux' : 'Ch'} ${c.id}`).join(', ');
+              return `<tr>
+                <td class="routing-matrix-source">
+                  <span class="material-icons" style="font-size:16px;">${g.icon || 'mic'}</span>
+                  <div>
+                    <div class="routing-source-name">${g.name}</div>
+                    <div class="routing-source-channels">${chLabel}</div>
+                  </div>
+                </td>
+                ${destinations.map(d => {
+                  const cell = matrix[g.name]?.[String(d.bus)];
+                  const active = cell?.active || false;
+                  return `<td class="routing-matrix-cell">
+                    <button class="routing-toggle ${active ? 'active' : ''}"
+                      data-route-group="${g.name}" data-route-bus="${d.bus}"
+                      title="${g.name} → ${d.name}">
+                      ${active ? 'ON' : '—'}
+                    </button>
+                  </td>`;
+                }).join('')}
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    // Card layout (narrow screens)
+    const cardsHtml = `
+      <div class="routing-cards">
+        ${activeGroups.map(g => {
+          const chLabel = g.channels.map(c => `${c.type === 'aux' ? 'Aux' : 'Ch'} ${c.id}`).join(', ');
+          return `<div class="routing-source-card">
+            <div class="routing-source-card-header">
+              <span class="material-icons">${g.icon || 'mic'}</span>
+              <div>
+                <div class="routing-source-name">${g.name}</div>
+                <div class="routing-source-channels">${chLabel}</div>
+              </div>
+            </div>
+            <div class="routing-dest-chips">
+              ${destinations.map(d => {
+                const cell = matrix[g.name]?.[String(d.bus)];
+                const active = cell?.active || false;
+                return `<button class="routing-chip ${active ? 'active' : ''}"
+                  data-route-group="${g.name}" data-route-bus="${d.bus}">
+                  <span class="material-icons" style="font-size:14px;">${d.icon || 'speaker'}</span>
+                  ${d.name}
+                </button>`;
+              }).join('')}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    `;
+
+    container.innerHTML = presetsHtml + matrixHtml + cardsHtml;
+
+    // Wire preset buttons
+    container.querySelectorAll('[data-routing-preset]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const preset = btn.dataset.routingPreset;
+        const presetData = presets[preset];
+        if (!await App.showConfirm(`Apply routing preset?\n\n${presetData?.name || preset}\n${presetData?.description || ''}`)) return;
+        btn.disabled = true;
+        const result = await X32API.applyRoutingPreset(preset);
+        btn.disabled = false;
+        if (result?.success) {
+          App.showToast(`Applied: ${presetData?.name || preset}`);
+          setTimeout(() => this._loadAudioRouting(), 500);
+        } else {
+          App.showToast(`Failed: ${result?.error || 'Unknown error'}`, 4000);
+        }
+      });
+    });
+
+    // Wire toggle buttons (both matrix and card layouts share data attributes)
+    container.querySelectorAll('[data-route-group][data-route-bus]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const group = btn.dataset.routeGroup;
+        const bus = parseInt(btn.dataset.routeBus);
+        const currentlyActive = btn.classList.contains('active');
+        btn.disabled = true;
+        const result = await X32API.setGroupRouting(group, bus, !currentlyActive);
+        btn.disabled = false;
+        if (result?.success) {
+          // Update UI immediately
+          btn.classList.toggle('active', !currentlyActive);
+          if (btn.classList.contains('routing-toggle')) {
+            btn.textContent = !currentlyActive ? 'ON' : '—';
+          }
+          // Also update the matching button in the other layout
+          container.querySelectorAll(`[data-route-group="${group}"][data-route-bus="${bus}"]`).forEach(b => {
+            b.classList.toggle('active', !currentlyActive);
+            if (b.classList.contains('routing-toggle')) {
+              b.textContent = !currentlyActive ? 'ON' : '—';
+            }
+          });
+        } else {
+          App.showToast(`Routing failed: ${result?.error || 'Unknown error'}`, 4000);
+        }
+      });
     });
   },
 

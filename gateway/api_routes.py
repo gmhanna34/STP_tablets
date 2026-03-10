@@ -921,6 +921,52 @@ def register_api_routes(ctx):
             socketio.emit("state:x32", {"event": "dca_volume_set", "dca": ch, "value": value}, room="x32")
         return jsonify(result), status
 
+    # ---- X32 Audio Routing ----
+
+    @app.route("/api/x32/routing/config")
+    def x32_routing_config():
+        if mock_mode:
+            return jsonify({"source_groups": [], "destinations": [], "presets": {}, "send_level": 0.75}), 200
+        return jsonify(ctx.x32.get_routing_config()), 200
+
+    @app.route("/api/x32/routing")
+    def x32_routing_state():
+        if mock_mode:
+            return jsonify({"groups": [], "destinations": [], "matrix": {}, "presets": {}, "mock": True}), 200
+        result, status = ctx.x32.get_routing_state()
+        return jsonify(result), status
+
+    @app.route("/api/x32/routing/group", methods=["POST"])
+    def x32_routing_group():
+        perm_err = check_permission(get_tablet_id(), "main", permissions_data)
+        if perm_err:
+            return perm_err
+        data = request.get_json(silent=True) or {}
+        group_name = data.get("group")
+        bus = data.get("bus")
+        enabled = data.get("enabled", True)
+        level = data.get("level")
+        if not group_name or bus is None:
+            return jsonify({"error": "Required: group, bus"}), 400
+        if mock_mode:
+            return jsonify({"success": True, "group": group_name, "bus": bus, "enabled": enabled, "mock": True}), 200
+        result, status = ctx.x32.set_group_routing(group_name, int(bus), bool(enabled), level)
+        if status < 400:
+            socketio.emit("state:x32", {"event": "routing_change", "group": group_name, "bus": bus, "enabled": enabled}, room="x32")
+        return jsonify(result), status
+
+    @app.route("/api/x32/routing/preset/<preset_name>", methods=["POST"])
+    def x32_routing_preset(preset_name: str):
+        perm_err = check_permission(get_tablet_id(), "main", permissions_data)
+        if perm_err:
+            return perm_err
+        if mock_mode:
+            return jsonify({"success": True, "preset": preset_name, "mock": True}), 200
+        result, status = ctx.x32.apply_routing_preset(preset_name)
+        if status < 400:
+            socketio.emit("state:x32", {"event": "routing_preset", "preset": preset_name}, room="x32")
+        return jsonify(result), status
+
     # ---- OBS ----
 
     @app.route("/api/obs/status")

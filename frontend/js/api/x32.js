@@ -112,6 +112,46 @@ const X32API = {
   async setBusVolume(bus, value) { await this.sendCommand(`bus/${bus}/volume/set/${value}`); },
   async setDcaVolume(dca, value) { await this.sendCommand(`dca/${dca}/volume/set/${value}`); },
 
+  async getRoutingState() {
+    const url = '/api/x32/routing';
+    try {
+      const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return await resp.json();
+    } catch (e) {
+      console.error('X32 routing:', e);
+      return null;
+    }
+  },
+
+  async setGroupRouting(group, bus, enabled) {
+    try {
+      const resp = await fetch('/api/x32/routing/group', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group, bus, enabled }),
+        signal: AbortSignal.timeout(10000),
+      });
+      return await resp.json();
+    } catch (e) {
+      console.error('X32 routing group:', e);
+      return null;
+    }
+  },
+
+  async applyRoutingPreset(presetName) {
+    try {
+      const resp = await fetch(`/api/x32/routing/preset/${presetName}`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(15000),
+      });
+      return await resp.json();
+    } catch (e) {
+      console.error('X32 routing preset:', e);
+      return null;
+    }
+  },
+
   // Called by Socket.IO state push
   onStateUpdate(data) {
     if (data && data.data) this._parseSnapshot(data.data);

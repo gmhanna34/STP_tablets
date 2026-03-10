@@ -905,6 +905,159 @@ body {
   font-weight: bold;
 }
 
+/* ── Audio Routing Matrix ─────────────────────────────────── */
+
+.routing-preset-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.routing-preset-btn {
+  font-size: 12px !important;
+}
+
+/* Matrix layout (wide screens) */
+.routing-matrix {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.routing-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.routing-matrix-corner {
+  min-width: 140px;
+}
+
+.routing-matrix-dest-header {
+  text-align: center;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.routing-matrix-dest-header .material-icons {
+  display: block;
+  margin: 0 auto 2px;
+}
+
+.routing-matrix-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.routing-source-name {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.routing-source-channels {
+  font-size: 10px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.routing-matrix-cell {
+  text-align: center;
+  padding: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.routing-toggle {
+  width: 48px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.routing-toggle.active {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #fff;
+}
+
+.routing-toggle:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* Card layout (narrow screens) — hidden on wide */
+.routing-cards {
+  display: none;
+}
+
+.routing-source-card {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.routing-source-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.routing-dest-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.routing-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.routing-chip.active {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: #fff;
+}
+
+.routing-chip:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* Responsive: show cards on narrow, matrix on wide */
+@media (max-width: 600px) {
+  .routing-matrix { display: none; }
+  .routing-cards { display: block; }
+}
+
 /* ── Source Routing ────────────────────────────────────────── */
 
 .routing-grid {

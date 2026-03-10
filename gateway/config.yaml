@@ -43,6 +43,71 @@ x32:
   snapshot_seconds: 6.0
   offline_after_seconds: 8.0
   ping_fails_to_offline: 3
+  routing:
+    send_level: 0.75
+    source_groups:
+      - name: "Church Mics"
+        icon: "mic"
+        patterns: ["pastor", "cantor", "ambo", "lector", "altar", "pulpit"]
+      - name: "Music/Band"
+        icon: "music_note"
+        patterns: ["guitar", "bass", "drum", "key", "piano", "organ", "band", "synth", "inst"]
+      - name: "Social Hall Mics"
+        icon: "mic_external_on"
+        patterns: ["social", "hall mic"]
+      - name: "Alexa"
+        icon: "smart_display"
+        patterns: ["alexa"]
+        type: "aux"
+      - name: "MoIP Audio"
+        icon: "settings_input_hdmi"
+        patterns: ["moip", "hdmi"]
+        type: "aux"
+    destinations:
+      - name: "Main Church"
+        icon: "church"
+        bus: 1
+      - name: "Social Hall"
+        icon: "groups"
+        bus: 3
+      - name: "Chapel"
+        icon: "meeting_room"
+        bus: 5
+      - name: "Gym"
+        icon: "fitness_center"
+        bus: 7
+      - name: "Cry Room"
+        icon: "child_care"
+        bus: 9
+    presets:
+      normal_sunday:
+        name: "Normal Sunday"
+        icon: "church"
+        description: "Church Mics to Main + Chapel + Cry Room, Music to Main"
+        routes:
+          "Church Mics": [1, 5, 9]
+          "Music/Band": [1]
+      overflow:
+        name: "Overflow to Social"
+        icon: "groups"
+        description: "Church Mics + Music to all rooms"
+        routes:
+          "Church Mics": [1, 3, 5, 7, 9]
+          "Music/Band": [1, 3]
+      social_event:
+        name: "Social Hall Event"
+        icon: "celebration"
+        description: "Social Hall Mics to Social Hall only"
+        routes:
+          "Social Hall Mics": [3]
+      broadcast_all:
+        name: "Broadcast All"
+        icon: "spatial_audio"
+        description: "All sources to all rooms"
+        routes:
+          "Church Mics": [1, 3, 5, 7, 9]
+          "Music/Band": [1, 3, 5, 7, 9]
+          "Social Hall Mics": [1, 3, 5, 7, 9]
 ptz_cameras:
   BaptismRoom:
     ip: 192.168.1.207
