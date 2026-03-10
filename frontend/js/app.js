@@ -1038,7 +1038,7 @@ const App = {
       // Render existing history or welcome message
       if (this._chatHistory.length === 0) {
         this._chatAddBubble(messagesEl, 'bot',
-          "Hi! I'm the AV Help Assistant. Ask me anything about operating the church AV system \u2014 how to use buttons, troubleshooting, or what a feature does.");
+          "Hi! I'm the AV Help Assistant. I can answer questions about the AV system and take actions for you \u2014 like turning on audio/video, switching sources, or creating schedules. Just ask!");
       } else {
         for (const msg of this._chatHistory) {
           this._chatAddBubble(messagesEl, msg.role === 'user' ? 'user' : 'bot', msg.content);
@@ -1076,6 +1076,10 @@ const App = {
           typing.remove();
 
           if (data.response) {
+            // Show action summary chips if actions were taken
+            if (data.actions && data.actions.length > 0) {
+              this._chatAddActionSummary(messagesEl, data.actions);
+            }
             this._chatAddBubble(messagesEl, 'bot', data.response);
             this._chatHistory.push({ role: 'assistant', content: data.response });
             this._saveChatHistory();
@@ -1105,6 +1109,39 @@ const App = {
     bubble.className = `chat-bubble ${type}`;
     bubble.textContent = text;
     container.appendChild(bubble);
+    container.scrollTop = container.scrollHeight;
+  },
+
+  _chatAddActionSummary(container, actions) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'chat-actions';
+    for (const action of actions) {
+      const chip = document.createElement('div');
+      chip.className = 'chat-action-chip';
+      const result = action.result || {};
+      const success = result.success !== false;
+      const icon = success ? 'check_circle' : 'error';
+      const iconColor = success ? '#4caf50' : '#f44336';
+      let label = '';
+      if (action.tool === 'execute_macro') {
+        label = result.label || action.input.macro_key || 'Macro';
+      } else if (action.tool === 'create_schedule') {
+        label = 'Schedule: ' + (result.name || action.input.name || 'Created');
+      } else if (action.tool === 'update_schedule') {
+        label = 'Schedule updated';
+      } else if (action.tool === 'delete_schedule') {
+        label = 'Schedule deleted';
+      } else if (action.tool === 'list_schedules') {
+        label = (result.count || 0) + ' schedule(s)';
+      } else if (action.tool === 'get_system_state') {
+        label = 'State checked';
+      } else {
+        label = action.tool;
+      }
+      chip.innerHTML = `<span class="material-icons" style="font-size:16px;color:${iconColor};vertical-align:middle;margin-right:4px;">${icon}</span>${label}`;
+      wrapper.appendChild(chip);
+    }
+    container.appendChild(wrapper);
     container.scrollTop = container.scrollHeight;
   },
 

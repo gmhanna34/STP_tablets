@@ -2066,16 +2066,17 @@ def register_api_routes(ctx):
                          "These are the screens/displays that can receive any video source:\n"
                          + "\n".join(rx_parts))
 
-        # ---- Macros ----
+        # ---- Macros (with keys for tool use) ----
         macro_lines = []
         for key, m in macro_defs.items():
             label = m.get("label", key)
             desc = m.get("description", "")
             if desc:
-                macro_lines.append(f"- {label}: {desc}")
+                macro_lines.append(f"- **{key}** — {label}: {desc}")
         if macro_lines:
             parts.append("\n## Available Macros (buttons volunteers can press)\n"
-                         "Macros are multi-step automations triggered by buttons on the tablet. "
+                         "Macros are multi-step automations triggered by buttons on the tablet or by you using the execute_macro tool. "
+                         "The bold text is the macro_key you pass to execute_macro. "
                          "When pressed, the button shows a progress bar. If a step fails, it may be skipped (orange warning) or the macro may abort (red error).\n"
                          + "\n".join(macro_lines[:120]))
 
@@ -2208,9 +2209,296 @@ def register_api_routes(ctx):
             "- The system supports multiple rooms running simultaneously — turning off audio in one room doesn't affect others."
         )
 
+        # ---- Action Capabilities ----
+        parts.append(
+            "\n## Action Capabilities\n"
+            "You can do more than just answer questions — you can take actions using the tools provided to you.\n\n"
+            "**What you can do:**\n"
+            "- Execute macros (turn on/off audio, video, projectors, etc.) using the execute_macro tool\n"
+            "- Create scheduled automations using the create_schedule tool\n"
+            "- List existing schedules using the list_schedules tool\n"
+            "- Enable, disable, or modify schedules using the update_schedule tool\n"
+            "- Delete schedules using the delete_schedule tool\n"
+            "- Check current device states using the get_system_state tool\n\n"
+            "**Guidelines:**\n"
+            "- When the volunteer asks you to do something (turn on audio, set up a room, create a schedule), USE the tools to do it — don't just explain how.\n"
+            "- For schedule days: 0=Monday, 1=Tuesday, 2=Wednesday, 3=Thursday, 4=Friday, 5=Saturday, 6=Sunday.\n"
+            "- For schedule times, use 24-hour HH:MM format (e.g., '07:00' for 7 AM, '18:30' for 6:30 PM).\n"
+            "- If a request maps to multiple macros (e.g., 'set up the chapel' = audio + TVs), execute them one at a time.\n"
+            "- After executing an action, briefly confirm what happened and whether it succeeded.\n"
+            "- If a macro fails, explain the issue and suggest troubleshooting steps.\n"
+            "- When asked to create a schedule, confirm the details (which macro, what time, which days) in your response.\n"
+            "- Use get_system_state to check current device status before answering questions about what's on or off.\n"
+            "- IMPORTANT: Only execute actions that were clearly requested. If the volunteer is asking a question about how to do something, answer the question. "
+            "If they say 'turn on the chapel audio' or 'can you turn on chapel audio', that's a request to act."
+        )
+
         return "\n".join(parts)
 
     _chat_system_prompt = _build_chat_system_prompt()
+
+    # ---- Chat Tool Definitions ----
+
+    _chat_tools = [
+        {
+            "name": "execute_macro",
+            "description": (
+                "Execute a macro to control AV equipment (turn on/off audio, video, projectors, "
+                "switch sources, etc.). Use the macro_key from the Available Macros list."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "macro_key": {
+                        "type": "string",
+                        "description": "The macro key to execute, e.g. 'chapel_audio_on', 'main_video_off'",
+                    },
+                },
+                "required": ["macro_key"],
+            },
+        },
+        {
+            "name": "create_schedule",
+            "description": (
+                "Create a new scheduled automation that runs a macro at a specific time on specific days."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Human-readable name for the schedule, e.g. 'Monday Chapel Setup'",
+                    },
+                    "macro_key": {
+                        "type": "string",
+                        "description": "The macro key to run on schedule",
+                    },
+                    "time_of_day": {
+                        "type": "string",
+                        "description": "Time in HH:MM 24-hour format, e.g. '07:00' for 7 AM",
+                    },
+                    "days": {
+                        "type": "string",
+                        "description": "Comma-separated day numbers: 0=Mon,1=Tue,2=Wed,3=Thu,4=Fri,5=Sat,6=Sun. E.g. '0,2,4' for Mon/Wed/Fri",
+                    },
+                },
+                "required": ["name", "macro_key", "time_of_day", "days"],
+            },
+        },
+        {
+            "name": "list_schedules",
+            "description": "List all existing scheduled automations with their status (enabled/disabled), times, and days.",
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+        {
+            "name": "update_schedule",
+            "description": "Update an existing schedule — enable/disable it, change its time, days, name, or macro.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "schedule_id": {
+                        "type": "integer",
+                        "description": "The ID of the schedule to update (from list_schedules)",
+                    },
+                    "enabled": {
+                        "type": "boolean",
+                        "description": "Set to true to enable or false to disable the schedule",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "New name for the schedule (optional)",
+                    },
+                    "macro_key": {
+                        "type": "string",
+                        "description": "New macro key (optional)",
+                    },
+                    "time_of_day": {
+                        "type": "string",
+                        "description": "New time in HH:MM format (optional)",
+                    },
+                    "days": {
+                        "type": "string",
+                        "description": "New comma-separated day numbers (optional)",
+                    },
+                },
+                "required": ["schedule_id"],
+            },
+        },
+        {
+            "name": "delete_schedule",
+            "description": "Permanently delete a scheduled automation.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "schedule_id": {
+                        "type": "integer",
+                        "description": "The ID of the schedule to delete (from list_schedules)",
+                    },
+                },
+                "required": ["schedule_id"],
+            },
+        },
+        {
+            "name": "get_system_state",
+            "description": (
+                "Get the current state of AV equipment — what's on/off, current video sources, "
+                "OBS streaming status, projector states, etc."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+    ]
+
+    # ---- Chat Tool Execution ----
+
+    _DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+    def _chat_execute_tool(tool_name: str, tool_input: dict, tablet: str) -> dict:
+        """Execute a chat tool and return the result as a dict for the tool_result message."""
+        if tool_name == "execute_macro":
+            macro_key = tool_input.get("macro_key", "")
+            if macro_key not in macro_defs:
+                return {"success": False, "error": f"Unknown macro: {macro_key}",
+                        "available_hint": "Use list from the Available Macros section"}
+            label = macro_defs[macro_key].get("label", macro_key)
+            logger.info(f"[{tablet}] Chat executing macro: {macro_key}")
+            db.log_action(tablet, "chat:execute_macro", macro_key, label, "started", 0)
+            result = execute_macro(ctx, macro_key, f"Chat:{tablet}", 0)
+            status = "OK" if result.get("success") else "FAILED"
+            db.log_action(tablet, "chat:execute_macro", macro_key, label,
+                          status, result.get("latency_ms", 0))
+            return {
+                "success": result.get("success", False),
+                "macro": macro_key,
+                "label": label,
+                "steps_completed": result.get("steps_completed", 0),
+                "steps_total": result.get("steps_total", 0),
+                "latency_ms": round(result.get("latency_ms", 0)),
+                "issues": result.get("issues", []),
+            }
+
+        elif tool_name == "create_schedule":
+            name = tool_input.get("name", "")
+            macro_key = tool_input.get("macro_key", "")
+            time_of_day = tool_input.get("time_of_day", "08:00")
+            days = tool_input.get("days", "0,1,2,3,4,5,6")
+            if not name or not macro_key:
+                return {"success": False, "error": "name and macro_key are required"}
+            if macro_key not in macro_defs:
+                return {"success": False, "error": f"Unknown macro: {macro_key}"}
+            sched_id = db.create_schedule(name, macro_key, days, time_of_day)
+            day_names = [_DAY_NAMES[int(d)] for d in days.split(",") if d.isdigit() and int(d) < 7]
+            logger.info(f"[{tablet}] Chat created schedule: {name} -> {macro_key} at {time_of_day}")
+            db.log_action(tablet, "chat:create_schedule", name,
+                          f"{macro_key} at {time_of_day} days={days}", "OK", 0)
+            return {
+                "success": True,
+                "schedule_id": sched_id,
+                "name": name,
+                "macro_key": macro_key,
+                "macro_label": macro_defs.get(macro_key, {}).get("label", macro_key),
+                "time": time_of_day,
+                "days": days,
+                "day_names": day_names,
+            }
+
+        elif tool_name == "list_schedules":
+            schedules = db.get_schedules()
+            formatted = []
+            for s in schedules:
+                days_str = s.get("days", "")
+                day_names = [_DAY_NAMES[int(d)] for d in days_str.split(",")
+                             if d.isdigit() and int(d) < 7]
+                mk = s.get("macro_key", "")
+                formatted.append({
+                    "id": s.get("id"),
+                    "name": s.get("name", ""),
+                    "macro_key": mk,
+                    "macro_label": macro_defs.get(mk, {}).get("label", mk),
+                    "time": s.get("time_of_day", ""),
+                    "days": days_str,
+                    "day_names": day_names,
+                    "enabled": bool(s.get("enabled", True)),
+                    "last_run": s.get("last_run", ""),
+                })
+            return {"schedules": formatted, "count": len(formatted)}
+
+        elif tool_name == "update_schedule":
+            sched_id = tool_input.get("schedule_id")
+            if sched_id is None:
+                return {"success": False, "error": "schedule_id is required"}
+            update = {}
+            if "name" in tool_input:
+                update["name"] = tool_input["name"]
+            if "macro_key" in tool_input:
+                mk = tool_input["macro_key"]
+                if mk not in macro_defs:
+                    return {"success": False, "error": f"Unknown macro: {mk}"}
+                update["macro_key"] = mk
+            if "time_of_day" in tool_input:
+                update["time_of_day"] = tool_input["time_of_day"]
+            if "days" in tool_input:
+                update["days"] = tool_input["days"]
+            if "enabled" in tool_input:
+                update["enabled"] = 1 if tool_input["enabled"] else 0
+            if not update:
+                return {"success": False, "error": "No fields to update"}
+            db.update_schedule(sched_id, **update)
+            action_desc = ", ".join(f"{k}={v}" for k, v in update.items())
+            logger.info(f"[{tablet}] Chat updated schedule {sched_id}: {action_desc}")
+            db.log_action(tablet, "chat:update_schedule", str(sched_id), action_desc, "OK", 0)
+            return {"success": True, "schedule_id": sched_id, "updated_fields": list(update.keys())}
+
+        elif tool_name == "delete_schedule":
+            sched_id = tool_input.get("schedule_id")
+            if sched_id is None:
+                return {"success": False, "error": "schedule_id is required"}
+            db.delete_schedule(sched_id)
+            logger.info(f"[{tablet}] Chat deleted schedule {sched_id}")
+            db.log_action(tablet, "chat:delete_schedule", str(sched_id), "", "OK", 0)
+            return {"success": True, "schedule_id": sched_id, "message": "Schedule deleted"}
+
+        elif tool_name == "get_system_state":
+            ha_states = state_cache.get("ha") or {}
+            summary = {}
+            obs_state = state_cache.get("obs")
+            if obs_state:
+                summary["obs"] = {
+                    "connected": obs_state.get("connected", False),
+                    "streaming": obs_state.get("streaming", False),
+                    "recording": obs_state.get("recording", False),
+                    "current_scene": obs_state.get("current_scene", ""),
+                }
+            x32_state = state_cache.get("x32")
+            if x32_state:
+                summary["x32_audio"] = {
+                    "connected": x32_state.get("connected", False),
+                }
+            proj_state = state_cache.get("projectors")
+            if proj_state:
+                summary["projectors"] = proj_state
+            moip_state = state_cache.get("moip")
+            if moip_state and isinstance(moip_state, dict):
+                summary["video_routing"] = moip_state
+            # Include HA switch states (on/off for power devices)
+            ha_switches = {}
+            for eid, state_info in ha_states.items():
+                if eid.startswith("switch.") and isinstance(state_info, dict):
+                    ha_switches[eid] = state_info.get("state", "unknown")
+                elif isinstance(state_info, str) and eid.startswith("switch."):
+                    ha_switches[eid] = state_info
+            if ha_switches:
+                summary["power_switches"] = ha_switches
+            return summary
+
+        return {"error": f"Unknown tool: {tool_name}"}
+
+    # ---- Chat Endpoint (with tool use) ----
 
     @app.route("/api/chat", methods=["POST"])
     def api_chat():
@@ -2223,6 +2511,7 @@ def register_api_routes(ctx):
         api_key = cfg.get("anthropic", {}).get("api_key", "")
         if not api_key:
             return jsonify({"error": "Chatbot not configured. Ask an admin to add the API key."}), 503
+
         messages = []
         for h in history[-10:]:
             role = h.get("role", "")
@@ -2230,40 +2519,122 @@ def register_api_routes(ctx):
             if role in ("user", "assistant") and content:
                 messages.append({"role": role, "content": content})
         messages.append({"role": "user", "content": message})
+
         page_context = f"\nThe volunteer is currently on the '{page}' page." if page else ""
         tablet = get_tablet_id()
         start = time.time()
+        actions_taken = []  # Track actions for frontend display
+
+        api_headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+        model = cfg.get("anthropic", {}).get("model", "claude-haiku-4-5-20251001")
+        max_tokens = cfg.get("anthropic", {}).get("max_tokens", 1024)
+
         try:
-            resp = http_requests.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": cfg.get("anthropic", {}).get("model", "claude-haiku-4-5-20251001"),
-                    "max_tokens": cfg.get("anthropic", {}).get("max_tokens", 1024),
-                    "system": _chat_system_prompt + page_context,
-                    "messages": messages,
-                },
-                timeout=30,
-            )
+            # Tool-use loop: keep calling until we get a final text response
+            max_rounds = 6  # Safety limit to prevent infinite loops
+            for _round in range(max_rounds):
+                resp = http_requests.post(
+                    "https://api.anthropic.com/v1/messages",
+                    headers=api_headers,
+                    json={
+                        "model": model,
+                        "max_tokens": max_tokens,
+                        "system": _chat_system_prompt + page_context,
+                        "messages": messages,
+                        "tools": _chat_tools,
+                    },
+                    timeout=45,
+                )
+                result = resp.json()
+                if resp.status_code >= 400:
+                    error_msg = result.get("error", {}).get("message", "API error")
+                    logger.warning(f"Chat API error: {resp.status_code} {error_msg}")
+                    latency = (time.time() - start) * 1000
+                    db.log_action(tablet, "chat:message", page, message[:200],
+                                  f"FAILED: {error_msg}", latency)
+                    return jsonify({"error": "Chat service error. Please try again."}), 502
+
+                stop_reason = result.get("stop_reason", "")
+                content_blocks = result.get("content", [])
+
+                # If the model is done (end_turn), extract text and return
+                if stop_reason == "end_turn":
+                    reply_parts = []
+                    for block in content_blocks:
+                        if block.get("type") == "text":
+                            reply_parts.append(block["text"])
+                    reply = "\n".join(reply_parts) or "Done!"
+                    latency = (time.time() - start) * 1000
+                    db.log_action(tablet, "chat:message", page, message[:200], "OK", latency)
+                    response_data = {"response": reply}
+                    if actions_taken:
+                        response_data["actions"] = actions_taken
+                    return jsonify(response_data), 200
+
+                # If tool_use, execute tools and continue
+                if stop_reason == "tool_use":
+                    # Build the assistant message with all content blocks
+                    messages.append({"role": "assistant", "content": content_blocks})
+
+                    # Execute each tool call and collect results
+                    tool_results = []
+                    for block in content_blocks:
+                        if block.get("type") != "tool_use":
+                            continue
+                        tool_name = block.get("name", "")
+                        tool_input = block.get("input", {})
+                        tool_use_id = block.get("id", "")
+
+                        logger.info(f"[{tablet}] Chat tool call: {tool_name}({json.dumps(tool_input)[:200]})")
+                        tool_result = _chat_execute_tool(tool_name, tool_input, tablet)
+
+                        # Track actions for frontend
+                        actions_taken.append({
+                            "tool": tool_name,
+                            "input": tool_input,
+                            "result": tool_result,
+                        })
+
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tool_use_id,
+                            "content": json.dumps(tool_result),
+                        })
+
+                    messages.append({"role": "user", "content": tool_results})
+                    continue  # Next round — let the model process tool results
+
+                # Unexpected stop_reason — extract any text and return
+                reply_parts = []
+                for block in content_blocks:
+                    if block.get("type") == "text":
+                        reply_parts.append(block["text"])
+                reply = "\n".join(reply_parts) or "Sorry, I couldn't complete that request."
+                latency = (time.time() - start) * 1000
+                db.log_action(tablet, "chat:message", page, message[:200], "OK", latency)
+                response_data = {"response": reply}
+                if actions_taken:
+                    response_data["actions"] = actions_taken
+                return jsonify(response_data), 200
+
+            # Max rounds exceeded
             latency = (time.time() - start) * 1000
-            result = resp.json()
-            if resp.status_code >= 400:
-                error_msg = result.get("error", {}).get("message", "API error")
-                logger.warning(f"Chat API error: {resp.status_code} {error_msg}")
-                db.log_action(tablet, "chat:message", page, message[:200],
-                              f"FAILED: {error_msg}", latency)
-                return jsonify({"error": "Chat service error. Please try again."}), 502
-            reply = result.get("content", [{}])[0].get("text",
-                    "Sorry, I couldn't generate a response.")
-            db.log_action(tablet, "chat:message", page, message[:200], "OK", latency)
-            return jsonify({"response": reply}), 200
+            logger.warning(f"Chat tool loop exceeded {max_rounds} rounds")
+            db.log_action(tablet, "chat:message", page, message[:200], "MAX_ROUNDS", latency)
+            reply = "I completed some actions but reached my processing limit. Please check the results."
+            response_data = {"response": reply}
+            if actions_taken:
+                response_data["actions"] = actions_taken
+            return jsonify(response_data), 200
+
         except http_requests.Timeout:
             logger.warning("Chat API timeout")
-            db.log_action(tablet, "chat:message", page, message[:200], "TIMEOUT", 30000)
+            latency = (time.time() - start) * 1000
+            db.log_action(tablet, "chat:message", page, message[:200], "TIMEOUT", latency)
             return jsonify({"error": "Chat service timed out. Please try again."}), 504
         except Exception as e:
             logger.warning(f"Chat API error: {e}")
