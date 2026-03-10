@@ -44,7 +44,7 @@
 # =============================================================================
 
 defaults:
-  voice: "en-US-AndrewNeural"
+  voice: "en-US-AriaNeural"
   wiim_entity: "media_player.wiim_pro_new"
   announce_mode: false         # Set true to use HA announce mode (ducks current audio)
   unmute_aux: [3, 4]           # Unmute these X32 aux channels before announcing
