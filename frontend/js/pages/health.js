@@ -3,6 +3,8 @@ const HealthPage = {
   _pollTimer: null,
   _services: [],
   _currentLogsServiceId: null,
+  _userToggled: new Set(),   // cards user has manually toggled — don't auto-collapse/expand these
+  _initialLoadDone: false,
 
   render(container) {
     container.innerHTML = `
@@ -98,6 +100,8 @@ const HealthPage = {
       clearInterval(this._pollTimer);
       this._pollTimer = null;
     }
+    this._userToggled = new Set();
+    this._initialLoadDone = false;
   },
 
   // --- Data Loading ---
@@ -174,17 +178,17 @@ const HealthPage = {
       </div>
     `).join('');
 
-    // Wire up card header toggles
+    // Wire up card header toggles (body + members collapse together)
     grid.querySelectorAll('.health-card-toggle').forEach(header => {
       header.style.cursor = 'pointer';
       header.addEventListener('click', () => {
         const safe = header.dataset.toggleTarget;
+        this._userToggled.add(safe);          // remember manual toggle
         const body = document.getElementById(`hbody-${safe}`);
-        const icon = document.getElementById(`hexpand-${safe}`);
-        if (body) {
-          const expanding = body.classList.contains('hidden');
-          body.classList.toggle('hidden');
-          if (icon) icon.textContent = expanding ? 'expand_less' : 'expand_more';
+        if (body && body.classList.contains('hidden')) {
+          this._expandCard(safe);
+        } else {
+          this._collapseCard(safe);
         }
       });
     });
@@ -208,6 +212,15 @@ const HealthPage = {
       for (const [id, result] of Object.entries(results)) {
         this._updateCard(id, result);
       }
+
+      // On first load, auto-collapse all-green parents
+      if (!this._initialLoadDone) {
+        this._applyAutoCollapse(results);
+        this._initialLoadDone = true;
+      }
+
+      // Sort cards by severity: red first, then yellow, then green
+      this._sortCards();
     } catch (e) {
       this._setBanner(`Failed to refresh health status: ${e}`, 'danger');
     }
@@ -299,7 +312,11 @@ const HealthPage = {
     const memberList = document.getElementById(`hmlist-${safe}`);
 
     if (Array.isArray(memberRows) && memberRows.length > 0) {
-      if (membersWrap) membersWrap.classList.remove('hidden');
+      // Only auto-show members if the card body is currently expanded
+      const bodyEl = document.getElementById(`hbody-${safe}`);
+      if (membersWrap && bodyEl && !bodyEl.classList.contains('hidden')) {
+        membersWrap.classList.remove('hidden');
+      }
       if (memberList) {
         memberList.innerHTML = memberRows.map(r => {
           const mid = this._safeId(r.id || r.name || '');
@@ -487,6 +504,64 @@ const HealthPage = {
         }
       };
     }
+  },
+
+  // --- Card collapse/expand helpers ---
+
+  _collapseCard(safe) {
+    const body = document.getElementById(`hbody-${safe}`);
+    const members = document.getElementById(`hmembers-${safe}`);
+    const icon = document.getElementById(`hexpand-${safe}`);
+    if (body) body.classList.add('hidden');
+    if (members) members.classList.add('hidden');
+    if (icon) icon.textContent = 'expand_more';
+  },
+
+  _expandCard(safe) {
+    const body = document.getElementById(`hbody-${safe}`);
+    const members = document.getElementById(`hmembers-${safe}`);
+    const icon = document.getElementById(`hexpand-${safe}`);
+    if (body) body.classList.remove('hidden');
+    // Only show members if it has content
+    if (members) {
+      const list = members.querySelector('.health-members-list');
+      if (list && list.children.length > 0) members.classList.remove('hidden');
+    }
+    if (icon) icon.textContent = 'expand_less';
+  },
+
+  _applyAutoCollapse(results) {
+    // On initial load, collapse healthy parents and expand non-healthy
+    for (const svc of this._services) {
+      const safe = this._safeId(svc.id);
+      if (this._userToggled.has(safe)) continue;  // respect manual toggles
+
+      const result = results[svc.id];
+      const level = result?.status?.level || 'down';
+
+      if (level === 'healthy') {
+        this._collapseCard(safe);
+      } else {
+        this._expandCard(safe);
+      }
+    }
+  },
+
+  _sortCards() {
+    const grid = document.getElementById('health-grid');
+    if (!grid) return;
+
+    const severityOrder = { down: 0, warning: 1, healthy: 2 };
+    const cards = Array.from(grid.querySelectorAll('.health-card'));
+
+    cards.sort((a, b) => {
+      const aLevel = (a.className.match(/health-card-(down|warning|healthy)/) || [])[1] || 'healthy';
+      const bLevel = (b.className.match(/health-card-(down|warning|healthy)/) || [])[1] || 'healthy';
+      return (severityOrder[aLevel] ?? 2) - (severityOrder[bLevel] ?? 2);
+    });
+
+    // Re-append in sorted order (moves existing DOM nodes)
+    cards.forEach(card => grid.appendChild(card));
   },
 
   // --- Helpers ---
