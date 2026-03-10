@@ -117,7 +117,8 @@
     "office":      { "displayName": "Offices",         "defaultRole": "office" },
     "test":        { "displayName": "Test Device",     "defaultRole": "full_access" },
     "pc":          { "displayName": "PC",              "defaultRole": "full_access" },
-    "admin":       { "displayName": "Admin",           "defaultRole": "full_access" }
+    "admin":       { "displayName": "Admin",           "defaultRole": "full_access" },
+    "audio-desk":  { "displayName": "Audio Desk",      "defaultRole": "full_access" }
   },
   "defaultRole": "full_access",
   "settingsPIN": "1234"
