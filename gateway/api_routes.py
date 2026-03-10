@@ -809,6 +809,34 @@ def register_api_routes(ctx):
             socketio.emit("state:x32", {"event": "volume", "channel": ch, "direction": direction}, room="x32")
         return jsonify(result), status
 
+    @app.route("/api/x32/volume/<int:ch>/set/<float:value>")
+    @app.route("/api/x32/volume/<int:ch>/set/<int:value>")
+    def x32_volume_set(ch: int, value):
+        perm_err = check_permission(get_tablet_id(), "main", permissions_data)
+        if perm_err:
+            return perm_err
+        value = float(value)
+        if mock_mode:
+            return jsonify({"success": True, "channel": ch, "volume": value, "mock": True}), 200
+        result, status = ctx.x32.set_volume_channel(ch, value)
+        if status < 400:
+            socketio.emit("state:x32", {"event": "volume_set", "channel": ch, "value": value}, room="x32")
+        return jsonify(result), status
+
+    @app.route("/api/x32/aux/<int:ch>/volume/set/<float:value>")
+    @app.route("/api/x32/aux/<int:ch>/volume/set/<int:value>")
+    def x32_aux_volume_set(ch: int, value):
+        perm_err = check_permission(get_tablet_id(), "main", permissions_data)
+        if perm_err:
+            return perm_err
+        value = float(value)
+        if mock_mode:
+            return jsonify({"success": True, "aux": ch, "volume": value, "mock": True}), 200
+        result, status = ctx.x32.set_volume_aux(ch, value)
+        if status < 400:
+            socketio.emit("state:x32", {"event": "aux_volume_set", "aux": ch, "value": value}, room="x32")
+        return jsonify(result), status
+
     @app.route("/api/x32/bus/<int:ch>/mute/<state>")
     def x32_bus_mute(ch: int, state: str):
         perm_err = check_permission(get_tablet_id(), "main", permissions_data)
@@ -837,6 +865,20 @@ def register_api_routes(ctx):
             socketio.emit("state:x32", {"event": "bus_volume", "bus": ch, "direction": direction}, room="x32")
         return jsonify(result), status
 
+    @app.route("/api/x32/bus/<int:ch>/volume/set/<float:value>")
+    @app.route("/api/x32/bus/<int:ch>/volume/set/<int:value>")
+    def x32_bus_volume_set(ch: int, value):
+        perm_err = check_permission(get_tablet_id(), "main", permissions_data)
+        if perm_err:
+            return perm_err
+        value = float(value)
+        if mock_mode:
+            return jsonify({"success": True, "bus": ch, "volume": value, "mock": True}), 200
+        result, status = ctx.x32.set_volume_bus(ch, value)
+        if status < 400:
+            socketio.emit("state:x32", {"event": "bus_volume_set", "bus": ch, "value": value}, room="x32")
+        return jsonify(result), status
+
     @app.route("/api/x32/dca/<int:ch>/mute/<state>")
     def x32_dca_mute(ch: int, state: str):
         perm_err = check_permission(get_tablet_id(), "main", permissions_data)
@@ -863,6 +905,20 @@ def register_api_routes(ctx):
         result, status = ctx.x32.volume_dca(ch, direction)
         if status < 400:
             socketio.emit("state:x32", {"event": "dca_volume", "dca": ch, "direction": direction}, room="x32")
+        return jsonify(result), status
+
+    @app.route("/api/x32/dca/<int:ch>/volume/set/<float:value>")
+    @app.route("/api/x32/dca/<int:ch>/volume/set/<int:value>")
+    def x32_dca_volume_set(ch: int, value):
+        perm_err = check_permission(get_tablet_id(), "main", permissions_data)
+        if perm_err:
+            return perm_err
+        value = float(value)
+        if mock_mode:
+            return jsonify({"success": True, "dca": ch, "volume": value, "mock": True}), 200
+        result, status = ctx.x32.set_volume_dca(ch, value)
+        if status < 400:
+            socketio.emit("state:x32", {"event": "dca_volume_set", "dca": ch, "value": value}, room="x32")
         return jsonify(result), status
 
     # ---- OBS ----

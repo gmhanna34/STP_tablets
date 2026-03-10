@@ -307,6 +307,20 @@ const SourcePage = {
     this._renderMixer(state);
   },
 
+  _faderDebounceTimers: {},
+
+  _debouncedSetVolume(type, id, value) {
+    const key = `${type}-${id}`;
+    if (this._faderDebounceTimers[key]) clearTimeout(this._faderDebounceTimers[key]);
+    this._faderDebounceTimers[key] = setTimeout(async () => {
+      const floatVal = parseFloat(value) / 100;
+      if (type === 'ch') await X32API.setChannelVolume(id, floatVal);
+      else if (type === 'aux') await X32API.setAuxVolume(id, floatVal);
+      else if (type === 'bus') await X32API.setBusVolume(id, floatVal);
+      else if (type === 'dca') await X32API.setDcaVolume(id, floatVal);
+    }, 150);
+  },
+
   _renderMixer(state) {
     const container = document.getElementById('mixer-container');
     if (!container) return;
@@ -322,10 +336,11 @@ const SourcePage = {
       <div class="mixer-grid">
         ${activeChannels.map(ch => `
           <div class="mixer-channel">
+            <div class="channel-number">Ch ${ch.id}</div>
             <div class="channel-name" title="${ch.name}">${ch.name}</div>
             <input type="range" class="channel-fader" min="0" max="100" value="${Math.round(ch.volume * 100)}"
-              data-ch="${ch.id}" orient="vertical" />
-            <div class="channel-volume">${Math.round(ch.volume * 100)}%</div>
+              data-fader-type="ch" data-fader-id="${ch.id}" orient="vertical" />
+            <div class="channel-volume" data-vol-display="ch-${ch.id}">${Math.round(ch.volume * 100)}%</div>
             <button class="channel-mute ${ch.muted === 'muted' ? 'muted' : 'unmuted'}" data-mute-ch="${ch.id}">
               ${ch.muted === 'muted' ? 'MUTED' : 'ON'}
             </button>
@@ -373,8 +388,11 @@ const SourcePage = {
       const activeAux = state.auxChannels.filter(a => a.name && a.name.trim() !== '');
       auxContainer.innerHTML = activeAux.map(a => `
         <div class="mixer-channel">
+          <div class="channel-number">Aux ${a.id}</div>
           <div class="channel-name" title="${a.name}">${a.name}</div>
-          <div class="channel-volume">${Math.round(a.volume * 100)}%</div>
+          <input type="range" class="channel-fader" min="0" max="100" value="${Math.round(a.volume * 100)}"
+            data-fader-type="aux" data-fader-id="${a.id}" orient="vertical" />
+          <div class="channel-volume" data-vol-display="aux-${a.id}">${Math.round(a.volume * 100)}%</div>
           <button class="channel-mute ${a.muted === 'muted' ? 'muted' : 'unmuted'}" data-mute-aux="${a.id}">
             ${a.muted === 'muted' ? 'MUTED' : 'ON'}
           </button>
@@ -401,8 +419,11 @@ const SourcePage = {
       const activeBuses = state.buses.filter(b => b.name && b.name.trim() !== '');
       busContainer.innerHTML = activeBuses.map(b => `
         <div class="mixer-channel">
+          <div class="channel-number">Bus ${b.id}</div>
           <div class="channel-name" title="${b.name}">${b.name}</div>
-          <div class="channel-volume">${Math.round(b.volume * 100)}%</div>
+          <input type="range" class="channel-fader" min="0" max="100" value="${Math.round(b.volume * 100)}"
+            data-fader-type="bus" data-fader-id="${b.id}" orient="vertical" />
+          <div class="channel-volume" data-vol-display="bus-${b.id}">${Math.round(b.volume * 100)}%</div>
           <button class="channel-mute ${b.muted === 'muted' ? 'muted' : 'unmuted'}" data-mute-bus="${b.id}">
             ${b.muted === 'muted' ? 'MUTED' : 'ON'}
           </button>
@@ -429,8 +450,11 @@ const SourcePage = {
       const activeDcas = state.dcas.filter(d => d.name && d.name.trim() !== '');
       dcaContainer.innerHTML = activeDcas.map(d => `
         <div class="mixer-channel">
+          <div class="channel-number">DCA ${d.id}</div>
           <div class="channel-name" title="${d.name}">${d.name}</div>
-          <div class="channel-volume">${Math.round(d.volume * 100)}%</div>
+          <input type="range" class="channel-fader" min="0" max="100" value="${Math.round(d.volume * 100)}"
+            data-fader-type="dca" data-fader-id="${d.id}" orient="vertical" />
+          <div class="channel-volume" data-vol-display="dca-${d.id}">${Math.round(d.volume * 100)}%</div>
           <button class="channel-mute ${d.muted === 'muted' ? 'muted' : 'unmuted'}" data-mute-dca="${d.id}">
             ${d.muted === 'muted' ? 'MUTED' : 'ON'}
           </button>
@@ -450,6 +474,17 @@ const SourcePage = {
         });
       });
     }
+
+    // Wire up ALL fader sliders (channels, aux, buses, DCAs)
+    document.querySelectorAll('.channel-fader[data-fader-type]').forEach(fader => {
+      const type = fader.dataset.faderType;
+      const id = parseInt(fader.dataset.faderId);
+      fader.addEventListener('input', () => {
+        const volDisplay = document.querySelector(`[data-vol-display="${type}-${id}"]`);
+        if (volDisplay) volDisplay.textContent = `${fader.value}%`;
+        this._debouncedSetVolume(type, id, fader.value);
+      });
+    });
   },
 
   _wireX32QuickActions() {

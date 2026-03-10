@@ -107,6 +107,10 @@ const X32API = {
   async unmuteDca(dca) { await this.sendCommand(`dca/${dca}/mute/off`); },
   async dcaVolumeUp(dca) { await this.sendCommand(`dca/${dca}/volume/up`); },
   async dcaVolumeDown(dca) { await this.sendCommand(`dca/${dca}/volume/down`); },
+  async setChannelVolume(ch, value) { await this.sendCommand(`volume/${ch}/set/${value}`); },
+  async setAuxVolume(aux, value) { await this.sendCommand(`aux/${aux}/volume/set/${value}`); },
+  async setBusVolume(bus, value) { await this.sendCommand(`bus/${bus}/volume/set/${value}`); },
+  async setDcaVolume(dca, value) { await this.sendCommand(`dca/${dca}/volume/set/${value}`); },
 
   // Called by Socket.IO state push
   onStateUpdate(data) {

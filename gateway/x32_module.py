@@ -471,6 +471,40 @@ class X32Module:
             return {"error": err}, 503
         return res, 200
 
+    def set_volume_channel(self, ch: int, value: float) -> Tuple[dict, int]:
+        """Set channel volume to an absolute value (0.0-1.0)."""
+        if ch < 1 or ch > 32:
+            return {"error": "Channel must be 1-32"}, 400
+        value = min(1.0, max(0.0, value))
+
+        def do(m):
+            chs = _fmt_ch(ch)
+            m.send(f"/ch/{chs}/mix/fader", value)
+            return {"success": True, "channel": ch, "volume": round(value, 3)}
+
+        res, err = self._poller.command(do)
+        if err:
+            return {"error": err}, 503
+        return res, 200
+
+    # --- Aux mute/volume ---
+
+    def set_volume_aux(self, ch: int, value: float) -> Tuple[dict, int]:
+        """Set aux input volume to an absolute value (0.0-1.0)."""
+        if ch < 1 or ch > 8:
+            return {"error": "Aux must be 1-8"}, 400
+        value = min(1.0, max(0.0, value))
+
+        def do(m):
+            ax = _fmt_ch(ch)
+            m.send(f"/auxin/{ax}/mix/fader", value)
+            return {"success": True, "aux": ch, "volume": round(value, 3)}
+
+        res, err = self._poller.command(do)
+        if err:
+            return {"error": err}, 503
+        return res, 200
+
     # --- Aux mute/volume ---
 
     def mute_aux(self, ch: int, state: str) -> Tuple[dict, int]:
@@ -526,6 +560,22 @@ class X32Module:
             return {"error": err}, 503
         return res, 200
 
+    def set_volume_bus(self, ch: int, value: float) -> Tuple[dict, int]:
+        """Set bus volume to an absolute value (0.0-1.0)."""
+        if ch < 1 or ch > 16:
+            return {"error": "Bus must be 1-16"}, 400
+        value = min(1.0, max(0.0, value))
+
+        def do(m):
+            bx = _fmt_ch(ch)
+            m.send(f"/bus/{bx}/mix/fader", value)
+            return {"success": True, "bus": ch, "volume": round(value, 3)}
+
+        res, err = self._poller.command(do)
+        if err:
+            return {"error": err}, 503
+        return res, 200
+
     # --- DCA mute/volume (NEW — not in old x32-flask.py) ---
 
     def mute_dca(self, ch: int, state: str) -> Tuple[dict, int]:
@@ -556,6 +606,21 @@ class X32Module:
             new_vol = min(1.0, max(0.0, vol + step))
             m.send(f"/dca/{ch}/fader", new_vol)
             return {"success": True, "dca": ch, "volume": round(new_vol, 3)}
+
+        res, err = self._poller.command(do)
+        if err:
+            return {"error": err}, 503
+        return res, 200
+
+    def set_volume_dca(self, ch: int, value: float) -> Tuple[dict, int]:
+        """Set DCA volume to an absolute value (0.0-1.0)."""
+        if ch < 1 or ch > 8:
+            return {"error": "DCA must be 1-8"}, 400
+        value = min(1.0, max(0.0, value))
+
+        def do(m):
+            m.send(f"/dca/{ch}/fader", value)
+            return {"success": True, "dca": ch, "volume": round(value, 3)}
 
         res, err = self._poller.command(do)
         if err:
