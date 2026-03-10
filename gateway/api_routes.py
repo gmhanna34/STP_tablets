@@ -2080,6 +2080,16 @@ def register_api_routes(ctx):
                          "When pressed, the button shows a progress bar. If a step fails, it may be skipped (orange warning) or the macro may abort (red error).\n"
                          + "\n".join(macro_lines[:120]))
 
+        # ---- PTZ Cameras ----
+        cameras = cfg.get("ptz_cameras", {})
+        if cameras:
+            cam_lines = [f"- **{k}** — {v.get('name', k)}" for k, v in cameras.items()]
+            parts.append(
+                "\n## PTZ Cameras\n"
+                "These cameras can be moved to preset positions using the move_camera_preset tool. "
+                "The bold text is the camera_key. Presets are numbered 1-8 (preset 1 is typically the home/default position).\n"
+                + "\n".join(cam_lines))
+
         # ---- Notification Center ----
         parts.append(
             "\n## Notification Center\n"
@@ -2219,7 +2229,10 @@ def register_api_routes(ctx):
             "- List existing schedules using the list_schedules tool\n"
             "- Enable, disable, or modify schedules using the update_schedule tool\n"
             "- Delete schedules using the delete_schedule tool\n"
-            "- Check current device states using the get_system_state tool\n\n"
+            "- Check current device states using the get_system_state tool\n"
+            "- Move PTZ cameras to preset positions using the move_camera_preset tool\n"
+            "- Check health of all services using the get_health_status tool\n"
+            "- Preview what a macro does (without running it) using the preview_macro tool\n\n"
             "**Guidelines:**\n"
             "- When the volunteer asks you to do something (turn on audio, set up a room, create a schedule), USE the tools to do it — don't just explain how.\n"
             "- For schedule days: 0=Monday, 1=Tuesday, 2=Wednesday, 3=Thursday, 4=Friday, 5=Saturday, 6=Sunday.\n"
@@ -2229,6 +2242,8 @@ def register_api_routes(ctx):
             "- If a macro fails, explain the issue and suggest troubleshooting steps.\n"
             "- When asked to create a schedule, confirm the details (which macro, what time, which days) in your response.\n"
             "- Use get_system_state to check current device status before answering questions about what's on or off.\n"
+            "- Use get_health_status when a volunteer reports something isn't working — check service health first.\n"
+            "- Use preview_macro when a volunteer asks 'what does this button do?' or 'what happens if I press X?'.\n"
             "- IMPORTANT: Only execute actions that were clearly requested. If the volunteer is asking a question about how to do something, answer the question. "
             "If they say 'turn on the chapel audio' or 'can you turn on chapel audio', that's a request to act."
         )
@@ -2350,6 +2365,55 @@ def register_api_routes(ctx):
             "input_schema": {
                 "type": "object",
                 "properties": {},
+            },
+        },
+        {
+            "name": "move_camera_preset",
+            "description": (
+                "Move a PTZ camera to a saved preset position. "
+                "Use this when a volunteer asks to point a camera to a specific location."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "camera_key": {
+                        "type": "string",
+                        "description": "The camera key from the available cameras list",
+                    },
+                    "preset_number": {
+                        "type": "integer",
+                        "description": "The preset number to recall (typically 1-8). Preset 1 is usually the default/home position.",
+                    },
+                },
+                "required": ["camera_key", "preset_number"],
+            },
+        },
+        {
+            "name": "get_health_status",
+            "description": (
+                "Check the health of all monitored services — gateway, cameras, mixer, MoIP, projectors, "
+                "OBS, Home Assistant, etc. Returns which services are healthy, warning, or down."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+        {
+            "name": "preview_macro",
+            "description": (
+                "Preview what a macro would do without executing it. Returns the list of steps "
+                "(HA checks, device commands, delays) so you can explain what will happen."
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "macro_key": {
+                        "type": "string",
+                        "description": "The macro key to preview",
+                    },
+                },
+                "required": ["macro_key"],
             },
         },
     ]
@@ -2495,6 +2559,91 @@ def register_api_routes(ctx):
             if ha_switches:
                 summary["power_switches"] = ha_switches
             return summary
+
+        elif tool_name == "move_camera_preset":
+            camera_key = tool_input.get("camera_key", "")
+            preset_num = tool_input.get("preset_number", 1)
+            cameras = cfg.get("ptz_cameras", {})
+            cam = cameras.get(camera_key)
+            if not cam:
+                available = [f"{k} ({v.get('name', k)})" for k, v in cameras.items()]
+                return {"success": False, "error": f"Unknown camera: {camera_key}",
+                        "available_cameras": available[:15]}
+            cam_name = cam.get("name", camera_key)
+            if mock_mode:
+                return {"success": True, "camera": camera_key, "name": cam_name,
+                        "preset": preset_num, "mock": True}
+            url = f"http://{cam['ip']}/cgi-bin/ptzctrl.cgi?ptzcmd&poscall&{preset_num}"
+            try:
+                resp = http_requests.get(url, timeout=timeouts.get("ptz_cameras", 3))
+                success = resp.status_code == 200
+                logger.info(f"[{tablet}] Chat PTZ preset: {camera_key} -> preset {preset_num} ({resp.status_code})")
+                db.log_action(tablet, "chat:ptz_preset", camera_key, str(preset_num),
+                              f"status={resp.status_code}", 0)
+                return {"success": success, "camera": camera_key, "name": cam_name,
+                        "preset": preset_num}
+            except http_requests.Timeout:
+                return {"success": False, "camera": camera_key, "name": cam_name,
+                        "error": "Camera timed out — it may be offline"}
+            except http_requests.ConnectionError:
+                return {"success": False, "camera": camera_key, "name": cam_name,
+                        "error": "Camera unreachable — check network connection"}
+
+        elif tool_name == "get_health_status":
+            health = ctx.health
+            if health is None:
+                return {"available": False, "message": "Health module not active"}
+            summary = health.get_summary()
+            all_results = health.get_all_results()
+            # Build a concise view: only include non-healthy services in detail
+            issues = []
+            healthy_names = []
+            for svc_id, result in all_results.items():
+                level = result.get("status", {}).get("level", "down")
+                name = result.get("name", svc_id)
+                if level != "healthy":
+                    issues.append({
+                        "service": name,
+                        "id": svc_id,
+                        "level": level,
+                        "message": result.get("message", ""),
+                    })
+                else:
+                    healthy_names.append(name)
+            return {
+                "counts": summary.get("counts", {}),
+                "total": summary.get("total", 0),
+                "issues": issues,
+                "healthy_services": healthy_names,
+            }
+
+        elif tool_name == "preview_macro":
+            macro_key = tool_input.get("macro_key", "")
+            if macro_key not in macro_defs:
+                return {"success": False, "error": f"Unknown macro: {macro_key}"}
+            macro = macro_defs[macro_key]
+            label = macro.get("label", macro_key)
+            description = macro.get("description", "")
+            steps = macro.get("steps", [])
+            step_list = []
+            for i, step_item in enumerate(steps):
+                step_type = step_item.get("type", "")
+                step_label = step_item.get("message", "") or step_summary(step_item, macro_defs)
+                entry = {"step": i + 1, "type": step_type, "description": step_label}
+                if step_item.get("conditional"):
+                    entry["conditional"] = True
+                if step_type == "macro" and step_item.get("macro"):
+                    entry["sub_macro"] = step_item["macro"]
+                    sub = macro_defs.get(step_item["macro"], {})
+                    entry["sub_macro_label"] = sub.get("label", step_item["macro"])
+                step_list.append(entry)
+            return {
+                "macro_key": macro_key,
+                "label": label,
+                "description": description,
+                "total_steps": len(steps),
+                "steps": step_list,
+            }
 
         return {"error": f"Unknown tool: {tool_name}"}
 

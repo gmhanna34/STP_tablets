@@ -1135,6 +1135,13 @@ const App = {
         label = (result.count || 0) + ' schedule(s)';
       } else if (action.tool === 'get_system_state') {
         label = 'State checked';
+      } else if (action.tool === 'move_camera_preset') {
+        label = (result.name || action.input.camera_key || 'Camera') + ' \u2192 preset ' + (action.input.preset_number || '?');
+      } else if (action.tool === 'get_health_status') {
+        const c = result.counts || {};
+        label = (c.down || 0) > 0 ? (c.down + ' service(s) down') : 'All healthy';
+      } else if (action.tool === 'preview_macro') {
+        label = 'Preview: ' + (result.label || action.input.macro_key || 'macro');
       } else {
         label = action.tool;
       }
