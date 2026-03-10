@@ -77,7 +77,7 @@ presets:
     
   test_message:
     label: "Test"
-    icon: "question"
+    icon: "ab-testing"
     text: "This is a test message.  This is only a test."    
 
 sequences:
