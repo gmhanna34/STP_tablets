@@ -534,7 +534,7 @@ healthdash:
     - ecoflow_2
     - ecoflow_3
     - ecoflow_4
-    - ecoflow_5
+#    - ecoflow_5
 #    - ecoflow_6
     - ecoflow_7
     - ecoflow_8
@@ -607,22 +607,22 @@ healthdash:
       warn_after_seconds: 360
       down_after_seconds: 720
       cooldown_seconds: 30000
-  - id: ecoflow_5
-    name: 'Main Church TV #1 - AC Power'
-    group: Power
-    type: http_json
-    url: ''
-    timeout_seconds: 5
-    poll_interval_seconds: 60
-    ok_json_path: state
-    ok_json_value: 'on'
-    bearer_token: ''
-    show_standalone: false
-    alert:
-      enabled: true
-      warn_after_seconds: 360
-      down_after_seconds: 720
-      cooldown_seconds: 30000
+#  - id: ecoflow_5
+#    name: 'Main Church TV #1 - AC Power'
+#    group: Power
+#    type: http_json
+#    url: ''
+#    timeout_seconds: 5
+#    poll_interval_seconds: 60
+#    ok_json_path: state
+#    ok_json_value: 'on'
+#    bearer_token: ''
+#    show_standalone: false
+#    alert:
+#      enabled: true
+#      warn_after_seconds: 360
+#      down_after_seconds: 720
+#      cooldown_seconds: 30000
 #  - id: ecoflow_6
 #    name: 'Main Church TV #1 - DC Power'
 #    group: Power
