@@ -2784,6 +2784,8 @@ body {
 .switch-name {
   font-size: 14px;
   font-weight: 600;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .switch-toggle {
@@ -2904,9 +2906,8 @@ body {
 }
 
 .tv-control-label span:last-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .tv-control-buttons {
