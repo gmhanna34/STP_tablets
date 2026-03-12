@@ -40,7 +40,7 @@ STP_Occupancy/            → Occupancy dashboard (archived, absorbed in Phase 6
 ## Architecture
 
 ```
-Tablets/Browsers (kiosk mode, 192.168.1.0/24)
+Tablets/Browsers (kiosk mode, 10.100.60.0/24)
        │
        ▼
 ┌──────────────────────────┐
@@ -67,11 +67,11 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
      ▼        ▼        ▼         ▼          ▼
   Behringer  Binary   OBS      10 PTZ     4 Epson
   X32 Mixer  MoIP     Studio   Cameras    Projectors
-  .1.231     Matrix   :4455
+  .60.231    Matrix   :4455
              10.100.
              20.11:23
 
-  Home Assistant @ 192.168.1.245:8123 (power, WattBox, EcoFlow)
+  Home Assistant @ 10.100.60.245:8123 (power, WattBox, EcoFlow)
 
   Health Module (built-in) — 30+ service checks, alerts, recovery
   Occupancy Module (built-in) — CSV analytics, daily download, Chart.js dashboard
@@ -123,7 +123,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
 | Subnet | Purpose |
 |--------|---------|
-| 192.168.1.0/24 | Main LAN (server, tablets, most devices) |
+| 10.100.60.0/24 | Main LAN (server, tablets, most devices) |
 | 10.100.0.0/16 | VPN / MoIP network |
 | 10.100.20.11:23 | MoIP controller (Telnet) |
 | 47.150.* | Church WAN (allowed) |
@@ -226,7 +226,7 @@ Tablets/Browsers (kiosk mode, 192.168.1.0/24)
 
 ### What Changes Per Phase
 
-**Phase 1 (X32) — COMPLETE:** Moved OSC/UDP protocol logic from `x32-flask.py` into `gateway/x32_module.py`. The gateway now communicates directly with the X32 mixer at 192.168.1.231 using the `xair_api` library (python-osc). Port 3400 is no longer required. New capabilities: bus mute/volume (1-16) and DCA mute/volume (1-8) are now implemented (were missing from the old middleware). The standalone `x32-flask.py` remains in STP_scripts as a rollback option.
+**Phase 1 (X32) — COMPLETE:** Moved OSC/UDP protocol logic from `x32-flask.py` into `gateway/x32_module.py`. The gateway now communicates directly with the X32 mixer at 10.100.60.231 using the `xair_api` library (python-osc). Port 3400 is no longer required. New capabilities: bus mute/volume (1-16) and DCA mute/volume (1-8) are now implemented (were missing from the old middleware). The standalone `x32-flask.py` remains in STP_scripts as a rollback option.
 
 **Phase 2 (MoIP) — COMPLETE:** Moved Telnet protocol logic from `moip-flask.py` into `gateway/moip_module.py`. The gateway now communicates directly with the MoIP controller at 10.100.20.11:23 via persistent Telnet connection with internal/external IP fallback. Port 5002 is no longer required. Includes keepalive thread with exponential backoff and HA watchdog for automatic controller restart after prolonged failure. Credentials moved to `.env` (MOIP_USERNAME, MOIP_PASSWORD). The standalone `moip-flask.py` remains in STP_scripts as a rollback option.
 
@@ -250,12 +250,12 @@ MAC MINI (new)                         WINDOWS PC (existing)
 STP Gateway :20858                     OBS Studio :4455
  ├─ REST API + Socket.IO               Camlytics (analytics)
  ├─ Static frontend
- ├─ X32 module ──── OSC/UDP ──────►  Behringer X32 (.1.231)
+ ├─ X32 module ──── OSC/UDP ──────►  Behringer X32 (.60.231)
  ├─ MoIP module ─── Telnet ──────►   Binary MoIP (10.100.20.11)
  ├─ OBS module ──── WebSocket ───►   OBS Studio (Windows IP:4455)
- ├─ PTZ module ──── HTTP/CGI ────►   10 cameras (.1.201-.210)
- ├─ Epson module ── HTTP ────────►   4 projectors (.1.233-.236)
- ├─ HA module ───── REST ────────►   Home Assistant (.1.245)
+ ├─ PTZ module ──── HTTP/CGI ────►   10 cameras (.60.201-.210)
+ ├─ Epson module ── HTTP ────────►   4 projectors (.60.233-.236)
+ ├─ HA module ───── REST ────────►   Home Assistant (.60.245)
  ├─ Health monitor (built-in)
  ├─ Occupancy module (Camlytics Cloud API)
  ├─ Macro engine

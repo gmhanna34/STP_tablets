@@ -26,7 +26,7 @@ moip:
   keepalive_interval_max: 300
   ha_webhook_id: ''
 x32:
-  mixer_ip: 192.168.1.231
+  mixer_ip: 10.100.60.231
   mixer_type: X32
   ping_seconds: 2.0
   snapshot_seconds: 6.0
@@ -34,53 +34,53 @@ x32:
   ping_fails_to_offline: 3
 ptz_cameras:
   BaptismRoom:
-    ip: 192.168.1.207
+    ip: 10.100.60.207
     name: Baptism Room
   Chapel_Rear:
-    ip: 192.168.1.205
+    ip: 10.100.60.205
     name: Cam1921681205
   Chapel_Side:
-    ip: 192.168.1.206
+    ip: 10.100.60.206
     name: Cam1921681206
   Gym:
-    ip: 192.168.1.210
+    ip: 10.100.60.210
     name: Cam1921681210
   MainChurch_Altar:
-    ip: 192.168.1.202
+    ip: 10.100.60.202
     name: Cam1921681202
   MainChurch_Left:
-    ip: 192.168.1.204
+    ip: 10.100.60.204
     name: Cam1921681204
   MainChurch_Rear:
-    ip: 192.168.1.201
+    ip: 10.100.60.201
     name: Cam1921681201
   MainChurch_Right:
-    ip: 192.168.1.203
+    ip: 10.100.60.203
     name: Cam1921681203
   MainChurch_Side_Left:
-    ip: 192.168.1.204
+    ip: 10.100.60.204
     name: Cam1921681204
   MainChurch_Side_Right:
-    ip: 192.168.1.203
+    ip: 10.100.60.203
     name: Cam1921681203
   SocialHall_Rear:
-    ip: 192.168.1.208
+    ip: 10.100.60.208
     name: Cam1921681208
   SocialHall_Side:
-    ip: 192.168.1.209
+    ip: 10.100.60.209
     name: Cam1921681209
 projectors:
   epson1:
-    ip: 192.168.1.233
+    ip: 10.100.60.233
     name: PRJ_FrontLeft
   epson2:
-    ip: 192.168.1.234
+    ip: 10.100.60.234
     name: PRJ_FrontRight
   epson3:
-    ip: 192.168.1.236
+    ip: 10.100.60.236
     name: PRJ_RearLeft
   epson4:
-    ip: 192.168.1.235
+    ip: 10.100.60.235
     name: PRJ_RearRight
 fully_kiosk:
   port: 2323
@@ -99,23 +99,23 @@ wattbox:
   devices:
     ha_server:
       label: Home Assistant Server
-      ip: 192.168.1.61
+      ip: 10.100.60.61
       outlet: 1
     livestream_pc:
       label: Live Stream PC
-      ip: 192.168.1.61
+      ip: 10.100.60.61
       outlet: 2
     moip_controller:
       label: MoIP Controller
-      ip: 192.168.1.62
+      ip: 10.100.60.62
       outlet: 1
     x32_mixer:
       label: X32 Mixer
-      ip: 192.168.1.62
+      ip: 10.100.60.62
       outlet: 2
 security:
   allowed_ips:
-  - 192.168.1.
+  - 10.100.60.
   - 10.100.
   - 10.10.
   - 172.16.
@@ -180,7 +180,7 @@ healthdash:
       cooldown_seconds: 300
   security:
     trusted_ip_prefixes:
-    - 192.168.1.
+    - 10.100.60.
     - 10.100.
     - 10.10.
     - 172.16.
@@ -258,7 +258,7 @@ healthdash:
     name: Insteon (Automation Hub)
     group: Automation Hubs
     type: http
-    url: http://192.168.1.193:25105/
+    url: http://10.100.60.193:25105/
     timeout_seconds: 5
     ok_http_codes:
     - 200
@@ -286,7 +286,7 @@ healthdash:
     name: WattBox 1 (Audio Wall) - 61
     group: Power
     type: http
-    url: http://192.168.1.61/wattbox_info.xml
+    url: http://10.100.60.61/wattbox_info.xml
     timeout_seconds: 5
     poll_interval_seconds: 300
     ok_http_codes:
@@ -305,7 +305,7 @@ healthdash:
     name: WattBox 2 (Video Wall) - 62
     group: Power
     type: http
-    url: http://192.168.1.62/wattbox_info.xml
+    url: http://10.100.60.62/wattbox_info.xml
     timeout_seconds: 5
     poll_interval_seconds: 300
     ok_http_codes:
@@ -321,7 +321,7 @@ healthdash:
     name: WattBox 3 (Floor Rack 1) - 63
     group: Power
     type: http
-    url: http://192.168.1.63/wattbox_info.xml
+    url: http://10.100.60.63/wattbox_info.xml
     timeout_seconds: 5
     poll_interval_seconds: 300
     ok_http_codes:
@@ -337,7 +337,7 @@ healthdash:
     name: WattBox 4 - 64
     group: Power
     type: http
-    url: http://192.168.1.64/wattbox_info.xml
+    url: http://10.100.60.64/wattbox_info.xml
     timeout_seconds: 5
     poll_interval_seconds: 300
     ok_http_codes:
@@ -353,7 +353,7 @@ healthdash:
     name: WattBox 5 - 65
     group: Power
     type: http
-    url: http://192.168.1.65/wattbox_info.xml
+    url: http://10.100.60.65/wattbox_info.xml
     timeout_seconds: 5
     poll_interval_seconds: 300
     ok_http_codes:
@@ -369,7 +369,7 @@ healthdash:
     name: WattBox 6 - 66
     group: Power
     type: http
-    url: http://192.168.1.66/wattbox_info.xml
+    url: http://10.100.60.66/wattbox_info.xml
     timeout_seconds: 5
     poll_interval_seconds: 300
     ok_http_codes:
@@ -385,7 +385,7 @@ healthdash:
     name: WattBox 7 - 67
     group: Power
     type: http
-    url: http://192.168.1.67/wattbox_info.xml
+    url: http://10.100.60.67/wattbox_info.xml
     timeout_seconds: 5
     poll_interval_seconds: 300
     ok_http_codes:
@@ -401,7 +401,7 @@ healthdash:
     name: WattBox 8 - 68
     group: Power
     type: http
-    url: http://192.168.1.68/wattbox_info.xml
+    url: http://10.100.60.68/wattbox_info.xml
     timeout_seconds: 5
     poll_interval_seconds: 300
     ok_http_codes:
@@ -417,7 +417,7 @@ healthdash:
     name: WattBox 9 - 69
     group: Power
     type: http
-    url: http://192.168.1.69/wattbox_info.xml
+    url: http://10.100.60.69/wattbox_info.xml
     timeout_seconds: 5
     poll_interval_seconds: 300
     ok_http_codes:
@@ -716,7 +716,7 @@ healthdash:
     name: Epson Projector 1 - Front Left
     group: Projectors
     type: http
-    url: http://192.168.1.233/api/v01/contentmgr/remote/power/
+    url: http://10.100.60.233/api/v01/contentmgr/remote/power/
     timeout_seconds: 20
     poll_interval_seconds: 60
     ok_http_codes:
@@ -731,7 +731,7 @@ healthdash:
     name: Epson Projector 2 - Front Right
     group: Projectors
     type: http
-    url: http://192.168.1.234/api/v01/contentmgr/remote/power/
+    url: http://10.100.60.234/api/v01/contentmgr/remote/power/
     timeout_seconds: 20
     poll_interval_seconds: 60
     ok_http_codes:
@@ -746,7 +746,7 @@ healthdash:
     name: Epson Projector 3 - Rear Right
     group: Projectors
     type: http
-    url: http://192.168.1.235/api/v01/contentmgr/remote/power/
+    url: http://10.100.60.235/api/v01/contentmgr/remote/power/
     timeout_seconds: 20
     poll_interval_seconds: 60
     ok_http_codes:
@@ -761,7 +761,7 @@ healthdash:
     name: Epson Projector 4 - Rear Left
     group: Projectors
     type: http
-    url: http://192.168.1.236/api/v01/contentmgr/remote/power/
+    url: http://10.100.60.236/api/v01/contentmgr/remote/power/
     timeout_seconds: 20
     poll_interval_seconds: 60
     ok_http_codes:

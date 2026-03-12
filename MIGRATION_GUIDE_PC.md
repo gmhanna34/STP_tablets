@@ -59,10 +59,10 @@ Tablets / Browsers ──► STP Gateway (:20858)
          .1.231    10.100.20.11  :4455
 
 Gateway also talks directly to:
-  • 10 PTZ Cameras (192.168.1.201-210)
-  • 4 Epson Projectors (192.168.1.233-236)
-  • Home Assistant (192.168.1.245:8123)
-  • 7 WattBox PDUs (192.168.1.61-67)
+  • 10 PTZ Cameras (10.100.60.201-210)
+  • 4 Epson Projectors (10.100.60.233-236)
+  • Home Assistant (10.100.60.245:8123)
+  • 7 WattBox PDUs (10.100.60.61-67)
   • Camlytics Cloud API
 
 HealthDash (:20855) monitors all of the above.
@@ -90,7 +90,7 @@ HealthDash (:20855) monitors all of the above.
 - Windows 10/11 (64-bit)
 - Minimum 8 GB RAM (16 GB recommended for OBS streaming)
 - SSD recommended for responsive service startup
-- Network adapter on the `192.168.1.x` subnet
+- Network adapter on the `10.100.60.x` subnet
 - Secondary NIC or VLAN access to `10.100.x.x` subnet (for MoIP)
 
 ---
@@ -102,10 +102,10 @@ The server **must** be on the church network with access to all device subnets.
 ### Static IP Configuration
 
 1. Open **Settings > Network & Internet > Ethernet > Edit IP assignment**
-2. Set a static IP in the `192.168.1.x` range (e.g., `192.168.1.10`)
+2. Set a static IP in the `10.100.60.x` range (e.g., `10.100.60.10`)
 3. Subnet mask: `255.255.255.0`
-4. Gateway: `192.168.1.1`
-5. DNS: `192.168.1.1` (or your preferred DNS)
+4. Gateway: `10.100.60.1`
+5. DNS: `10.100.60.1` (or your preferred DNS)
 
 ### Firewall Rules
 
@@ -137,12 +137,12 @@ Ensure the PC can reach:
 
 | Destination | Purpose |
 |-------------|---------|
-| 192.168.1.201-210 | PTZ Cameras |
-| 192.168.1.233-236 | Epson Projectors |
-| 192.168.1.231 | Behringer X32 Mixer |
-| 192.168.1.61-67 | WattBox PDUs |
-| 192.168.1.245:8123 | Home Assistant |
-| 192.168.1.193:25105 | Insteon Hub |
+| 10.100.60.201-210 | PTZ Cameras |
+| 10.100.60.233-236 | Epson Projectors |
+| 10.100.60.231 | Behringer X32 Mixer |
+| 10.100.60.61-67 | WattBox PDUs |
+| 10.100.60.245:8123 | Home Assistant |
+| 10.100.60.193:25105 | Insteon Hub |
 | 10.100.20.11:23 | MoIP Controller (may require routing/VLAN) |
 | cloud.camlytics.com | Camlytics Cloud |
 
@@ -356,19 +356,19 @@ middleware:
 
 # Verify these IPs match your actual device addresses:
 ptz_cameras:
-  MainChurch_Rear:    { ip: "192.168.1.201", name: "Cam1921681201" }
-  MainChurch_Altar:   { ip: "192.168.1.202", name: "Cam1921681202" }
+  MainChurch_Rear:    { ip: "10.100.60.201", name: "Cam1921681201" }
+  MainChurch_Altar:   { ip: "10.100.60.202", name: "Cam1921681202" }
   # ... (verify all 10 cameras)
 
 projectors:
-  epson1: { ip: "192.168.1.233", name: "PRJ_FrontLeft" }
-  epson2: { ip: "192.168.1.234", name: "PRJ_FrontRight" }
-  epson3: { ip: "192.168.1.236", name: "PRJ_RearLeft" }
-  epson4: { ip: "192.168.1.235", name: "PRJ_RearRight" }
+  epson1: { ip: "10.100.60.233", name: "PRJ_FrontLeft" }
+  epson2: { ip: "10.100.60.234", name: "PRJ_FrontRight" }
+  epson3: { ip: "10.100.60.236", name: "PRJ_RearLeft" }
+  epson4: { ip: "10.100.60.235", name: "PRJ_RearRight" }
 
 security:
   allowed_ips:
-    - "192.168.1."
+    - "10.100.60."
     - "10.100."
     - "10.10."
     - "172.16."
@@ -404,7 +404,7 @@ The macro configuration file at `C:\STP\STP_tablets\gateway\macros.yaml` defines
 The middleware scripts in `STP_scripts/` have hardcoded values. Verify these in each file:
 
 **`x32-flask.py`:**
-- `X32_MIXER_IP` = `192.168.1.231`
+- `X32_MIXER_IP` = `10.100.60.231`
 - API key must match the gateway's `.env` `X32_API_KEY`
 - Listen port: `3400`
 
@@ -757,7 +757,7 @@ You should see the health monitoring dashboard showing all service statuses.
 
 From an iPad or Android tablet on the same network:
 ```
-http://192.168.1.XX:20858/
+http://10.100.60.XX:20858/
 ```
 (Replace `XX` with your server's IP)
 
@@ -890,10 +890,10 @@ python gateway.py --mock
 
 ```cmd
 :: Test network connectivity
-ping 192.168.1.231        :: X32 Mixer
-ping 192.168.1.201        :: First PTZ camera
-ping 192.168.1.233        :: First projector
-ping 192.168.1.245        :: Home Assistant
+ping 10.100.60.231        :: X32 Mixer
+ping 10.100.60.201        :: First PTZ camera
+ping 10.100.60.233        :: First projector
+ping 10.100.60.245        :: Home Assistant
 
 :: Test MoIP network (may need VPN/VLAN)
 ping 10.100.20.11
@@ -901,7 +901,7 @@ ping 10.100.20.11
 
 ### Tablets can't connect
 
-1. Verify the tablet is on the `192.168.1.x` network
+1. Verify the tablet is on the `10.100.60.x` network
 2. Test from the tablet browser: `http://<server-ip>:20858/api/health`
 3. Check Windows Firewall isn't blocking the port
 4. Check the gateway logs for connection errors

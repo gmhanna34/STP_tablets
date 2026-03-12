@@ -43,7 +43,7 @@ def _make_user_auth_app(users_yaml_path=None):
     ctx = Ctx()
     ctx.app = app
     ctx.db = Database(db_path)
-    ctx.allowed_ips = ["192.168.1."]  # Only LAN IPs auto-allowed
+    ctx.allowed_ips = ["10.100.60."]  # Only LAN IPs auto-allowed
     ctx.trusted_proxy_prefixes = []
     ctx.settings_pin = "1234"
     ctx.secure_pin = "5678"
@@ -158,7 +158,7 @@ class TestAuthMe:
             # LAN IP = auto-authed, no user session
             resp = client.get("/api/auth/me",
                               headers={"X-Tablet-ID": "chapel"},
-                              environ_base={"REMOTE_ADDR": "192.168.1.100"})
+                              environ_base={"REMOTE_ADDR": "10.100.60.100"})
             assert resp.status_code == 200
             data = resp.get_json()
             assert data["type"] == "tablet"
@@ -257,7 +257,7 @@ class TestGetActor:
         with app.test_client() as client:
             resp = client.get("/api/test-actor-tablet",
                               headers={"X-Tablet-ID": "chapel"},
-                              environ_base={"REMOTE_ADDR": "192.168.1.100"})
+                              environ_base={"REMOTE_ADDR": "10.100.60.100"})
             data = resp.get_json()
             assert data["actor"] == "tablet:chapel"
 

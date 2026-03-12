@@ -1672,7 +1672,7 @@ const SourcePage = {
 
         // Step 2: Build full URL the WiiM can reach (gateway address)
         const audioPath = genData.url; // e.g. /api/tts/audio/abc123.mp3
-        const gatewayOrigin = window.location.origin; // e.g. http://192.168.1.X:20858
+        const gatewayOrigin = window.location.origin; // e.g. http://10.100.60.X:20858
         const fullAudioUrl = gatewayOrigin + audioPath;
 
         // Step 3: Tell WiiM to play the gateway-hosted audio

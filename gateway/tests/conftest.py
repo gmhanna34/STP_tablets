@@ -41,7 +41,7 @@ class StubContext:
         self.user_module = None
 
         # Security
-        self.allowed_ips = ["192.168.1.", "127.0.0.1"]
+        self.allowed_ips = ["10.100.60.", "127.0.0.1"]
         self.settings_pin = "1234"
         self.secure_pin = "5678"
         self.remote_auth = {}

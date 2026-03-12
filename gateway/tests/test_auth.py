@@ -36,7 +36,7 @@ def _make_app_and_ctx(allowed_ips=None, settings_pin="1234", secure_pin="5678",
     ctx = Ctx()
     ctx.app = app
     ctx.db = Database(db_path)
-    ctx.allowed_ips = allowed_ips or ["127.0.0.1", "192.168.1."]
+    ctx.allowed_ips = allowed_ips or ["127.0.0.1", "10.100.60."]
     ctx.trusted_proxy_prefixes = []
     ctx.settings_pin = settings_pin
     ctx.secure_pin = secure_pin
@@ -63,7 +63,7 @@ def auth_app():
 @pytest.fixture
 def remote_auth_app():
     app, ctx, db_path = _make_app_and_ctx(
-        allowed_ips=["192.168.1."],
+        allowed_ips=["10.100.60."],
         remote_auth={"username": "admin", "password": "secret123"},
     )
     yield app, ctx

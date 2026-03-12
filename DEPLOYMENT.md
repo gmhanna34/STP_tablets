@@ -56,12 +56,12 @@ The system runs across **three repositories** and **five services**.
          |2 | |6 |
          +--+ +--+
 
-   X32 Middleware  ------>  Behringer X32 Mixer (192.168.1.231)
+   X32 Middleware  ------>  Behringer X32 Mixer (10.100.60.231)
    MoIP Middleware ------>  Binary MoIP Controller (10.100.20.11:23)
    OBS Middleware  ------>  OBS WebSocket (127.0.0.1:4455)
-   STP Gateway     ------>  PTZ Cameras (192.168.1.201-210)
-   STP Gateway     ------>  Epson Projectors (192.168.1.111-114)
-   STP Gateway     ------>  Home Assistant (192.168.1.245:8123)
+   STP Gateway     ------>  PTZ Cameras (10.100.60.201-210)
+   STP Gateway     ------>  Epson Projectors (10.100.60.111-114)
+   STP Gateway     ------>  Home Assistant (10.100.60.245:8123)
 ```
 
 ### Component Responsibilities
@@ -93,17 +93,17 @@ The system runs across **three repositories** and **five services**.
 
 | Device | IP | Protocol |
 |--------|-----|----------|
-| Behringer X32 Mixer | 192.168.1.231 | OSC / UDP |
+| Behringer X32 Mixer | 10.100.60.231 | OSC / UDP |
 | Binary MoIP Controller | 10.100.20.11 | Telnet (:23) |
-| 10 PTZ Cameras | 192.168.1.201-210 | HTTP CGI |
-| 4 Epson Projectors | 192.168.1.111-114 | HTTP API |
-| 7 WattBox PDUs | 192.168.1.61-67 | HTTP + Basic Auth |
-| Home Assistant | 192.168.1.245:8123 | REST API |
-| Insteon Hub | 192.168.1.193:25105 | HTTP |
+| 10 PTZ Cameras | 10.100.60.201-210 | HTTP CGI |
+| 4 Epson Projectors | 10.100.60.111-114 | HTTP API |
+| 7 WattBox PDUs | 10.100.60.61-67 | HTTP + Basic Auth |
+| Home Assistant | 10.100.60.245:8123 | REST API |
+| Insteon Hub | 10.100.60.193:25105 | HTTP |
 
 ### Network
 
-- Server must be on the `192.168.1.x` subnet
+- Server must be on the `10.100.60.x` subnet
 - Firewall must allow inbound TCP on ports: **8080** (gateway), **20855** (healthdash)
 - Outbound access to cameras, projectors, mixer, MoIP controller
 - Optional: outbound HTTPS to Home Assistant Cloud URL
@@ -294,22 +294,22 @@ middleware:
     timeout: 10
 
 ptz_cameras:
-  MainChurch_Rear:   { ip: "192.168.1.201", name: "Cam1921681201" }
-  MainChurch_Altar:  { ip: "192.168.1.202", name: "Cam1921681202" }
-  MainChurch_Right:  { ip: "192.168.1.203", name: "Cam1921681203" }
-  MainChurch_Left:   { ip: "192.168.1.204", name: "Cam1921681204" }
-  Chapel_Rear:       { ip: "192.168.1.205", name: "Cam1921681205" }
-  Chapel_Side:       { ip: "192.168.1.206", name: "Cam1921681206" }
-  BaptismRoom:       { ip: "192.168.1.207", name: "Cam1921681207" }
-  SocialHall_Rear:   { ip: "192.168.1.208", name: "Cam1921681208" }
-  SocialHall_Side:   { ip: "192.168.1.209", name: "Cam1921681209" }
-  Gym:               { ip: "192.168.1.210", name: "Cam1921681210" }
+  MainChurch_Rear:   { ip: "10.100.60.201", name: "Cam1921681201" }
+  MainChurch_Altar:  { ip: "10.100.60.202", name: "Cam1921681202" }
+  MainChurch_Right:  { ip: "10.100.60.203", name: "Cam1921681203" }
+  MainChurch_Left:   { ip: "10.100.60.204", name: "Cam1921681204" }
+  Chapel_Rear:       { ip: "10.100.60.205", name: "Cam1921681205" }
+  Chapel_Side:       { ip: "10.100.60.206", name: "Cam1921681206" }
+  BaptismRoom:       { ip: "10.100.60.207", name: "Cam1921681207" }
+  SocialHall_Rear:   { ip: "10.100.60.208", name: "Cam1921681208" }
+  SocialHall_Side:   { ip: "10.100.60.209", name: "Cam1921681209" }
+  Gym:               { ip: "10.100.60.210", name: "Cam1921681210" }
 
 projectors:
-  epson1: { ip: "192.168.1.111", name: "PRJ_FrontLeft" }
-  epson2: { ip: "192.168.1.112", name: "PRJ_FrontRight" }
-  epson3: { ip: "192.168.1.113", name: "PRJ_RearLeft" }
-  epson4: { ip: "192.168.1.114", name: "PRJ_RearRight" }
+  epson1: { ip: "10.100.60.111", name: "PRJ_FrontLeft" }
+  epson2: { ip: "10.100.60.112", name: "PRJ_FrontRight" }
+  epson3: { ip: "10.100.60.113", name: "PRJ_RearLeft" }
+  epson4: { ip: "10.100.60.114", name: "PRJ_RearRight" }
 
 home_assistant:
   url: "https://your-ha-instance.ui.nabu.casa"
@@ -318,7 +318,7 @@ home_assistant:
 
 security:
   allowed_ips:                 # IP prefixes that skip auth
-    - "192.168.1."
+    - "10.100.60."
     - "10.100."
     - "10.10."
     - "172.16."
@@ -349,7 +349,7 @@ configuration or environment variables. Key values:
 
 **X32 Middleware** (`x32-flask.py`):
 ```
-X32_MIXER_IP=192.168.1.231     # Behringer X32 IP address
+X32_MIXER_IP=10.100.60.231     # Behringer X32 IP address
 X32_PORT=3400                  # Flask listen port
 X32_API_KEY=x32-key-...        # Must match gateway config
 X32_PING_SECONDS=2.0           # Mixer heartbeat interval
@@ -623,41 +623,41 @@ The frontend Socket.IO client is configured with:
 
 ```
 AUDIO
-  192.168.1.231    Behringer X32 Mixer
+  10.100.60.231    Behringer X32 Mixer
 
 VIDEO MATRIX
   10.100.20.11     Binary MoIP Controller (Telnet :23)
 
 PTZ CAMERAS
-  192.168.1.201    MainChurch Rear
-  192.168.1.202    MainChurch Altar
-  192.168.1.203    MainChurch Right
-  192.168.1.204    MainChurch Left
-  192.168.1.205    Chapel Rear
-  192.168.1.206    Chapel Side
-  192.168.1.207    Baptism Room
-  192.168.1.208    Social Hall Rear
-  192.168.1.209    Social Hall Side
-  192.168.1.210    Gym
+  10.100.60.201    MainChurch Rear
+  10.100.60.202    MainChurch Altar
+  10.100.60.203    MainChurch Right
+  10.100.60.204    MainChurch Left
+  10.100.60.205    Chapel Rear
+  10.100.60.206    Chapel Side
+  10.100.60.207    Baptism Room
+  10.100.60.208    Social Hall Rear
+  10.100.60.209    Social Hall Side
+  10.100.60.210    Gym
 
 EPSON PROJECTORS
-  192.168.1.111    Front Left  (epson1)
-  192.168.1.112    Front Right (epson2)
-  192.168.1.113    Rear Left   (epson3)
-  192.168.1.114    Rear Right  (epson4)
+  10.100.60.111    Front Left  (epson1)
+  10.100.60.112    Front Right (epson2)
+  10.100.60.113    Rear Left   (epson3)
+  10.100.60.114    Rear Right  (epson4)
 
 WATTBOX PDUs
-  192.168.1.61     WattBox 1 (Audio Wall)
-  192.168.1.62     WattBox 2 (Video Wall)
-  192.168.1.63     WattBox 3 (Floor Rack 1)
-  192.168.1.64     WattBox 4
-  192.168.1.65     WattBox 5
-  192.168.1.66     WattBox 6
-  192.168.1.67     WattBox 7
+  10.100.60.61     WattBox 1 (Audio Wall)
+  10.100.60.62     WattBox 2 (Video Wall)
+  10.100.60.63     WattBox 3 (Floor Rack 1)
+  10.100.60.64     WattBox 4
+  10.100.60.65     WattBox 5
+  10.100.60.66     WattBox 6
+  10.100.60.67     WattBox 7
 
 AUTOMATION
-  192.168.1.245    Home Assistant
-  192.168.1.193    Insteon Hub
+  10.100.60.245    Home Assistant
+  10.100.60.193    Insteon Hub
 
 CAMERAS (RTSP via Camlytics)
   10.100.40.100    UniFi NVR (RTSPS streams)
@@ -679,7 +679,7 @@ CAMERAS (RTSP via Camlytics)
 
 These prefixes bypass authentication:
 ```
-192.168.1.*    Local network
+10.100.60.*    Local network
 10.100.*       VPN / internal
 10.10.*        Guest / secondary
 172.16.*       Docker / reserved
@@ -992,7 +992,7 @@ sudo systemctl restart stp-x32
 ### Home Assistant integration failing
 
 1. Verify the long-lived access token hasn't expired
-2. Test manually: `curl -H "Authorization: Bearer <token>" http://192.168.1.245:8123/api/`
+2. Test manually: `curl -H "Authorization: Bearer <token>" http://10.100.60.245:8123/api/`
 3. If using Cloud URL, verify internet connectivity
 4. Check HA logs for webhook delivery issues
 

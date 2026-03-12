@@ -366,7 +366,7 @@ class X32Module:
 
     def __init__(self, cfg: dict, logger: logging.Logger) -> None:
         self._logger = logger
-        self._mixer_ip = cfg.get("mixer_ip", "192.168.1.231")
+        self._mixer_ip = cfg.get("mixer_ip", "10.100.60.231")
         self._mixer_type = cfg.get("mixer_type", "X32")
         self._routing_cfg = cfg.get("routing", {})
         self._poller = X32Poller(

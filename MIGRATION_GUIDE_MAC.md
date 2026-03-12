@@ -61,10 +61,10 @@ Tablets / Browsers ──► STP Gateway (:20858)
          .1.231    10.100.20.11  :4455
 
 Gateway also talks directly to:
-  • 10 PTZ Cameras (192.168.1.201-210)
-  • 4 Epson Projectors (192.168.1.233-236)
-  • Home Assistant (192.168.1.245:8123)
-  • 7 WattBox PDUs (192.168.1.61-67)
+  • 10 PTZ Cameras (10.100.60.201-210)
+  • 4 Epson Projectors (10.100.60.233-236)
+  • Home Assistant (10.100.60.245:8123)
+  • 7 WattBox PDUs (10.100.60.61-67)
   • Camlytics Cloud API
 
 HealthDash (:20855) monitors all of the above.
@@ -92,7 +92,7 @@ HealthDash (:20855) monitors all of the above.
 - Minimum 8 GB RAM (16 GB recommended for OBS streaming)
 - SSD (standard on all modern Macs)
 - Ethernet adapter recommended for reliable network (USB-C to Ethernet for Mac Mini)
-- Network access to `192.168.1.x` subnet
+- Network access to `10.100.60.x` subnet
 - Secondary NIC or VLAN access to `10.100.x.x` subnet (for MoIP)
 
 ---
@@ -108,10 +108,10 @@ The Mac **must** be on the church network with access to all device subnets.
 3. Select **TCP/IP** tab
 4. Change "Configure IPv4" to **Manually**
 5. Set:
-   - IP Address: `192.168.1.10` (or your chosen address)
+   - IP Address: `10.100.60.10` (or your chosen address)
    - Subnet Mask: `255.255.255.0`
-   - Router: `192.168.1.1`
-6. Select **DNS** tab, add: `192.168.1.1`
+   - Router: `10.100.60.1`
+6. Select **DNS** tab, add: `10.100.60.1`
 7. Click **OK**
 
 ### macOS Firewall Configuration
@@ -139,19 +139,19 @@ Ensure the Mac can reach:
 
 | Destination | Purpose |
 |-------------|---------|
-| 192.168.1.201-210 | PTZ Cameras |
-| 192.168.1.233-236 | Epson Projectors |
-| 192.168.1.231 | Behringer X32 Mixer |
-| 192.168.1.61-67 | WattBox PDUs |
-| 192.168.1.245:8123 | Home Assistant |
-| 192.168.1.193:25105 | Insteon Hub |
+| 10.100.60.201-210 | PTZ Cameras |
+| 10.100.60.233-236 | Epson Projectors |
+| 10.100.60.231 | Behringer X32 Mixer |
+| 10.100.60.61-67 | WattBox PDUs |
+| 10.100.60.245:8123 | Home Assistant |
+| 10.100.60.193:25105 | Insteon Hub |
 | 10.100.20.11:23 | MoIP Controller (may require routing/VLAN) |
 | cloud.camlytics.com | Camlytics Cloud |
 
 Test connectivity:
 ```bash
-ping 192.168.1.231
-ping 192.168.1.201
+ping 10.100.60.231
+ping 10.100.60.201
 ping 10.100.20.11
 ```
 
@@ -402,19 +402,19 @@ middleware:
 
 # Verify these IPs match your actual device addresses:
 ptz_cameras:
-  MainChurch_Rear:    { ip: "192.168.1.201", name: "Cam1921681201" }
-  MainChurch_Altar:   { ip: "192.168.1.202", name: "Cam1921681202" }
+  MainChurch_Rear:    { ip: "10.100.60.201", name: "Cam1921681201" }
+  MainChurch_Altar:   { ip: "10.100.60.202", name: "Cam1921681202" }
   # ... (verify all 10+ cameras)
 
 projectors:
-  epson1: { ip: "192.168.1.233", name: "PRJ_FrontLeft" }
-  epson2: { ip: "192.168.1.234", name: "PRJ_FrontRight" }
-  epson3: { ip: "192.168.1.236", name: "PRJ_RearLeft" }
-  epson4: { ip: "192.168.1.235", name: "PRJ_RearRight" }
+  epson1: { ip: "10.100.60.233", name: "PRJ_FrontLeft" }
+  epson2: { ip: "10.100.60.234", name: "PRJ_FrontRight" }
+  epson3: { ip: "10.100.60.236", name: "PRJ_RearLeft" }
+  epson4: { ip: "10.100.60.235", name: "PRJ_RearRight" }
 
 security:
   allowed_ips:
-    - "192.168.1."
+    - "10.100.60."
     - "10.100."
     - "10.10."
     - "172.16."
@@ -450,7 +450,7 @@ The macro configuration at `~/STP/STP_tablets/gateway/macros.yaml` defines all a
 The middleware scripts in `STP_scripts/` have hardcoded values. Verify these in each file:
 
 **`x32-flask.py`:**
-- `X32_MIXER_IP` = `192.168.1.231`
+- `X32_MIXER_IP` = `10.100.60.231`
 - API key must match the gateway's `.env` `X32_API_KEY`
 - Listen port: `3400`
 
@@ -1018,7 +1018,7 @@ http://localhost:20855/
 
 From an iPad or Android tablet on the same network:
 ```
-http://192.168.1.XX:20858/
+http://10.100.60.XX:20858/
 ```
 (Replace `XX` with your Mac's IP)
 
@@ -1172,10 +1172,10 @@ cat ~/STP/logs/gateway-launchd-err.log
 
 ```bash
 # Test network connectivity
-ping 192.168.1.231        # X32 Mixer
-ping 192.168.1.201        # First PTZ camera
-ping 192.168.1.233        # First projector
-ping 192.168.1.245        # Home Assistant
+ping 10.100.60.231        # X32 Mixer
+ping 10.100.60.201        # First PTZ camera
+ping 10.100.60.233        # First projector
+ping 10.100.60.245        # Home Assistant
 
 # Test MoIP network (may need VPN/VLAN)
 ping 10.100.20.11
@@ -1186,7 +1186,7 @@ netstat -rn
 
 ### Tablets can't connect
 
-1. Verify the tablet is on the `192.168.1.x` network
+1. Verify the tablet is on the `10.100.60.x` network
 2. Test from the tablet browser: `http://<mac-ip>:20858/api/health`
 3. Check macOS firewall isn't blocking the port
 4. Check the gateway logs for connection errors
