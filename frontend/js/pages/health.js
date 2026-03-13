@@ -606,7 +606,8 @@ const HealthPage = {
     if (!ts) return '—';
     // Normalize: trim microseconds to milliseconds (JS only supports 3 fractional digits)
     let raw = typeof ts === 'string' ? ts.replace(/(\.\d{3})\d+/, '$1') : ts;
-    if (typeof raw === 'string' && !raw.endsWith('Z') && /\d{4}-\d{2}-\d{2}/.test(raw)) raw = raw + 'Z';
+    // Append Z only if no timezone info present (no Z, no +HH:MM/-HH:MM offset)
+    if (typeof raw === 'string' && /\d{4}-\d{2}-\d{2}/.test(raw) && !/Z|[+-]\d{2}:\d{2}$/.test(raw)) raw = raw + 'Z';
     const d = new Date(raw);
     if (isNaN(d.getTime())) return ts;
     return d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: '2-digit', day: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
