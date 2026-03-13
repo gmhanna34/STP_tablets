@@ -63,13 +63,13 @@ macros:
       - type: condition
         if:
           type: ha_check
-          entity: "switch.wb_004_av_audiorack1_outlet_3"
+          entity: "switch.sw_019_2spare"
           expect: "off"
         then:
           - type: ha_service
             domain: "switch"
             service: "turn_on"
-            data: { entity_id: "switch.wb_004_av_audiorack1_outlet_3" }
+            data: { entity_id: "switch.sw_019_2spare" }
             on_fail: skip
             message: "Turning on X32 Mixer (was off)"
           - type: delay
@@ -82,13 +82,13 @@ macros:
           - type: ha_service
             domain: "switch"
             service: "turn_on"
-            data: { entity_id: "switch.wb_004_av_audiorack1_outlet_3" }
+            data: { entity_id: "switch.sw_019_2spare" }
             on_fail: skip
             message: "Turning on X32 Mixer"
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_10" }
+        data: { entity_id: "switch.sw_020_spare_plug1" }
         on_fail: skip
         message: "Turning on Antennas (W_020_AV_1Antennas)"
       - type: ha_service
@@ -100,13 +100,13 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_6" }
+        data: { entity_id: "switch.sw_020_spare_plug4" }
         on_fail: skip
         message: "Turning on PA Amp"
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_5" }
+        data: { entity_id: "switch.sw_020_spare_plug5" }
         on_fail: skip
         message: "Turning on Main Audio Sub"
       - type: delay
@@ -264,7 +264,7 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_8" }
+        data: { entity_id: "switch.sw_020_spare_plug3" }
         on_fail: skip
         message: "Turning on Chapel Amplifier"
       # WattBox IR outlets
@@ -289,7 +289,7 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_off"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_8" }
+        data: { entity_id: "switch.sw_020_spare_plug3" }
         on_fail: skip
         message: "Turning off Chapel Amplifier"
       - type: delay
@@ -844,13 +844,13 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_2" }
+        data: { entity_id: "switch.sw_020_spare_plug6" }
         on_fail: skip
         message: "Turning on Main Church Amplifier"
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_9" }
+        data: { entity_id: "switch.sw_020_spare_plug2" }
         on_fail: skip
         message: "Turning on Social Hall Amplifier"
 
@@ -862,7 +862,7 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_off"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_2" }
+        data: { entity_id: "switch.sw_020_spare_plug6" }
         on_fail: skip
         message: "Turning off Main Church Amplifier"
       - type: delay
@@ -950,14 +950,14 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_off"
-        data: { entity_id: "switch.wb_003_av_floorswitch2_outlet_11" }
+        data: { entity_id: "switch.sw_022_spare" }
       - type: delay
         seconds: 5
         message: "Waiting for power cycle"
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.wb_003_av_floorswitch2_outlet_11" }
+        data: { entity_id: "switch.sw_022_spare" }
         on_fail: skip
 
   # --- Main Church video source macros (inline MoIP switches) ---
@@ -1171,7 +1171,7 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.wb_003_av_floorswitch2_outlet_11" }
+        data: { entity_id: "switch.sw_022_spare" }
       - type: moip_switch
         tx: 24
         rx: 34
@@ -1221,7 +1221,7 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.wb_003_av_floorswitch2_outlet_11" }
+        data: { entity_id: "switch.sw_022_spare" }
       - type: moip_switch
         tx: 27
         rx: 46
@@ -1854,7 +1854,7 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_9" }
+        data: { entity_id: "switch.sw_020_spare_plug2" }
         on_fail: skip
         message: "Turning on Social Hall Amplifier"
 
@@ -2975,7 +2975,7 @@ macros:
 #       state:
 #         source: ha
 #         entities:
-#           - "switch.wb_008_av_audiorack2_outlet_8"
+#           - "switch.sw_020_spare_plug3"
 #           - "switch.wb_004_av_audiorack1_outlet_12"
 #         mode: any                                # "any" (default) or "all"
 #         on_value: "on"
@@ -3083,7 +3083,7 @@ buttons:
           state:
             source: ha
             entities: 
-              - "switch.wb_008_av_audiorack2_outlet_8"
+              - "switch.sw_020_spare_plug3"
               - "switch.wb_004_av_audiorack1_outlet_12"
             mode: any
             on_value: "on"
@@ -3224,7 +3224,7 @@ buttons:
           style: "large"
           state:
             source: ha
-            entity: "switch.wb_004_av_audiorack1_outlet_2"
+            entity: "switch.sw_020_spare_plug6"
             on_value: "on"
             on_style: "active"
         - label: "Off"

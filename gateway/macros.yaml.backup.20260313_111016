@@ -106,7 +106,7 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_5" }
+        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_7" }
         on_fail: skip
         message: "Turning on Main Audio Sub"
       - type: delay
