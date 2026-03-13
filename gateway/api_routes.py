@@ -53,13 +53,22 @@ def register_api_routes(ctx):
     def serve_index():
         return send_from_directory(static_dir, "index.html")
 
+    # File extensions that are safe to cache long-term (images, fonts)
+    _LONG_CACHE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
+                        ".woff", ".woff2", ".ttf", ".eot"}
+
     @app.route("/<path:filepath>")
     def serve_static(filepath):
         if filepath.startswith("api/"):
             return jsonify({"error": "Not found"}), 404
         full = os.path.join(static_dir, filepath)
         if os.path.isfile(full):
-            return send_from_directory(static_dir, filepath)
+            resp = send_from_directory(static_dir, filepath)
+            ext = os.path.splitext(filepath)[1].lower()
+            if ext in _LONG_CACHE_EXTS:
+                resp.cache_control.max_age = 86400  # 1 day
+                resp.cache_control.public = True
+            return resp
         slug = filepath.strip("/").lower()
         if slug in ctx.known_location_slugs:
             return send_from_directory(static_dir, "index.html")
