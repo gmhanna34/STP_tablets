@@ -2039,7 +2039,7 @@ const MacroAPI = {
 
         const cardsHtml = entities.map(e => {
           const raw = e.friendly_name || e.entity_id.split('.').pop() || e.entity_id;
-          const name = raw.replace(/^sw[_ ]|^wb[_ ]|^bat[_ ]/i, '').replace(/_/g, ' ');
+          const name = raw.replace(/_/g, ' ');
           const isOn = e.state === 'on';
           return `<div class="switch-card ${isOn ? 'switch-on' : 'switch-off'}">
             <div class="switch-info">
