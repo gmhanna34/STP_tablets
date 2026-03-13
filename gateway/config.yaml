@@ -137,12 +137,6 @@ ptz_cameras:
   MainChurch_Right:
     ip: 10.100.60.203
     name: Main Church - Right
-  MainChurch_Side_Left:
-    ip: 10.100.60.204
-    name: Main Church - Left
-  MainChurch_Side_Right:
-    ip: 10.100.60.203
-    name: Main Church - Right
   SocialHall_Rear:
     ip: 10.100.60.208
     name: Social Hall - Rear
@@ -373,6 +367,15 @@ healthdash:
     - wattbox_7
     - wattbox_8
     - wattbox_9
+    - wattbox_ha_3
+    - wattbox_ha_5
+#    - wattbox_ha_1
+#    - wattbox_ha_2
+#    - wattbox_ha_4
+#    - wattbox_ha_6
+#    - wattbox_ha_7
+#    - wattbox_ha_8
+#    - wattbox_ha_9
     warn_if_bad_ge: 1
     down_if_bad_ge: 2
     poll_interval_seconds: 300
@@ -525,6 +528,114 @@ healthdash:
       password: ''
     alert:
       enabled: false
+  - id: wattbox_ha_3
+    name: WattBox 3 HA Outlet Check - 63
+    group: Power
+    type: http_json
+    url: ''
+    timeout_seconds: 5
+    poll_interval_seconds: 300
+    ok_json_path: state
+    bearer_token: ''
+    show_standalone: false
+    alert:
+      enabled: false
+  - id: wattbox_ha_5
+    name: WattBox 5 HA Outlet Check - 65
+    group: Power
+    type: http_json
+    url: ''
+    timeout_seconds: 5
+    poll_interval_seconds: 300
+    ok_json_path: state
+    bearer_token: ''
+    show_standalone: false
+    alert:
+      enabled: false
+#  - id: wattbox_ha_1
+#    name: WattBox 1 HA Outlet Check - 61
+#    group: Power
+#    type: http_json
+#    url: ''
+#    timeout_seconds: 5
+#    poll_interval_seconds: 300
+#    ok_json_path: state
+#    bearer_token: ''
+#    show_standalone: false
+#    alert:
+#      enabled: false
+#  - id: wattbox_ha_2
+#    name: WattBox 2 HA Outlet Check - 62
+#    group: Power
+#    type: http_json
+#    url: ''
+#    timeout_seconds: 5
+#    poll_interval_seconds: 300
+#    ok_json_path: state
+#    bearer_token: ''
+#    show_standalone: false
+#    alert:
+#      enabled: false
+#  - id: wattbox_ha_4
+#    name: WattBox 4 HA Outlet Check - 64
+#    group: Power
+#    type: http_json
+#    url: ''
+#    timeout_seconds: 5
+#    poll_interval_seconds: 300
+#    ok_json_path: state
+#    bearer_token: ''
+#    show_standalone: false
+#    alert:
+#      enabled: false
+#  - id: wattbox_ha_6
+#    name: WattBox 6 HA Outlet Check - 66
+#    group: Power
+#    type: http_json
+#    url: ''
+#    timeout_seconds: 5
+#    poll_interval_seconds: 300
+#    ok_json_path: state
+#    bearer_token: ''
+#    show_standalone: false
+#    alert:
+#      enabled: false
+#  - id: wattbox_ha_7
+#    name: WattBox 7 HA Outlet Check - 67
+#    group: Power
+#    type: http_json
+#    url: ''
+#    timeout_seconds: 5
+#    poll_interval_seconds: 300
+#    ok_json_path: state
+#    bearer_token: ''
+#    show_standalone: false
+#    alert:
+#      enabled: false
+#  - id: wattbox_ha_8
+#    name: WattBox 8 HA Outlet Check - 68
+#    group: Power
+#    type: http_json
+#    url: ''
+#    timeout_seconds: 5
+#    poll_interval_seconds: 300
+#    ok_json_path: state
+#    bearer_token: ''
+#    show_standalone: false
+#    alert:
+#      enabled: false
+#  - id: wattbox_ha_9
+#    name: WattBox 9 HA Outlet Check - 69
+#    group: Power
+#    type: http_json
+#    url: ''
+#    timeout_seconds: 5
+#    poll_interval_seconds: 300
+#    ok_json_path: state
+#    bearer_token: ''
+#    show_standalone: false
+#    alert:
+#      enabled: false
   - id: ecoflow_overall
     name: EcoFlow Batteries (Portable TV's)
     group: Power
@@ -671,6 +782,88 @@ healthdash:
       warn_after_seconds: 360
       down_after_seconds: 720
       cooldown_seconds: 30000
+  - id: ecobee_overall
+    name: Ecobee Thermostats
+    group: HVAC
+    type: composite
+    members:
+    - ecobee_chapel
+    - ecobee_mainchurch
+    - ecobee_socialhall
+    - ecobee_sundayschool
+    warn_if_bad_ge: 1
+    down_if_bad_ge: 2
+    poll_interval_seconds: 300
+    alert:
+      enabled: false
+  - id: ecobee_chapel
+    name: Chapel & Main Hallway
+    group: HVAC
+    type: http_json
+    url: ''
+    timeout_seconds: 5
+    poll_interval_seconds: 300
+    ok_json_path: attributes.current_temperature
+    bearer_token: ''
+    show_standalone: false
+    detail_json_paths:
+      Mode: state
+      Current Temp: attributes.current_temperature
+      Target Temp: attributes.temperature
+      Humidity: attributes.current_humidity
+    alert:
+      enabled: false
+  - id: ecobee_mainchurch
+    name: Main Church
+    group: HVAC
+    type: http_json
+    url: ''
+    timeout_seconds: 5
+    poll_interval_seconds: 300
+    ok_json_path: attributes.current_temperature
+    bearer_token: ''
+    show_standalone: false
+    detail_json_paths:
+      Mode: state
+      Current Temp: attributes.current_temperature
+      Target Temp: attributes.temperature
+      Humidity: attributes.current_humidity
+    alert:
+      enabled: false
+  - id: ecobee_socialhall
+    name: Social Hall
+    group: HVAC
+    type: http_json
+    url: ''
+    timeout_seconds: 5
+    poll_interval_seconds: 300
+    ok_json_path: attributes.current_temperature
+    bearer_token: ''
+    show_standalone: false
+    detail_json_paths:
+      Mode: state
+      Current Temp: attributes.current_temperature
+      Target Temp: attributes.temperature
+      Humidity: attributes.current_humidity
+    alert:
+      enabled: false
+  - id: ecobee_sundayschool
+    name: Sunday School
+    group: HVAC
+    type: http_json
+    url: ''
+    timeout_seconds: 5
+    poll_interval_seconds: 300
+    ok_json_path: attributes.current_temperature
+    bearer_token: ''
+    show_standalone: false
+    detail_json_paths:
+      Mode: state
+      Current Temp: attributes.current_temperature
+      Target Temp: attributes.temperature
+      Humidity: attributes.current_humidity
+    alert:
+      enabled: false
   - id: tablets
     name: Control Tablets
     group: Tablets
