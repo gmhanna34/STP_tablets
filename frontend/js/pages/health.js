@@ -239,7 +239,7 @@ const HealthPage = {
     for (const [id, svc] of Object.entries(results)) {
       const rows = svc?.details?.member_rows;
       if (Array.isArray(rows)) {
-        rows.forEach(r => { counts[r?.level || 'down'] = (counts[r?.level || 'down'] || 0) + 1; });
+        rows.filter(r => !/^wattbox_ha_\d+$/.test(r?.id || '')).forEach(r => { counts[r?.level || 'down'] = (counts[r?.level || 'down'] || 0) + 1; });
       } else if (!memberIds.has(String(id))) {
         const lvl = svc?.status?.level || 'down';
         counts[lvl] = (counts[lvl] || 0) + 1;
@@ -315,13 +315,32 @@ const HealthPage = {
         membersWrap.classList.remove('hidden');
       }
       if (memberList) {
-        memberList.innerHTML = memberRows.map(r => {
+        // Build a map of wattbox_ha_* outlet checks keyed by their parent number
+        const outletMap = {};
+        const displayRows = [];
+        for (const r of memberRows) {
+          const haMatch = (r.id || '').match(/^wattbox_ha_(\d+)$/);
+          if (haMatch) {
+            outletMap[haMatch[1]] = r;
+          } else {
+            displayRows.push(r);
+          }
+        }
+
+        memberList.innerHTML = displayRows.map(r => {
           const mid = this._safeId(r.id || r.name || '');
           const rlvl = r.level || 'down';
           const rmsg = r.message || '—';
           const rlatency = r.latency_ms != null ? `${r.latency_ms} ms` : '—';
           const rchecked = this._fmtTime(r.checked_at);
           const rlastok = this._fmtTime(r.last_ok_at);
+
+          // Check for a paired outlet check (e.g. wattbox_3 → outletMap["3"])
+          const wbMatch = (r.id || '').match(/^wattbox_(\d+)$/);
+          const outlet = wbMatch ? outletMap[wbMatch[1]] : null;
+          const outletHtml = outlet ? `
+                  <span class="health-stat-label">Outlet 1</span><span class="health-dot health-dot-${outlet.level || 'down'}" style="display:inline-block;vertical-align:middle;margin-right:4px;"></span><span>${this._esc(outlet.label || outlet.level || '—')}</span>` : '';
+
           return `
             <div class="health-member-row health-member-toggle" data-member-detail="mdetail-${safe}-${mid}">
               <div class="health-member-summary">
@@ -335,7 +354,7 @@ const HealthPage = {
                   <span class="health-stat-label">Message</span><span>${this._esc(rmsg)}</span>
                   <span class="health-stat-label">Latency</span><span>${rlatency}</span>
                   <span class="health-stat-label">Last OK</span><span>${rlastok}</span>
-                  <span class="health-stat-label">Last Check</span><span>${rchecked}</span>
+                  <span class="health-stat-label">Last Check</span><span>${rchecked}</span>${outletHtml}
                 </div>
               </div>
             </div>
@@ -585,7 +604,9 @@ const HealthPage = {
 
   _fmtTime(ts) {
     if (!ts) return '—';
-    const raw = typeof ts === 'string' && !ts.endsWith('Z') && /\d{4}-\d{2}-\d{2}/.test(ts) ? ts + 'Z' : ts;
+    // Normalize: trim microseconds to milliseconds (JS only supports 3 fractional digits)
+    let raw = typeof ts === 'string' ? ts.replace(/(\.\d{3})\d+/, '$1') : ts;
+    if (typeof raw === 'string' && !raw.endsWith('Z') && /\d{4}-\d{2}-\d{2}/.test(raw)) raw = raw + 'Z';
     const d = new Date(raw);
     if (isNaN(d.getTime())) return ts;
     return d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: '2-digit', day: '2-digit', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
