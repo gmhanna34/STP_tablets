@@ -368,14 +368,10 @@ healthdash:
     - wattbox_8
     - wattbox_9
     - wattbox_ha_3
+    - wattbox_ha_4
     - wattbox_ha_5
-#    - wattbox_ha_1
-#    - wattbox_ha_2
-#    - wattbox_ha_4
-#    - wattbox_ha_6
-#    - wattbox_ha_7
-#    - wattbox_ha_8
-#    - wattbox_ha_9
+    - wattbox_ha_8
+    - wattbox_ha_9
     warn_if_bad_ge: 1
     down_if_bad_ge: 2
     poll_interval_seconds: 300
@@ -417,7 +413,7 @@ healthdash:
     alert:
       enabled: false
   - id: wattbox_3
-    name: WattBox 3 (Floor Rack 1) - 63
+    name: WattBox 3 (AV Floor Switch 2) - 63
     group: Power
     type: http
     url: http://10.100.60.63/wattbox_info.xml
@@ -433,7 +429,7 @@ healthdash:
     alert:
       enabled: false
   - id: wattbox_4
-    name: WattBox 4 - 64
+    name: WattBox 4 (AV Audio Rack 1) - 64
     group: Power
     type: http
     url: http://10.100.60.64/wattbox_info.xml
@@ -449,7 +445,7 @@ healthdash:
     alert:
       enabled: false
   - id: wattbox_5
-    name: WattBox 5 - 65
+    name: WattBox 5 (Chapel Ceiling Rack) - 65
     group: Power
     type: http
     url: http://10.100.60.65/wattbox_info.xml
@@ -497,7 +493,7 @@ healthdash:
     alert:
       enabled: false
   - id: wattbox_8
-    name: WattBox 8 - 68
+    name: WattBox 8 (AV Audio Rack 2) - 68
     group: Power
     type: http
     url: http://10.100.60.68/wattbox_info.xml
@@ -513,7 +509,7 @@ healthdash:
     alert:
       enabled: false
   - id: wattbox_9
-    name: WattBox 9 - 69
+    name: WattBox 9 (AV Floor Switch 1) - 69
     group: Power
     type: http
     url: http://10.100.60.69/wattbox_info.xml
@@ -529,7 +525,7 @@ healthdash:
     alert:
       enabled: false
   - id: wattbox_ha_3
-    name: WattBox 3 HA Outlet Check - 63
+    name: WattBox 3 (AV Floor Switch 2) Outlet Check - 63
     group: Power
     type: http_json
     url: ''
@@ -541,7 +537,7 @@ healthdash:
     alert:
       enabled: false
   - id: wattbox_ha_5
-    name: WattBox 5 HA Outlet Check - 65
+    name: WattBox 5 (Chapel Ceiling Rack) Outlet Check - 65
     group: Power
     type: http_json
     url: ''
@@ -552,90 +548,42 @@ healthdash:
     show_standalone: false
     alert:
       enabled: false
-#  - id: wattbox_ha_1
-#    name: WattBox 1 HA Outlet Check - 61
-#    group: Power
-#    type: http_json
-#    url: ''
-#    timeout_seconds: 5
-#    poll_interval_seconds: 300
-#    ok_json_path: state
-#    bearer_token: ''
-#    show_standalone: false
-#    alert:
-#      enabled: false
-#  - id: wattbox_ha_2
-#    name: WattBox 2 HA Outlet Check - 62
-#    group: Power
-#    type: http_json
-#    url: ''
-#    timeout_seconds: 5
-#    poll_interval_seconds: 300
-#    ok_json_path: state
-#    bearer_token: ''
-#    show_standalone: false
-#    alert:
-#      enabled: false
-#  - id: wattbox_ha_4
-#    name: WattBox 4 HA Outlet Check - 64
-#    group: Power
-#    type: http_json
-#    url: ''
-#    timeout_seconds: 5
-#    poll_interval_seconds: 300
-#    ok_json_path: state
-#    bearer_token: ''
-#    show_standalone: false
-#    alert:
-#      enabled: false
-#  - id: wattbox_ha_6
-#    name: WattBox 6 HA Outlet Check - 66
-#    group: Power
-#    type: http_json
-#    url: ''
-#    timeout_seconds: 5
-#    poll_interval_seconds: 300
-#    ok_json_path: state
-#    bearer_token: ''
-#    show_standalone: false
-#    alert:
-#      enabled: false
-#  - id: wattbox_ha_7
-#    name: WattBox 7 HA Outlet Check - 67
-#    group: Power
-#    type: http_json
-#    url: ''
-#    timeout_seconds: 5
-#    poll_interval_seconds: 300
-#    ok_json_path: state
-#    bearer_token: ''
-#    show_standalone: false
-#    alert:
-#      enabled: false
-#  - id: wattbox_ha_8
-#    name: WattBox 8 HA Outlet Check - 68
-#    group: Power
-#    type: http_json
-#    url: ''
-#    timeout_seconds: 5
-#    poll_interval_seconds: 300
-#    ok_json_path: state
-#    bearer_token: ''
-#    show_standalone: false
-#    alert:
-#      enabled: false
-#  - id: wattbox_ha_9
-#    name: WattBox 9 HA Outlet Check - 69
-#    group: Power
-#    type: http_json
-#    url: ''
-#    timeout_seconds: 5
-#    poll_interval_seconds: 300
-#    ok_json_path: state
-#    bearer_token: ''
-#    show_standalone: false
-#    alert:
-#      enabled: false
+  - id: wattbox_ha_4
+    name: WattBox 4 (AV Audio Rack 1) Outlet Check - 64
+    group: Power
+    type: http_json
+    url: ''
+    timeout_seconds: 5
+    poll_interval_seconds: 300
+    ok_json_path: state
+    bearer_token: ''
+    show_standalone: false
+    alert:
+      enabled: false
+  - id: wattbox_ha_8
+    name: WattBox 8 (AV Audio Rack 2) Outlet Check - 68
+    group: Power
+    type: http_json
+    url: ''
+    timeout_seconds: 5
+    poll_interval_seconds: 300
+    ok_json_path: state
+    bearer_token: ''
+    show_standalone: false
+    alert:
+      enabled: false
+  - id: wattbox_ha_9
+    name: WattBox 9 (AV Floor Switch 1) Outlet Check - 69
+    group: Power
+    type: http_json
+    url: ''
+    timeout_seconds: 5
+    poll_interval_seconds: 300
+    ok_json_path: state
+    bearer_token: ''
+    show_standalone: false
+    alert:
+      enabled: false
   - id: ecoflow_overall
     name: EcoFlow Batteries (Portable TV's)
     group: Power

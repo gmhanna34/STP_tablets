@@ -133,13 +133,13 @@ def _apply_env_overrides(cfg: dict):
                 wattbox_ha_entity_map = {
                     "wattbox_ha_1": "switch.wb_001_audiowallrack_outlet_1",
                     "wattbox_ha_2": "switch.wb_002_videowallrack_outlet_1",
-                    "wattbox_ha_3": "switch.wb_003_av_floorswitch_outlet_1",
-                    "wattbox_ha_4": "switch.wb_004_outlet_1",
+                    "wattbox_ha_3": "switch.wb_003_av_floorswitch2_outlet_1",
+                    "wattbox_ha_4": "switch.wb_004_av_audiorack1_outlet_1",
                     "wattbox_ha_5": "switch.wb_005_chapel_ceilingrack_outlet_1",
                     "wattbox_ha_6": "switch.wb_006_outlet_1",
                     "wattbox_ha_7": "switch.wb_007_outlet_1",
-                    "wattbox_ha_8": "switch.wb_008_outlet_1",
-                    "wattbox_ha_9": "switch.wb_009_outlet_1",
+                    "wattbox_ha_8": "switch.wb_008_av_audiorack2_outlet_1",
+                    "wattbox_ha_9": "switch.wb_009_av_floorswitch1_outlet_1",
                 }
                 entity = wattbox_ha_entity_map.get(svc["id"], "")
                 if entity:
