@@ -315,7 +315,8 @@ def register_api_routes(ctx):
                 results[svc_id]["content_type"] = resp.headers.get("Content-Type", "")
                 results[svc_id]["body_preview"] = resp.text[:500]
                 if resp.status_code == 200:
-                    now = datetime.now(health._tz)
+                    from zoneinfo import ZoneInfo
+                    now = datetime.now(ZoneInfo("America/Los_Angeles"))
                     events = health._parse_rss_calendar(resp.text, now.tzinfo)
                     results[svc_id]["parsed_events"] = len(events)
                     results[svc_id]["events"] = [
