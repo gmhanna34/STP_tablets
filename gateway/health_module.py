@@ -1209,16 +1209,20 @@ class HealthModule:
         now = datetime.now(tz)
         warmup = timedelta(minutes=int(schedule.get("warmup_minutes", 60)))
 
-        # Check calendar events first
+        # Check calendar events — if the feed was successfully fetched,
+        # use it exclusively (no event today = expected off).
+        # Only fall back to static windows when the feed is unreachable.
         calendar_url = schedule.get("calendar_url", "")
         if calendar_url:
-            events = self._get_calendar_events(calendar_url, now)
-            for ev in events:
-                # Event window: (event_start - warmup) to event_end
-                if (ev["start"] - warmup) <= now <= ev["end"]:
-                    return True
+            events, feed_ok = self._get_calendar_events(calendar_url, now)
+            if feed_ok:
+                # Feed was fetched — trust it as the source of truth
+                for ev in events:
+                    if (ev["start"] - warmup) <= now <= ev["end"]:
+                        return True
+                return False  # No matching event — expected to be off
 
-        # Check static fallback windows
+        # Calendar feed unavailable or not configured — use static fallback windows
         for window in schedule.get("fallback_windows", []):
             win_days = [self._DAY_ABBREVS.get(d.lower()) for d in window.get("days", [])]
             if now.weekday() not in win_days:
@@ -1232,30 +1236,39 @@ class HealthModule:
 
         return False
 
-    def _get_calendar_events(self, calendar_url: str, now: datetime) -> List[dict]:
-        """Fetch and cache calendar events. Returns list of {start, end} datetimes."""
+    def _get_calendar_events(self, calendar_url: str, now: datetime) -> Tuple[List[dict], bool]:
+        """Fetch and cache calendar events.
+
+        Returns (events, feed_ok) where feed_ok indicates whether we have
+        a valid cached or freshly-fetched result to rely on.
+        """
         url = calendar_url
 
         # Return cached if fresh
         last_fetch = self._calendar_fetched_at.get(url, 0)
         if time.time() - last_fetch < self._calendar_fetch_interval and url in self._calendar_cache:
-            return self._calendar_cache[url]
+            return self._calendar_cache[url], True
 
         # Fetch and parse
         try:
             resp = requests.get(url, timeout=10)
             if resp.status_code != 200:
                 self._logger.debug(f"Calendar feed HTTP {resp.status_code}: {url}")
-                return self._calendar_cache.get(url, [])
+                # If we have stale cache, use it; otherwise signal feed unavailable
+                if url in self._calendar_cache:
+                    return self._calendar_cache[url], True
+                return [], False
 
             events = self._parse_rss_calendar(resp.text, now.tzinfo)
             self._calendar_cache[url] = events
             self._calendar_fetched_at[url] = time.time()
-            self._logger.info(f"Calendar feed refreshed: {len(events)} events this month")
-            return events
+            self._logger.info(f"Calendar feed refreshed: {len(events)} events")
+            return events, True
         except Exception as e:
             self._logger.debug(f"Calendar feed fetch failed: {e}")
-            return self._calendar_cache.get(url, [])
+            if url in self._calendar_cache:
+                return self._calendar_cache[url], True
+            return [], False
 
     @staticmethod
     def _parse_rss_calendar(xml_text: str, tz) -> List[dict]:
