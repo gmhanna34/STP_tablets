@@ -141,8 +141,7 @@ const SecurityPage = {
     });
 
     // Start PTZ feeds (default tab)
-    const cameraEntries = App.settings?.ptzCameras ? Object.entries(App.settings.ptzCameras) : [];
-    cameraEntries.forEach(([key]) => this._startPTZFeed(key));
+    this._ptzEntriesByIP().forEach(([key]) => this._startPTZFeed(key));
   },
 
   _switchTab(tab) {
@@ -168,8 +167,7 @@ const SecurityPage = {
     if (accContent) accContent.style.display = tab === 'access' ? '' : 'none';
 
     if (tab === 'ptz') {
-      const entries = App.settings?.ptzCameras ? Object.entries(App.settings.ptzCameras) : [];
-      entries.forEach(([key]) => this._startPTZFeed(key));
+      this._ptzEntriesByIP().forEach(([key]) => this._startPTZFeed(key));
     } else if (tab === 'security') {
       this._loadSecurityCameras();
     } else if (tab === 'access') {
@@ -181,10 +179,22 @@ const SecurityPage = {
   // PTZ Camera Grid
   // ===========================================================================
 
+  _ptzEntriesByIP() {
+    const entries = App.settings?.ptzCameras ? Object.entries(App.settings.ptzCameras) : [];
+    return entries.sort((a, b) => {
+      const ipA = (a[1].ip || '').split('.').map(Number);
+      const ipB = (b[1].ip || '').split('.').map(Number);
+      for (let i = 0; i < 4; i++) {
+        if ((ipA[i] || 0) !== (ipB[i] || 0)) return (ipA[i] || 0) - (ipB[i] || 0);
+      }
+      return 0;
+    });
+  },
+
   _renderPTZGrid() {
     const grid = document.getElementById('ptz-grid');
     if (!grid) return;
-    const entries = App.settings?.ptzCameras ? Object.entries(App.settings.ptzCameras) : [];
+    const entries = this._ptzEntriesByIP();
 
     grid.innerHTML = entries.map(([key, cam]) => `
       <div class="camera-card" data-cam-click="${key}" data-cam-type="ptz">
