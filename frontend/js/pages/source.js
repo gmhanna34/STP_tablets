@@ -304,7 +304,7 @@ const SourcePage = {
     this.loadMixer();
     this._loadAudioRouting();
     this._wireX32QuickActions();
-    document.getElementById('btn-refresh-routing-audio')?.addEventListener('click', () => this._loadAudioRouting());
+    document.getElementById('btn-refresh-routing-audio')?.addEventListener('click', () => this._loadAudioRouting(true));
   },
 
   // UI-only refresh — reads from cached API state without HTTP calls.
@@ -313,6 +313,11 @@ const SourcePage = {
     this._renderRouting(MoIPAPI.state);
     if (this._activeTab === 'audio') {
       this._renderMixer(X32API.state);
+      // Scene changes alter bus send levels — reload routing matrix
+      if (X32API.state && X32API.state._sceneChanged) {
+        X32API.state._sceneChanged = false;
+        this._loadAudioRouting(true);
+      }
     }
   },
 
@@ -613,10 +618,10 @@ const SourcePage = {
 
   _routingState: null,
 
-  async _loadAudioRouting() {
+  async _loadAudioRouting(nocache = false) {
     const container = document.getElementById('audio-routing-container');
     if (!container) return;
-    const data = await X32API.getRoutingState();
+    const data = await X32API.getRoutingState(nocache);
     if (!data || data.error) {
       container.innerHTML = `<div class="text-center" style="color:var(--text-secondary);">
         ${data?.error === 'offline' ? 'X32 Mixer Offline' : 'Could not load routing state'}

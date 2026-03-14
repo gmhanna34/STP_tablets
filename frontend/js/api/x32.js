@@ -112,10 +112,10 @@ const X32API = {
   async setBusVolume(bus, value) { await this.sendCommand(`bus/${bus}/volume/set/${value}`); },
   async setDcaVolume(dca, value) { await this.sendCommand(`dca/${dca}/volume/set/${value}`); },
 
-  async getRoutingState() {
-    const url = '/api/x32/routing';
+  async getRoutingState(nocache = false) {
+    const url = nocache ? '/api/x32/routing?nocache=1' : '/api/x32/routing';
     try {
-      const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      const resp = await fetch(url, { signal: AbortSignal.timeout(30000) });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return await resp.json();
     } catch (e) {
@@ -154,6 +154,9 @@ const X32API = {
 
   // Called by Socket.IO state push
   onStateUpdate(data) {
+    if (data && data.event === 'scene') {
+      this.state._sceneChanged = true;
+    }
     if (data && data.data) this._parseSnapshot(data.data);
     else if (data && data.healthy !== undefined) {
       if (data.healthy && data.data) this._parseSnapshot(data.data);

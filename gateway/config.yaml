@@ -46,40 +46,77 @@ x32:
   routing:
     send_level: 0.75
     source_groups:
+      # Ch 1-4: ALTAR PRIEST, ALTAR ORANGE, ALTAR BLUE, ICONASIS
+      # Ch 6: PODIUM
+      # Ch 7-10: CHANT BLACK, CHANT GREY, CHANT ORANGE, CHANT BLUE
       - name: "Church Mics"
         icon: "mic"
-        patterns: ["pastor", "cantor", "ambo", "lector", "altar", "pulpit"]
-      - name: "Music/Band"
-        icon: "music_note"
-        patterns: ["guitar", "bass", "drum", "key", "piano", "organ", "band", "synth", "inst"]
+        patterns: ["altar", "iconasis", "podium", "chant"]
+      # Ch 11-14: CHAPEL ALTAR, CHAPEL BLACK, CHAPEL GRAY, CHAPEL BLUE
+      - name: "Chapel Mics"
+        icon: "mic_external_on"
+        patterns: ["chapel"]
+      # Ch 17-19: SOCIAL BLACK, SOCIAL BLUE, SOCIAL GRAY
       - name: "Social Hall Mics"
         icon: "mic_external_on"
-        patterns: ["social", "hall mic"]
+        patterns: ["social"]
+      # Ch 21-22: GAME ROOM1, GAME ROOM2
+      - name: "Gym Mics"
+        icon: "mic"
+        patterns: ["game room"]
+      # Ch 23: LAPEL MIC
+      - name: "Lapel Mic"
+        icon: "settings_voice"
+        patterns: ["lapel"]
+      # Ch 27-28: PC L, PC R
+      - name: "PC Audio"
+        icon: "computer"
+        patterns: ["^pc"]
+      # Aux 1-2: AIRPLAY L, AIRPLAY R
+      - name: "AirPlay"
+        icon: "airplay"
+        patterns: ["airplay"]
+        type: "aux"
+      # Aux 3-4: ALEXA L, ALEXA R
       - name: "Alexa"
         icon: "smart_display"
         patterns: ["alexa"]
         type: "aux"
+      # Aux 5-6: MOIP IN L, MOIP IN R
       - name: "MoIP Audio"
         icon: "settings_input_hdmi"
-        patterns: ["moip", "hdmi"]
+        patterns: ["moip"]
         type: "aux"
     destinations:
+      # Bus 1+2: CHRCH CL'G L/R (linked)
       - name: "Main Church"
         icon: "church"
         buses: [1, 2]
-      - name: "Social Hall"
-        icon: "groups"
-        buses: [3, 4]
+        description: "Church Ceiling L/R speakers"
+      # Bus 3: MAINCEILINGR (solo — not linked with bus 4)
+      - name: "Main Ceiling"
+        icon: "speaker"
+        buses: [3]
+        description: "Main ceiling rear speakers"
+      # Bus 4: MOIP OUT (solo — feeds MoIP video distribution audio)
+      - name: "MoIP Out"
+        icon: "settings_input_hdmi"
+        buses: [4]
+        description: "Audio feed to MoIP video distribution"
+      # Bus 5+6: CHAPEL LEFT/RIGHT (linked)
       - name: "Chapel"
         icon: "meeting_room"
         buses: [5, 6]
+      # Bus 7+8: SOCIAL LEFT/RIGHT (linked)
+      - name: "Social Hall"
+        icon: "groups"
+        buses: [7, 8]
+      # Bus 9+10: GAME LEFT/RIGHT (linked)
       - name: "Gym"
         icon: "fitness_center"
-        buses: [7]
-      - name: "Cry Room"
-        icon: "child_care"
-        buses: [9]
-      - name: "PA Group"
+        buses: [9, 10]
+      # Bus 11+12: PA L7,8,9 / PA L10 (not linked — separate PA zones)
+      - name: "PA System"
         icon: "campaign"
         buses: [11, 12]
         description: "Sunday School Rooms + Hallways"
@@ -87,31 +124,52 @@ x32:
       normal_sunday:
         name: "Normal Sunday"
         icon: "church"
-        description: "Church Mics to Main + Chapel + Cry Room, Music to Main"
+        description: "Standard Sunday service — Church Mics to Main + MoIP + Social + PA"
         routes:
-          "Church Mics": ["Main Church", "Chapel", "Cry Room"]
-          "Music/Band": ["Main Church"]
+          "Church Mics": ["Main Church", "Main Ceiling", "MoIP Out", "Social Hall", "PA System"]
+          "Chapel Mics": ["Chapel"]
+          "AirPlay": ["Main Church", "Main Ceiling", "Chapel"]
+          "MoIP Audio": ["Main Church", "Main Ceiling", "Chapel"]
+          "Alexa": ["Main Church", "Main Ceiling", "PA System"]
+          "PC Audio": ["Main Church", "Main Ceiling", "Chapel", "Social Hall", "Gym", "PA System"]
       overflow:
-        name: "Overflow to Social"
+        name: "Overflow to All"
         icon: "groups"
-        description: "Church Mics + Music to all rooms"
+        description: "Church audio to every room for large events"
         routes:
-          "Church Mics": ["Main Church", "Social Hall", "Chapel", "Gym", "Cry Room", "PA Group"]
-          "Music/Band": ["Main Church", "Social Hall"]
+          "Church Mics": ["Main Church", "Main Ceiling", "MoIP Out", "Chapel", "Social Hall", "Gym", "PA System"]
+          "Chapel Mics": ["Chapel"]
+          "AirPlay": ["Main Church", "Main Ceiling", "Chapel", "Social Hall"]
+          "MoIP Audio": ["Main Church", "Main Ceiling", "Chapel", "Social Hall"]
+          "Alexa": ["Main Church", "Main Ceiling", "PA System"]
+          "PC Audio": ["Main Church", "Main Ceiling", "Chapel", "Social Hall", "Gym", "PA System"]
       social_event:
         name: "Social Hall Event"
         icon: "celebration"
-        description: "Social Hall Mics to Social Hall only"
+        description: "Social Hall Mics to Social, Church Mics off in Social"
         routes:
           "Social Hall Mics": ["Social Hall"]
+          "Chapel Mics": ["Chapel"]
+          "AirPlay": ["Social Hall"]
+      chapel_only:
+        name: "Chapel Service"
+        icon: "meeting_room"
+        description: "Chapel Mics to Chapel speakers only"
+        routes:
+          "Chapel Mics": ["Chapel"]
       broadcast_all:
         name: "Broadcast All"
         icon: "spatial_audio"
-        description: "All sources to all rooms"
+        description: "All mic groups to all rooms"
         routes:
-          "Church Mics": ["Main Church", "Social Hall", "Chapel", "Gym", "Cry Room", "PA Group"]
-          "Music/Band": ["Main Church", "Social Hall", "Chapel", "Gym", "Cry Room", "PA Group"]
-          "Social Hall Mics": ["Main Church", "Social Hall", "Chapel", "Gym", "Cry Room", "PA Group"]
+          "Church Mics": ["Main Church", "Main Ceiling", "MoIP Out", "Chapel", "Social Hall", "Gym", "PA System"]
+          "Chapel Mics": ["Main Church", "Main Ceiling", "Chapel", "Social Hall", "Gym", "PA System"]
+          "Social Hall Mics": ["Main Church", "Main Ceiling", "Social Hall", "Gym", "PA System"]
+          "Gym Mics": ["Main Church", "Gym", "PA System"]
+          "AirPlay": ["Main Church", "Main Ceiling", "Chapel", "Social Hall", "Gym"]
+          "MoIP Audio": ["Main Church", "Main Ceiling", "Chapel", "Social Hall"]
+          "Alexa": ["Main Church", "Main Ceiling", "Chapel", "Social Hall", "Gym", "PA System"]
+          "PC Audio": ["Main Church", "Main Ceiling", "Chapel", "Social Hall", "Gym", "PA System"]
 ptz_cameras:
   BaptismRoom:
     ip: 10.100.60.207
