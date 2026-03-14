@@ -351,11 +351,11 @@ healthdash:
       warmup_minutes: 90
       fallback_windows:
         - days: [sun]
-          start: "06:00"
-          end: "14:00"
+          start: "07:00"
+          end: "12:00"
         - days: [sat]
           start: "17:30"
-          end: "20:00"
+          end: "19:00"
         - days: [wed, fri]
           start: "6:00"
           end: "12:00"
