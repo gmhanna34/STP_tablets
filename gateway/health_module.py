@@ -1232,10 +1232,9 @@ class HealthModule:
 
         return False
 
-    def _get_calendar_events(self, url_template: str, now: datetime) -> List[dict]:
+    def _get_calendar_events(self, calendar_url: str, now: datetime) -> List[dict]:
         """Fetch and cache calendar events. Returns list of {start, end} datetimes."""
-        # Build URL for current month
-        url = url_template.replace("{month}", str(now.month)).replace("{year}", str(now.year))
+        url = calendar_url
 
         # Return cached if fresh
         last_fetch = self._calendar_fetched_at.get(url, 0)
