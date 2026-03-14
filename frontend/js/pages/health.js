@@ -560,7 +560,7 @@ const HealthPage = {
 
       // Act on transitions (or first load when prev is undefined)
       if (level !== prev) {
-        if (level === 'healthy') {
+        if (level === 'healthy' || level === 'expected_off') {
           this._collapseCard(safe);
         } else {
           this._expandCard(safe);
@@ -575,12 +575,12 @@ const HealthPage = {
     const grid = document.getElementById('health-grid');
     if (!grid) return;
 
-    const severityOrder = { down: 0, warning: 1, healthy: 2 };
+    const severityOrder = { down: 0, warning: 1, healthy: 2, expected_off: 3 };
     const cards = Array.from(grid.querySelectorAll('.health-card'));
 
     cards.sort((a, b) => {
-      const aLevel = (a.className.match(/health-card-(down|warning|healthy)/) || [])[1] || 'healthy';
-      const bLevel = (b.className.match(/health-card-(down|warning|healthy)/) || [])[1] || 'healthy';
+      const aLevel = (a.className.match(/health-card-(down|warning|healthy|expected_off)/) || [])[1] || 'healthy';
+      const bLevel = (b.className.match(/health-card-(down|warning|healthy|expected_off)/) || [])[1] || 'healthy';
       return (severityOrder[aLevel] ?? 2) - (severityOrder[bLevel] ?? 2);
     });
 

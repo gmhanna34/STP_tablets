@@ -3853,9 +3853,10 @@ body {
   border-left: 5px solid #adb5bd;
   box-shadow: 0 1px 3px rgba(0,0,0,.08);
 }
-.health-card-healthy { border-left-color: var(--ok); }
-.health-card-warning { border-left-color: var(--warn); }
-.health-card-down    { border-left-color: var(--down); }
+.health-card-healthy      { border-left-color: var(--ok); }
+.health-card-warning      { border-left-color: var(--warn); }
+.health-card-down         { border-left-color: var(--down); }
+.health-card-expected_off { border-left-color: #666; }
 
 .health-card-header {
   display: flex;
@@ -3924,9 +3925,10 @@ body {
   background: #adb5bd;
   flex-shrink: 0;
 }
-.health-dot-healthy { background: var(--ok); }
-.health-dot-warning { background: var(--warn); }
-.health-dot-down    { background: var(--down); }
+.health-dot-healthy      { background: var(--ok); }
+.health-dot-warning      { background: var(--warn); }
+.health-dot-down         { background: var(--down); }
+.health-dot-expected_off { background: #666; }
 
 /* --- Members (composite) --- */
 
