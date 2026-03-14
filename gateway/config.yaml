@@ -348,13 +348,13 @@ healthdash:
       enabled: false
     schedule:
       calendar_url: "https://stpauloc.org/calendar_rss_feed.cfm?category=3"
-      warmup_minutes: 115
+      warmup_minutes: 90
       fallback_windows:
         - days: [sun]
           start: "06:00"
           end: "14:00"
         - days: [sat]
-          start: "17:00"
+          start: "17:30"
           end: "20:00"
         - days: [wed, fri]
           start: "6:00"
