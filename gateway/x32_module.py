@@ -96,7 +96,8 @@ class X32Poller:
                  ping_seconds: float = 2.0,
                  snapshot_seconds: float = 6.0,
                  offline_after_seconds: float = 8.0,
-                 ping_fails_to_offline: int = 3) -> None:
+                 ping_fails_to_offline: int = 3,
+                 routing_buses: Optional[set] = None) -> None:
         self._lock = threading.Lock()
         self._logger = logger
         self._owner = MixerOwner(mixer_type, ip, logger)
@@ -113,6 +114,7 @@ class X32Poller:
         self._snapshot_seconds = snapshot_seconds
         self._offline_after_seconds = offline_after_seconds
         self._ping_fails_to_offline = ping_fails_to_offline
+        self._routing_buses = routing_buses or set()
 
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -369,6 +371,9 @@ class X32Module:
         self._mixer_ip = cfg.get("mixer_ip", "10.100.60.231")
         self._mixer_type = cfg.get("mixer_type", "X32")
         self._routing_cfg = cfg.get("routing", {})
+        self._routing_buses = self._collect_routing_buses()
+        self._routing_cache: Optional[dict] = None
+        self._routing_cache_ts: float = 0.0
         self._poller = X32Poller(
             mixer_type=self._mixer_type,
             ip=self._mixer_ip,
@@ -377,7 +382,18 @@ class X32Module:
             snapshot_seconds=cfg.get("snapshot_seconds", 6.0),
             offline_after_seconds=cfg.get("offline_after_seconds", 8.0),
             ping_fails_to_offline=cfg.get("ping_fails_to_offline", 3),
+            routing_buses=self._routing_buses,
         )
+
+    def _collect_routing_buses(self) -> set:
+        """Collect the set of bus numbers used in routing destinations."""
+        buses = set()
+        for dest in self._routing_cfg.get("destinations", []):
+            for b in dest.get("buses", []):
+                buses.add(b)
+            if "bus" in dest:
+                buses.add(dest["bus"])
+        return buses
 
     def start(self) -> None:
         self._logger.info(f"X32 module starting: {self._mixer_type} @ {self._mixer_ip}")
@@ -700,25 +716,42 @@ class X32Module:
         m.send(path, level)
 
     def get_routing_state(self) -> Tuple[dict, int]:
-        """Return current routing matrix: which source groups are routed to which destinations."""
+        """Return current routing matrix: which source groups are routed to which destinations.
+        Uses cached result with 10s TTL to avoid hammering the mixer with OSC queries."""
         snap, _, online, err = self._poller.snapshot()
         if not online or not snap:
             return {"error": err or "offline"}, 503
 
+        # Return cached result if fresh (within 10s)
+        now = time.time()
+        if (self._routing_cache is not None
+                and now - self._routing_cache_ts < 10.0):
+            return self._routing_cache, 200
+
         groups = self._match_channels_to_groups(snap)
         destinations = self._routing_cfg.get("destinations", [])
 
+        # Collect only the (ch_type, ch_id, bus_num) triples we need to query
+        queries = []
+        for group in groups:
+            for dest in destinations:
+                for bus_num in self._dest_buses(dest):
+                    for ch_info in group["channels"]:
+                        queries.append((ch_info["type"], ch_info["id"], bus_num,
+                                        group["name"], dest["name"]))
+
         def do(m):
+            # Query all send levels in one command() call
+            raw = {}
+            for ch_type, ch_id, bus_num, gname, dname in queries:
+                lvl = self._query_send_level(m, ch_type, ch_id, bus_num)
+                raw.setdefault((gname, dname), []).append(lvl)
+
             matrix = {}
             for group in groups:
                 group_routes = {}
                 for dest in destinations:
-                    buses = self._dest_buses(dest)
-                    levels = []
-                    for bus_num in buses:
-                        for ch_info in group["channels"]:
-                            lvl = self._query_send_level(m, ch_info["type"], ch_info["id"], bus_num)
-                            levels.append(lvl)
+                    levels = raw.get((group["name"], dest["name"]), [])
                     avg_level = sum(levels) / len(levels) if levels else 0.0
                     group_routes[dest["name"]] = {
                         "active": avg_level > 0.05,
@@ -731,13 +764,16 @@ class X32Module:
         if cmd_err:
             return {"error": cmd_err}, 503
 
-        return {
+        result = {
             "groups": groups,
             "destinations": destinations,
             "matrix": matrix,
             "presets": self._routing_cfg.get("presets", {}),
             "send_level": self._routing_cfg.get("send_level", 0.75),
-        }, 200
+        }
+        self._routing_cache = result
+        self._routing_cache_ts = now
+        return result, 200
 
     def set_group_routing(self, group_name: str, dest_name: str, enabled: bool,
                           level: Optional[float] = None) -> Tuple[dict, int]:
@@ -785,6 +821,7 @@ class X32Module:
         res, cmd_err = self._poller.command(do)
         if cmd_err:
             return {"error": cmd_err}, 503
+        self._routing_cache = None  # invalidate cache
         return res, 200
 
     def apply_routing_preset(self, preset_name: str) -> Tuple[dict, int]:
@@ -837,4 +874,5 @@ class X32Module:
         res, cmd_err = self._poller.command(do)
         if cmd_err:
             return {"error": cmd_err}, 503
+        self._routing_cache = None  # invalidate cache
         return res, 200

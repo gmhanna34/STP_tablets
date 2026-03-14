@@ -115,7 +115,7 @@ const X32API = {
   async getRoutingState() {
     const url = '/api/x32/routing';
     try {
-      const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      const resp = await fetch(url, { signal: AbortSignal.timeout(30000) });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       return await resp.json();
     } catch (e) {
