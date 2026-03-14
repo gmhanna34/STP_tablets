@@ -300,7 +300,7 @@ def register_api_routes(ctx):
         from datetime import datetime
         results = {}
         # Find services with calendar_url in schedule
-        for svc_id, svc_cfg in health._services.items():
+        for svc_id, svc_cfg in health._services_cfg.items():
             schedule = svc_cfg.get("schedule")
             if not schedule:
                 continue
