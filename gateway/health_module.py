@@ -1251,9 +1251,10 @@ class HealthModule:
 
         # Fetch and parse
         try:
+            self._logger.info(f"Calendar feed fetching: {url}")
             resp = requests.get(url, timeout=10)
             if resp.status_code != 200:
-                self._logger.debug(f"Calendar feed HTTP {resp.status_code}: {url}")
+                self._logger.warning(f"Calendar feed HTTP {resp.status_code} from {url}")
                 # If we have stale cache, use it; otherwise signal feed unavailable
                 if url in self._calendar_cache:
                     return self._calendar_cache[url], True
@@ -1262,10 +1263,10 @@ class HealthModule:
             events = self._parse_rss_calendar(resp.text, now.tzinfo)
             self._calendar_cache[url] = events
             self._calendar_fetched_at[url] = time.time()
-            self._logger.info(f"Calendar feed refreshed: {len(events)} events")
+            self._logger.info(f"Calendar feed refreshed: {len(events)} events from {url}")
             return events, True
         except Exception as e:
-            self._logger.debug(f"Calendar feed fetch failed: {e}")
+            self._logger.warning(f"Calendar feed fetch failed for {url}: {type(e).__name__}: {e}")
             if url in self._calendar_cache:
                 return self._calendar_cache[url], True
             return [], False

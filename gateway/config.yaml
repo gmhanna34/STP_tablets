@@ -347,7 +347,7 @@ healthdash:
     alert:
       enabled: false
     schedule:
-      calendar_url: "http://stpauloc.org/calendar_rss_feed.cfm?category=3"
+      calendar_url: "https://stpauloc.org/calendar_rss_feed.cfm?category=3"
       warmup_minutes: 115
       fallback_windows:
         - days: [sun]

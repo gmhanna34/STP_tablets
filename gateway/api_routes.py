@@ -290,6 +290,45 @@ def register_api_routes(ctx):
         health.force_check_now()
         return jsonify({"ok": True}), 200
 
+    @app.route("/api/healthdash/calendar-debug")
+    def api_healthdash_calendar_debug():
+        """Debug endpoint to test calendar feed retrieval."""
+        health = ctx.health
+        if health is None:
+            return jsonify({"error": "Health module not available"}), 503
+        import requests as req
+        from datetime import datetime
+        results = {}
+        # Find services with calendar_url in schedule
+        for svc_id, svc_cfg in health._services.items():
+            schedule = svc_cfg.get("schedule")
+            if not schedule:
+                continue
+            cal_url = schedule.get("calendar_url", "")
+            if not cal_url:
+                continue
+            results[svc_id] = {"url": cal_url}
+            try:
+                resp = req.get(cal_url, timeout=10)
+                results[svc_id]["status_code"] = resp.status_code
+                results[svc_id]["content_type"] = resp.headers.get("Content-Type", "")
+                results[svc_id]["body_preview"] = resp.text[:500]
+                if resp.status_code == 200:
+                    now = datetime.now(health._tz)
+                    events = health._parse_rss_calendar(resp.text, now.tzinfo)
+                    results[svc_id]["parsed_events"] = len(events)
+                    results[svc_id]["events"] = [
+                        {"start": e["start"].isoformat(), "end": e["end"].isoformat()}
+                        for e in events[:10]
+                    ]
+            except Exception as e:
+                results[svc_id]["error"] = f"{type(e).__name__}: {e}"
+            # Also report cache state
+            results[svc_id]["cached_events"] = len(health._calendar_cache.get(cal_url, []))
+            last = health._calendar_fetched_at.get(cal_url, 0)
+            results[svc_id]["cache_age_seconds"] = round(time.time() - last, 1) if last else None
+        return jsonify(results)
+
     # ---- Occupancy ----
 
     @app.route("/api/occupancy/data")
