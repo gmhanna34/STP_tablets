@@ -310,7 +310,7 @@ def register_api_routes(ctx):
                 continue
             results[svc_id] = {"url": cal_url}
             try:
-                resp = req.get(cal_url, timeout=10)
+                resp = req.get(cal_url, timeout=10, headers={"User-Agent": "STP-Gateway/1.0"})
                 results[svc_id]["status_code"] = resp.status_code
                 results[svc_id]["content_type"] = resp.headers.get("Content-Type", "")
                 results[svc_id]["body_preview"] = resp.text[:500]

@@ -1252,7 +1252,8 @@ class HealthModule:
         # Fetch and parse
         try:
             self._logger.info(f"Calendar feed fetching: {url}")
-            resp = requests.get(url, timeout=10)
+            headers = {"User-Agent": "STP-Gateway/1.0"}
+            resp = requests.get(url, timeout=10, headers=headers)
             if resp.status_code != 200:
                 self._logger.warning(f"Calendar feed HTTP {resp.status_code} from {url}")
                 # If we have stale cache, use it; otherwise signal feed unavailable
