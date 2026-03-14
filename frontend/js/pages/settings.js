@@ -667,8 +667,7 @@ const SettingsPage = {
         const search = self._switchSearchTerm.toLowerCase();
         const filtered = search
           ? allEntities.filter(e => {
-              const raw = e.friendly_name || e.entity_id.split('.').pop() || e.entity_id;
-              const name = raw.replace(/_/g, ' ');
+              const name = e.entity_id.split('.').pop() || e.entity_id;
               return name.toLowerCase().includes(search) || e.entity_id.toLowerCase().includes(search);
             })
           : allEntities;
@@ -686,8 +685,7 @@ const SettingsPage = {
 
         gridEl.innerHTML = filtered.map(e => {
           const isOn = e.state === 'on';
-          const raw = e.friendly_name || e.entity_id.split('.').pop() || e.entity_id;
-          const name = raw.replace(/_/g, ' ');
+          const name = e.entity_id.split('.').pop() || e.entity_id;
           return `<div class="switch-card ${isOn ? 'switch-on' : 'switch-off'}">
             <div class="switch-info">
               <span class="status-dot ${isOn ? 'idle' : 'offline'}"></span>

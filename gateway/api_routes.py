@@ -1707,14 +1707,15 @@ def register_api_routes(ctx):
             result["buttons"] = button_defs
         return jsonify(result), 200
 
-    @app.route("/api/macros/switches")
-    def api_macros_switches():
-        page = request.args.get("page", "")
-        if not page:
-            return jsonify({"error": "page parameter required"}), 400
-        sections = button_defs.get(page, [])
+    # Cache for per-page switch IDs (built from macros.yaml, invalidated on reload)
+    _switches_cache = {}
+    _switches_cache_refs = {"macro_defs": id(ctx.macro_defs), "button_defs": id(ctx.button_defs)}
+
+    def _build_page_switches(page):
+        """Extract switch entity_ids used by macros on a given page."""
+        sections = ctx.button_defs.get(page, [])
         if not sections:
-            return jsonify({"switches": []}), 200
+            return []
         macro_keys = set()
         for section in sections:
             all_items = list(section.get("items", []))
@@ -1732,14 +1733,9 @@ def register_api_routes(ctx):
                             macro_keys.add(ba["macro"])
         switch_ids = set()
         visited = set()
-        def _walk_macro(key, depth=0):
-            if depth > 5 or key in visited:
-                return
-            visited.add(key)
-            macro = macro_defs.get(key)
-            if not macro:
-                return
-            for step_item in macro.get("steps", []):
+        def _walk_steps(steps, depth=0):
+            """Recursively walk macro steps to find switch entity_ids."""
+            for step_item in steps:
                 stype = step_item.get("type", "")
                 if stype == "ha_service":
                     eid = (step_item.get("data") or {}).get("entity_id", "")
@@ -1753,17 +1749,33 @@ def register_api_routes(ctx):
                     child = step_item.get("macro", "")
                     if child:
                         _walk_macro(child, depth + 1)
+                elif stype == "parallel":
+                    _walk_steps(step_item.get("steps", []), depth)
                 elif stype == "condition":
                     for branch_key in ("then", "else"):
-                        for sub in step_item.get(branch_key, []):
-                            if sub.get("type") == "ha_service":
-                                eid = (sub.get("data") or {}).get("entity_id", "")
-                                if eid.startswith("switch."):
-                                    switch_ids.add(eid)
+                        _walk_steps(step_item.get(branch_key, []), depth)
+        def _walk_macro(key, depth=0):
+            if depth > 5 or key in visited:
+                return
+            visited.add(key)
+            macro = ctx.macro_defs.get(key)
+            if not macro:
+                return
+            _walk_steps(macro.get("steps", []), depth)
         for mk in macro_keys:
             _walk_macro(mk)
         for section in sections:
-            for item in section.get("items", []):
+            all_items = list(section.get("items", []))
+            for tab in section.get("tabs", []):
+                all_items.extend(tab.get("items", []))
+            for item in all_items:
+                # Check item.state (e.g. button state indicators)
+                ist = item.get("state", {})
+                if ist.get("source") == "ha":
+                    eid = ist.get("entity", "")
+                    if eid.startswith("switch."):
+                        switch_ids.add(eid)
+                # Check item.toggle.state
                 toggle = item.get("toggle")
                 if toggle:
                     tst = toggle.get("state", {})
@@ -1772,7 +1784,21 @@ def register_api_routes(ctx):
                         if eid.startswith("switch."):
                             switch_ids.add(eid)
         switch_ids = {s for s in switch_ids if "TODO" not in s.upper()}
-        return jsonify({"switches": sorted(switch_ids)}), 200
+        return sorted(switch_ids)
+
+    @app.route("/api/macros/switches")
+    def api_macros_switches():
+        page = request.args.get("page", "")
+        if not page:
+            return jsonify({"error": "page parameter required"}), 400
+        # Invalidate cache if macros were hot-reloaded
+        cur_refs = {"macro_defs": id(ctx.macro_defs), "button_defs": id(ctx.button_defs)}
+        if cur_refs != _switches_cache_refs:
+            _switches_cache.clear()
+            _switches_cache_refs.update(cur_refs)
+        if page not in _switches_cache:
+            _switches_cache[page] = _build_page_switches(page)
+        return jsonify({"switches": _switches_cache[page]}), 200
 
     @app.route("/api/macro/execute", methods=["POST"])
     def api_macro_execute():
