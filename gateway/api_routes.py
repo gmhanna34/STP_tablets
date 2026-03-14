@@ -946,6 +946,8 @@ def register_api_routes(ctx):
     def x32_routing_state():
         if mock_mode:
             return jsonify({"groups": [], "destinations": [], "matrix": {}, "presets": {}, "mock": True}), 200
+        if request.args.get("nocache"):
+            ctx.x32.invalidate_routing_cache()
         result, status = ctx.x32.get_routing_state()
         return jsonify(result), status
 

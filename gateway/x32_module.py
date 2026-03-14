@@ -450,6 +450,7 @@ class X32Module:
         res, err = self._poller.command(do)
         if err:
             return {"error": err}, 503
+        self._routing_cache = None  # scene changes alter send levels
         return res, 200
 
     # --- Channel mute/volume ---
@@ -646,6 +647,10 @@ class X32Module:
         return res, 200
 
     # --- Audio Routing (channel → bus sends) ---
+
+    def invalidate_routing_cache(self) -> None:
+        """Force next get_routing_state() to query live data."""
+        self._routing_cache = None
 
     def get_routing_config(self) -> dict:
         """Return the routing configuration (source groups, destinations, presets)."""
