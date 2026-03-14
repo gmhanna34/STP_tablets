@@ -1481,7 +1481,7 @@ const SettingsPage = {
         const raw = log.timestamp.endsWith('Z') ? log.timestamp : log.timestamp + 'Z';
         const d = new Date(raw);
         if (!isNaN(d.getTime())) {
-          ts = d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(',', '');
+          ts = d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: '2-digit', day: '2-digit', hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }).replace(',', '');
         }
       }
       const tablet = (log.actor || log.tablet_id || '').replace('Tablet_', '');
@@ -1844,7 +1844,7 @@ const SettingsPage = {
       return `<div class="health-item" style="margin-bottom:6px;">
         <div>
           <div class="health-name">${s.name}</div>
-          <div style="font-size:12px;color:#ccc;">
+          <div style="font-size:12px;color:var(--text);opacity:0.85;">
             ${s.macro_key} &middot; ${s.time_of_day} &middot; ${days}
           </div>
         </div>
@@ -2106,7 +2106,14 @@ const SettingsPage = {
         return;
       }
       listEl.innerHTML = runs.map(r => {
-        const ts = r.timestamp || '';
+        let ts = r.timestamp || '';
+        if (ts) {
+          const raw = ts.endsWith('Z') ? ts : ts + 'Z';
+          const d = new Date(raw);
+          if (!isNaN(d.getTime())) {
+            ts = d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: '2-digit', day: '2-digit', hour: 'numeric', minute: '2-digit', hour12: true });
+          }
+        }
         const result = r.result || '';
         const icon = result === 'triggered'
           ? '<span class="material-icons" style="font-size:13px;vertical-align:middle;color:#81c784;">check_circle</span>'
