@@ -23,10 +23,12 @@ import socket
 import subprocess
 import threading
 import time
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass, asdict, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 import psutil
 import requests
@@ -97,6 +99,11 @@ class HealthModule:
         self._on_summary_change = None  # Optional callback(summary_dict)
 
         self._running = False
+
+        # Calendar feed cache for schedule-aware alerting
+        self._calendar_cache: Dict[str, List[dict]] = {}  # url -> [{start, end}, ...]
+        self._calendar_fetched_at: Dict[str, float] = {}  # url -> timestamp
+        self._calendar_fetch_interval = 3600  # re-fetch hourly
 
     # -------------------------------------------------------------------------
     # PUBLIC API
@@ -265,6 +272,10 @@ class HealthModule:
                 self._next_due[sid] = now + interval
 
                 result = self._run_check(svc)
+                # Schedule-aware: downgrade "down" to "expected_off" outside operating windows
+                if result.status.get("level") == "down" and not self._is_in_schedule_window(svc):
+                    result.status = {"level": "expected_off", "label": "Expected Off"}
+                    result.message = "Outside scheduled operating window"
                 with self._lock:
                     self._results[sid] = result
                 self._maybe_fire_alert(svc, result)
@@ -1017,6 +1028,10 @@ class HealthModule:
         if not enabled:
             return
 
+        # Schedule-aware: suppress alerts when service is expected to be off
+        if not self._is_in_schedule_window(svc):
+            return
+
         webhook_url = self._alerts_cfg.get("ha_webhook_url", "")
         if not webhook_url:
             return
@@ -1171,3 +1186,150 @@ class HealthModule:
         except Exception as e:
             self._logger.warning(f"Health HA service call failed: {e}")
             return False
+
+    # -------------------------------------------------------------------------
+    # SCHEDULE-AWARE ALERTING
+    # -------------------------------------------------------------------------
+
+    _DAY_ABBREVS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+
+    def _is_in_schedule_window(self, svc: dict) -> bool:
+        """Check if the current time falls within this service's expected operating window.
+
+        Returns True (should be running) if:
+        - No schedule config (backward compatible — always considered 'in window')
+        - Current time is within warmup_minutes of a calendar event or static window
+        Returns False (expected to be off) otherwise.
+        """
+        schedule = svc.get("schedule")
+        if not schedule:
+            return True
+
+        tz = ZoneInfo("America/Los_Angeles")
+        now = datetime.now(tz)
+        warmup = timedelta(minutes=int(schedule.get("warmup_minutes", 60)))
+
+        # Check calendar events first
+        calendar_url = schedule.get("calendar_url", "")
+        if calendar_url:
+            events = self._get_calendar_events(calendar_url, now)
+            for ev in events:
+                # Event window: (event_start - warmup) to event_end
+                if (ev["start"] - warmup) <= now <= ev["end"]:
+                    return True
+
+        # Check static fallback windows
+        for window in schedule.get("fallback_windows", []):
+            win_days = [self._DAY_ABBREVS.get(d.lower()) for d in window.get("days", [])]
+            if now.weekday() not in win_days:
+                continue
+            start_parts = window.get("start", "00:00").split(":")
+            end_parts = window.get("end", "23:59").split(":")
+            win_start = now.replace(hour=int(start_parts[0]), minute=int(start_parts[1]), second=0, microsecond=0)
+            win_end = now.replace(hour=int(end_parts[0]), minute=int(end_parts[1]), second=0, microsecond=0)
+            if (win_start - warmup) <= now <= win_end:
+                return True
+
+        return False
+
+    def _get_calendar_events(self, url_template: str, now: datetime) -> List[dict]:
+        """Fetch and cache calendar events. Returns list of {start, end} datetimes."""
+        # Build URL for current month
+        url = url_template.replace("{month}", str(now.month)).replace("{year}", str(now.year))
+
+        # Return cached if fresh
+        last_fetch = self._calendar_fetched_at.get(url, 0)
+        if time.time() - last_fetch < self._calendar_fetch_interval and url in self._calendar_cache:
+            return self._calendar_cache[url]
+
+        # Fetch and parse
+        try:
+            resp = requests.get(url, timeout=10)
+            if resp.status_code != 200:
+                self._logger.debug(f"Calendar feed HTTP {resp.status_code}: {url}")
+                return self._calendar_cache.get(url, [])
+
+            events = self._parse_rss_calendar(resp.text, now.tzinfo)
+            self._calendar_cache[url] = events
+            self._calendar_fetched_at[url] = time.time()
+            self._logger.info(f"Calendar feed refreshed: {len(events)} events this month")
+            return events
+        except Exception as e:
+            self._logger.debug(f"Calendar feed fetch failed: {e}")
+            return self._calendar_cache.get(url, [])
+
+    @staticmethod
+    def _parse_rss_calendar(xml_text: str, tz) -> List[dict]:
+        """Parse a FaithConnector RSS calendar feed into event windows.
+
+        Expected RSS 2.0 format with <item> elements containing:
+        - <title>: Event name
+        - <description>: May contain date/time info
+        - <pubDate>: RFC 822 date (used as event date)
+
+        Falls back gracefully if format differs.
+        """
+        events = []
+        try:
+            root = ET.fromstring(xml_text)
+        except ET.ParseError:
+            return events
+
+        for item in root.iter("item"):
+            title_el = item.find("title")
+            pub_date_el = item.find("pubDate")
+            desc_el = item.find("description")
+
+            if pub_date_el is None or pub_date_el.text is None:
+                continue
+
+            # Parse pubDate (RFC 822: "Sun, 15 Mar 2026 08:00:00 -0800")
+            event_dt = _parse_rfc822(pub_date_el.text.strip(), tz)
+            if event_dt is None:
+                continue
+
+            # Try to extract duration from description, default to 3 hours
+            duration_hours = 3
+            desc = (desc_el.text or "") if desc_el is not None else ""
+
+            # Look for end time hints in description (e.g., "8:00 AM - 11:00 AM")
+            import re
+            time_range = re.search(
+                r'(\d{1,2}:\d{2}\s*[APap][Mm])\s*[-–]\s*(\d{1,2}:\d{2}\s*[APap][Mm])',
+                desc
+            )
+            if time_range:
+                try:
+                    from datetime import datetime as _dt
+                    end_time = _dt.strptime(time_range.group(2).strip(), "%I:%M %p").time()
+                    event_end = event_dt.replace(hour=end_time.hour, minute=end_time.minute)
+                    if event_end <= event_dt:
+                        event_end += timedelta(hours=duration_hours)
+                except ValueError:
+                    event_end = event_dt + timedelta(hours=duration_hours)
+            else:
+                event_end = event_dt + timedelta(hours=duration_hours)
+
+            events.append({"start": event_dt, "end": event_end})
+
+        return events
+
+
+def _parse_rfc822(date_str: str, fallback_tz) -> Optional[datetime]:
+    """Parse RFC 822 date string to timezone-aware datetime."""
+    from email.utils import parsedate_to_datetime
+    try:
+        dt = parsedate_to_datetime(date_str)
+        return dt.astimezone(fallback_tz)
+    except Exception:
+        pass
+    # Fallback: try common patterns
+    for fmt in ("%a, %d %b %Y %H:%M:%S %z", "%d %b %Y %H:%M:%S %z", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            dt = datetime.strptime(date_str, fmt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=fallback_tz)
+            return dt.astimezone(fallback_tz)
+        except ValueError:
+            continue
+    return None

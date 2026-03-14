@@ -288,6 +288,19 @@ healthdash:
     log_path: ''
     alert:
       enabled: false
+    schedule:
+      calendar_url: "https://stpauloc.org/calendar_rss_feed.cfm?month={month}&year={year}&category=3"
+      warmup_minutes: 60
+      fallback_windows:
+        - days: [sun]
+          start: "06:00"
+          end: "14:00"
+        - days: [sat]
+          start: "15:00"
+          end: "20:00"
+        - days: [wed, fri]
+          start: "17:00"
+          end: "21:00"
   - id: moip_module
     name: MoIP Video (Built-in Module)
     group: Core
@@ -310,6 +323,10 @@ healthdash:
     url: http://127.0.0.1:20858/api/obs/status
     ok_json_path: healthy
     ok_json_value: true
+    detail_json_paths:
+      Scene: data.current_scene
+      Streaming: data.streaming
+      Recording: data.recording
     timeout_seconds: 5
     log_path: ''
     alert:
