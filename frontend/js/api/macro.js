@@ -1676,7 +1676,7 @@ const MacroAPI = {
       }
 
       const cardsHtml = entities.map(e => {
-        const name = e.entity_id.split('.').pop() || e.entity_id;
+        const name = e.friendly_name || e.entity_id.split('.').pop() || e.entity_id;
         const isOn = e.state === 'on';
         return `<div class="switch-card ${isOn ? 'switch-on' : 'switch-off'}">
           <div class="switch-info">
@@ -2037,7 +2037,7 @@ const MacroAPI = {
         }
 
         const cardsHtml = entities.map(e => {
-          const name = e.entity_id.split('.').pop() || e.entity_id;
+          const name = e.friendly_name || e.entity_id.split('.').pop() || e.entity_id;
           const isOn = e.state === 'on';
           return `<div class="switch-card ${isOn ? 'switch-on' : 'switch-off'}">
             <div class="switch-info">
