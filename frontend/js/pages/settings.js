@@ -214,6 +214,10 @@ const SettingsPage = {
                   <div id="sched-macro-steps" style="margin-top:6px;color:var(--text-secondary);font-size:11px;line-height:1.6;"></div>
                 </details>
               </div>
+              <div id="sched-history" class="hidden" style="margin-top:8px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;">
+                <div style="font-weight:bold;margin-bottom:6px;color:var(--text);">Recent Runs</div>
+                <div id="sched-history-list" style="color:var(--text-secondary);line-height:1.8;"></div>
+              </div>
               <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end;">
                 <button class="btn" id="btn-sched-cancel" style="min-height:auto;padding:6px 12px;">Cancel</button>
                 <button class="btn btn-success" id="btn-sched-save" style="min-height:auto;padding:6px 12px;background:#00b050;border-color:#00b050;"><span class="btn-label">Save</span></button>
@@ -1840,7 +1844,7 @@ const SettingsPage = {
       return `<div class="health-item" style="margin-bottom:6px;">
         <div>
           <div class="health-name">${s.name}</div>
-          <div style="font-size:12px;color:#aaa;">
+          <div style="font-size:12px;color:#ccc;">
             ${s.macro_key} &middot; ${s.time_of_day} &middot; ${days}
           </div>
         </div>
@@ -1938,6 +1942,7 @@ const SettingsPage = {
         });
         document.getElementById('schedule-form')?.classList.remove('hidden');
         document.getElementById('btn-sched-save').querySelector('.btn-label').textContent = 'Update';
+        this._loadScheduleHistory(btn.dataset.editSched);
       });
     });
   },
@@ -2082,6 +2087,35 @@ const SettingsPage = {
       if (label) label.textContent = 'Save';
     }
     document.getElementById('sched-macro-details')?.classList.add('hidden');
+    document.getElementById('sched-history')?.classList.add('hidden');
+  },
+
+  async _loadScheduleHistory(schedId) {
+    const panel = document.getElementById('sched-history');
+    const listEl = document.getElementById('sched-history-list');
+    if (!panel || !listEl) return;
+
+    listEl.innerHTML = '<span style="opacity:0.5;">Loading...</span>';
+    panel.classList.remove('hidden');
+
+    try {
+      const resp = await fetch(`/api/schedule/${schedId}/history`);
+      const runs = await resp.json();
+      if (!runs || runs.length === 0) {
+        listEl.innerHTML = '<span style="opacity:0.5;">No runs recorded yet.</span>';
+        return;
+      }
+      listEl.innerHTML = runs.map(r => {
+        const ts = r.timestamp || '';
+        const result = r.result || '';
+        const icon = result === 'triggered'
+          ? '<span class="material-icons" style="font-size:13px;vertical-align:middle;color:#81c784;">check_circle</span>'
+          : '<span class="material-icons" style="font-size:13px;vertical-align:middle;color:#ef5350;">error</span>';
+        return `<div style="display:flex;align-items:center;gap:6px;">${icon} <span>${ts}</span> <span style="opacity:0.5;">${result}</span></div>`;
+      }).join('');
+    } catch {
+      listEl.innerHTML = '<span style="color:#cc0000;">Failed to load history</span>';
+    }
   },
 
   // -----------------------------------------------------------------------

@@ -1921,6 +1921,11 @@ def register_api_routes(ctx):
         db.delete_schedule(sched_id)
         return jsonify({"success": True}), 200
 
+    @app.route("/api/schedule/<int:sched_id>/history")
+    def api_schedule_history(sched_id: int):
+        limit = request.args.get("limit", 5, type=int)
+        return jsonify(db.get_schedule_history(sched_id, min(limit, 20))), 200
+
     # ---- Chat ----
 
     def _build_chat_system_prompt() -> str:

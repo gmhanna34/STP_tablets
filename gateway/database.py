@@ -188,6 +188,19 @@ class Database:
             conn.execute(f"UPDATE schedules SET {','.join(sets)} WHERE id=?", vals)
             conn.commit()
 
+    def get_schedule_history(self, sched_id: int, limit: int = 5) -> list:
+        """Return the most recent audit log entries for a given schedule."""
+        conn = self._get_conn()
+        # The scheduler logs with request_data containing the schedule_id as JSON
+        pattern = f'%"schedule_id": {sched_id}%'
+        rows = conn.execute(
+            "SELECT timestamp, action, target, result FROM audit_log "
+            "WHERE action LIKE 'schedule:%' AND request_data LIKE ? "
+            "ORDER BY id DESC LIMIT ?",
+            (pattern, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def delete_schedule(self, sched_id: int):
         conn = self._get_conn()
         conn.execute("DELETE FROM schedules WHERE id=?", (sched_id,))
