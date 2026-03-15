@@ -75,7 +75,7 @@ const StreamPage = {
                   <span class="btn-label">Full View</span>
                 </button>
                 <button class="btn camera-preset-btn" id="btn-preset-podium" title="Preset 2: Podium View">
-                  <span class="material-icons">podium</span>
+                  <span class="material-icons">record_voice_over</span>
                   <span class="btn-label">Podium View</span>
                 </button>
               </div>
@@ -693,7 +693,7 @@ const StreamPage = {
               <dd>Shows a live preview from the current scene's camera. Tap the image to open full PTZ (pan/tilt/zoom) controls.</dd>
               <dt><span class="material-icons">panorama_wide_angle</span> Full View</dt>
               <dd>Moves the active camera to Preset 1 (wide/full view of the space).</dd>
-              <dt><span class="material-icons">podium</span> Podium View</dt>
+              <dt><span class="material-icons">record_voice_over</span> Podium View</dt>
               <dd>Moves the active camera to Preset 2 (zoomed in on the podium/altar).</dd>
             </dl>
           </div>
