@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import socket
 import subprocess
 import threading
@@ -141,11 +142,14 @@ class HealthModule:
                         member_ids.add(row["id"])
 
         counts = {"healthy": 0, "warning": 0, "down": 0}
+        _wattbox_re = re.compile(r'^wattbox_ha_\d+$')
         for svc_id, result in results.items():
             is_composite = result.details and isinstance(result.details.get("member_rows"), list)
             if is_composite:
-                # Count member rows
+                # Count member rows (exclude individual WattBox outlets)
                 for row in result.details["member_rows"]:
+                    if _wattbox_re.match(row.get("id", "")):
+                        continue
                     level = row.get("level", "down")
                     counts[level] = counts.get(level, 0) + 1
             elif svc_id not in member_ids:
