@@ -44,31 +44,32 @@ const MainPage = {
     MacroAPI.onStateChange(this._stateHandler);
 
     // Fetch and display current mixer scene next to Audio section
-    this._updateScenePill();
+    this._fetchAndShowScene();
   },
 
-  _updateScenePill() {
-    X32API.fetchScene().then(info => {
-      if (!info) return;
-      this._renderScenePill(info.name);
-    });
+  async _fetchAndShowScene() {
+    // Show cached value immediately if available
+    if (X32API.state.currentSceneName) {
+      this._renderScenePill(X32API.state.currentSceneName);
+    }
+    // Fetch latest from lightweight health endpoint
+    const info = await X32API.fetchScene();
+    if (info?.name) this._renderScenePill(info.name);
   },
 
   _renderScenePill(sceneName) {
     if (!sceneName) return;
     const container = document.getElementById('main-macro-buttons');
     if (!container) return;
-    // Find Audio section title
     const titles = container.querySelectorAll('.section-title');
     for (const title of titles) {
-      if (/audio/i.test(title.textContent)) {
+      // Check original text only (not pill text)
+      const titleText = title.childNodes[0]?.textContent || '';
+      if (/audio/i.test(titleText)) {
         let pill = title.querySelector('.scene-pill');
         if (!pill) {
           pill = document.createElement('span');
           pill.className = 'scene-pill';
-          title.style.display = 'flex';
-          title.style.alignItems = 'center';
-          title.style.justifyContent = 'space-between';
           title.appendChild(pill);
         }
         pill.textContent = sceneName;
@@ -78,7 +79,9 @@ const MainPage = {
   },
 
   updateStatus() {
-    this._renderScenePill(X32API.state.currentSceneName);
+    if (X32API.state.currentSceneName) {
+      this._renderScenePill(X32API.state.currentSceneName);
+    }
   },
 
   _showHelp() {

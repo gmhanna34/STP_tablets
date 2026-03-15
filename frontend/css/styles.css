@@ -470,6 +470,7 @@ body {
 }
 
 .section-title {
+  position: relative;
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 10px;
@@ -729,6 +730,10 @@ body {
 /* ── Scene Pill (mixer scene indicator on room pages) ──── */
 
 .scene-pill {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 10px;
   font-weight: 600;
   color: var(--text-secondary);
@@ -739,7 +744,6 @@ body {
   max-width: 120px;
   text-align: center;
   line-height: 1.3;
-  flex-shrink: 0;
 }
 
 /* ── Disabled State (disabled_when) ──────────────────────── */

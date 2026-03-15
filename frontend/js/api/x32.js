@@ -174,6 +174,10 @@ const X32API = {
   onStateUpdate(data) {
     if (data && data.event === 'scene') {
       this.state._sceneChanged = true;
+      // Refresh scene name from health endpoint, then re-trigger page refresh
+      this.fetchScene().then(() => {
+        if (typeof App !== 'undefined') App.refreshCurrentPage('x32');
+      });
     }
     if (data && data.data) this._parseSnapshot(data.data);
     else if (data && data.healthy !== undefined) {
