@@ -1315,7 +1315,10 @@ class HealthModule:
             if time_range:
                 try:
                     from datetime import datetime as _dt
-                    end_time = _dt.strptime(time_range.group(2).strip(), "%I:%M %p").time()
+                    raw_end = time_range.group(2).strip()
+                    # Normalize "7:30pm" → "7:30 PM" for strptime
+                    raw_end = re.sub(r'([APap][Mm])', lambda m: ' ' + m.group(1).upper(), raw_end).strip()
+                    end_time = _dt.strptime(raw_end, "%I:%M %p").time()
                     event_end = event_dt.replace(hour=end_time.hour, minute=end_time.minute)
                     if event_end <= event_dt:
                         event_end += timedelta(hours=duration_hours)
