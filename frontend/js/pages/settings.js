@@ -315,7 +315,7 @@ const SettingsPage = {
               Save writes to config.yaml (backup created automatically).
               Restart is required for most changes to take effect.
             </div>
-            <div class="control-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="control-grid" style="grid-template-columns:1fr 1fr 1fr;">
               <button class="btn" id="btn-config-save">
                 <span class="material-icons">save</span>
                 <span class="btn-label">Save Config</span>
@@ -323,6 +323,10 @@ const SettingsPage = {
               <button class="btn danger" id="btn-gateway-restart">
                 <span class="material-icons">restart_alt</span>
                 <span class="btn-label">Restart Gateway</span>
+              </button>
+              <button class="btn danger" id="btn-gateway-update">
+                <span class="material-icons">system_update</span>
+                <span class="btn-label">Update Gateway</span>
               </button>
             </div>
           </div>
@@ -539,6 +543,7 @@ const SettingsPage = {
     this._loadConfigEditor();
     document.getElementById('btn-config-save')?.addEventListener('click', () => this._saveConfig());
     document.getElementById('btn-gateway-restart')?.addEventListener('click', () => this._restartGateway());
+    document.getElementById('btn-gateway-update')?.addEventListener('click', () => this._updateGateway());
 
     // Entity find & replace panel
     document.getElementById('btn-open-entity-fr')?.addEventListener('click', () => this._openEntityFRPanel());
@@ -2559,6 +2564,31 @@ const SettingsPage = {
       });
     } catch (e) {
       // Expected — server dies before response completes
+    }
+  },
+
+  async _updateGateway() {
+    if (!confirm('Update gateway? This will pull latest code, merge, restart the gateway, and reload all tablets.')) return;
+
+    const btn = document.getElementById('btn-gateway-update');
+    if (btn) { btn.disabled = true; btn.querySelector('.btn-label').textContent = 'Updating…'; }
+
+    try {
+      const resp = await fetch('/api/gateway/update', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await resp.json();
+      if (data.success) {
+        App.showToast('Gateway update started — tablets will reload shortly', 5000);
+      } else {
+        App.showToast(data.error || 'Update request failed', 5000, 'error');
+        if (btn) { btn.disabled = false; btn.querySelector('.btn-label').textContent = 'Update Gateway'; }
+      }
+    } catch (e) {
+      // May be expected if gateway restarts before response completes
+      App.showToast('Gateway update triggered', 4000);
     }
   },
 

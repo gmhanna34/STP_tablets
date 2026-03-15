@@ -572,6 +572,75 @@ def register_api_routes(ctx):
         eventlet.spawn(_do_restart)
         return jsonify({"success": True, "message": "Restarting..."}), 200
 
+    @app.route("/api/gateway/update", methods=["POST"])
+    def api_gateway_update():
+        """Trigger 'Update Gateway' via the build app batch API (merge + restart + reload)."""
+        import eventlet
+        tablet = get_tablet_id()
+        logger.info(f"Gateway update requested by {tablet}")
+        db.log_action(tablet, "gateway:update", "gateway", "", "OK", 0)
+
+        socketio.emit("gateway:updating", {
+            "message": "Gateway update started — pulling code, merging, restarting…",
+            "requested_by": tablet,
+        })
+
+        def _do_update():
+            time.sleep(1)
+            logger.info("Requesting update from build app batch API")
+            try:
+                # Fetch tablet IDs from build app config for the reload step
+                tablet_ids = []
+                try:
+                    cfg_resp = http_requests.get(
+                        "http://127.0.0.1:20856/ops/api/config",
+                        timeout=10,
+                    )
+                    tablet_ids = list(cfg_resp.json().get("tablets", {}).keys())
+                except Exception as e:
+                    logger.warning(f"Could not fetch tablet list from build app: {e}")
+
+                resp = http_requests.post(
+                    "http://127.0.0.1:20856/ops/api/batch",
+                    json={
+                        "repo_ids": ["STP_tablets"],
+                        "service_ids": ["tablets_gateway"],
+                        "tablet_ids": tablet_ids,
+                        "actions": ["merge", "restart", "reload"],
+                    },
+                    timeout=30,
+                )
+                data = resp.json()
+                task_id = data.get("task_id")
+                logger.info(f"Build app update task started: {task_id}")
+
+                # Poll the task until it completes so we can log the outcome
+                if task_id:
+                    for _ in range(120):  # up to ~3 minutes
+                        time.sleep(1.5)
+                        try:
+                            st = http_requests.get(
+                                f"http://127.0.0.1:20856/ops/api/tasks/{task_id}",
+                                timeout=10,
+                            )
+                            info = st.json()
+                            status = info.get("status", "")
+                            if status in ("done", "failed"):
+                                logger.info(f"Update task {task_id} finished: {status}")
+                                break
+                        except Exception:
+                            # Gateway may be restarting — stop polling
+                            break
+
+            except Exception as e:
+                logger.error(f"Failed to contact build app for update: {e}")
+                socketio.emit("gateway:update_failed", {
+                    "message": f"Update failed: {e}",
+                })
+
+        eventlet.spawn(_do_update)
+        return jsonify({"success": True, "message": "Update started"}), 200
+
     # ---- MoIP ----
 
     @app.route("/api/moip/receivers")
