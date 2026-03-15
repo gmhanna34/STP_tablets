@@ -249,7 +249,7 @@ const SourcePage = {
         document.getElementById('source-tab-announcements').style.display = target === 'announcements' ? '' : 'none';
         document.getElementById('source-tab-test').style.display = target === 'test' ? '' : 'none';
 
-        if (target === 'audio' && !this.mixerTimer) {
+        if (target === 'audio' && !this._audioInitialized) {
           this._initAudio();
         }
         if (target === 'announcements' && !this._announcementsLoaded) {
@@ -277,7 +277,8 @@ const SourcePage = {
   },
 
   _initAudio() {
-    this._loadSceneOnly();
+    this._audioInitialized = true;
+    this._loadScenes();
     this._wireX32QuickActions();
     document.getElementById('audio-advanced-link')?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -285,15 +286,11 @@ const SourcePage = {
     });
   },
 
-  async _loadSceneOnly() {
-    // Lightweight fetch — only scene info, no channels/buses/routing
-    const info = await X32API.fetchScene();
-    if (!info) {
-      const scenesContainer = document.getElementById('x32-scenes');
-      if (scenesContainer) scenesContainer.innerHTML = '<div class="text-center" style="color:#cc0000;">X32 Mixer Offline</div>';
-      return;
+  async _loadScenes() {
+    const scenesContainer = document.getElementById('x32-scenes');
+    if (scenesContainer && !scenesContainer.querySelector('.scene-btn')) {
+      scenesContainer.innerHTML = '<div class="text-center" style="opacity:0.5;">Loading scenes...</div>';
     }
-    // Still need full poll for scenes list (to render scene buttons) but this is a single call
     const state = await X32API.poll();
     this._renderScenes(state);
   },
@@ -303,7 +300,13 @@ const SourcePage = {
     if (!scenesContainer) return;
 
     if (!state.online) {
-      scenesContainer.innerHTML = '<div class="text-center" style="color:#cc0000;">X32 Mixer Offline</div>';
+      scenesContainer.innerHTML = `<div class="text-center" style="color:#cc0000;">
+        X32 Mixer Offline
+        <button class="btn" id="x32-retry-scenes" style="margin-top:8px;max-width:160px;display:inline-flex;">
+          <span class="material-icons">refresh</span><span class="btn-label">Retry</span>
+        </button>
+      </div>`;
+      scenesContainer.querySelector('#x32-retry-scenes')?.addEventListener('click', () => this._loadScenes());
       return;
     }
 
@@ -318,7 +321,7 @@ const SourcePage = {
       btn.addEventListener('click', async () => {
         await X32API.loadScene(parseInt(btn.dataset.x32Scene));
         App.showToast('Loading scene...');
-        setTimeout(() => this._loadSceneOnly(), 1000);
+        setTimeout(() => this._loadScenes(), 1000);
       });
     });
   },
@@ -370,8 +373,14 @@ const SourcePage = {
   updateStatus() {
     this._renderRouting(MoIPAPI.state);
     if (this._activeTab === 'audio') {
-      // Always update scenes on the main audio tab
-      this._renderScenes(X32API.state);
+      const hasScenes = X32API.state.scenes && X32API.state.scenes.some(s => s.name && s.name.trim());
+      if (hasScenes) {
+        // Scenes already loaded — just re-render from cache
+        this._renderScenes(X32API.state);
+      } else if (X32API.state.online) {
+        // Mixer is online but scenes never loaded — fetch them
+        this._loadScenes();
+      }
       // Only update mixer/routing if advanced panel is open
       if (document.getElementById('mixer-container')?.closest('.panel-body')) {
         this._renderMixer(X32API.state);
@@ -2190,6 +2199,7 @@ const SourcePage = {
   destroy() {
     this._closePreview();
     this._activeTab = 'video';
+    this._audioInitialized = false;
     this._announcementsLoaded = false;
     this._announceConfig = null;
     this._announceProgressBound = false;
