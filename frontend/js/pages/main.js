@@ -42,6 +42,43 @@ const MainPage = {
       MacroAPI.updateButtonStates(btnContainer, this._sections);
     };
     MacroAPI.onStateChange(this._stateHandler);
+
+    // Fetch and display current mixer scene next to Audio section
+    this._updateScenePill();
+  },
+
+  _updateScenePill() {
+    X32API.fetchScene().then(info => {
+      if (!info) return;
+      this._renderScenePill(info.name);
+    });
+  },
+
+  _renderScenePill(sceneName) {
+    if (!sceneName) return;
+    const container = document.getElementById('main-macro-buttons');
+    if (!container) return;
+    // Find Audio section title
+    const titles = container.querySelectorAll('.section-title');
+    for (const title of titles) {
+      if (/audio/i.test(title.textContent)) {
+        let pill = title.querySelector('.scene-pill');
+        if (!pill) {
+          pill = document.createElement('span');
+          pill.className = 'scene-pill';
+          title.style.display = 'flex';
+          title.style.alignItems = 'center';
+          title.style.justifyContent = 'space-between';
+          title.appendChild(pill);
+        }
+        pill.textContent = sceneName;
+        return;
+      }
+    }
+  },
+
+  updateStatus() {
+    this._renderScenePill(X32API.state.currentSceneName);
   },
 
   _showHelp() {

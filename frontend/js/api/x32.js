@@ -152,6 +152,24 @@ const X32API = {
     }
   },
 
+  // Lightweight scene-only fetch (uses /health endpoint — no channel/bus data)
+  async fetchScene() {
+    try {
+      const resp = await fetch('/api/x32/health', { signal: AbortSignal.timeout(3000) });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      if (data.healthy) {
+        this.state.online = true;
+        this.state.currentScene = data.cur_scene || '';
+        this.state.currentSceneName = data.cur_scene_name || '';
+        return { scene: data.cur_scene, name: data.cur_scene_name };
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  },
+
   // Called by Socket.IO state push
   onStateUpdate(data) {
     if (data && data.event === 'scene') {

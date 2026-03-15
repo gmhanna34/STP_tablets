@@ -415,7 +415,7 @@ const App = {
 
     // Map subsystems to pages that display their data
     const subsystemPages = {
-      x32: ['settings', 'main', 'source'],
+      x32: ['settings', 'main', 'chapel', 'social', 'gym', 'source'],
       moip: ['source', 'main', 'chapel', 'social', 'gym', 'confroom'],
       obs: ['stream'],
       projectors: ['main'],

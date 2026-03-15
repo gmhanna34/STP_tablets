@@ -726,6 +726,22 @@ body {
   color: #fff;
 }
 
+/* ── Scene Pill (mixer scene indicator on room pages) ──── */
+
+.scene-pill {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--sp-dark);
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: normal;
+  max-width: 120px;
+  text-align: center;
+  line-height: 1.3;
+  flex-shrink: 0;
+}
+
 /* ── Disabled State (disabled_when) ──────────────────────── */
 
 .btn.btn-disabled-state {

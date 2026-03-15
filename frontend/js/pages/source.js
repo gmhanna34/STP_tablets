@@ -108,35 +108,11 @@ const SourcePage = {
             <div class="section-title">Mixer Scenes</div>
             <div class="scene-grid" id="x32-scenes"></div>
           </div>
-          <div class="control-section">
-            <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
-              <span><span class="material-icons" style="font-size:18px;vertical-align:middle;margin-right:4px;">route</span>Audio Routing</span>
-              <button class="btn" id="btn-refresh-routing-audio" style="min-width:auto;padding:4px 10px;font-size:11px;">
-                <span class="material-icons" style="font-size:14px;">refresh</span>
-                <span class="btn-label">Refresh</span>
-              </button>
-            </div>
-            <div id="audio-routing-container">
-              <div class="text-center" style="opacity:0.5;">Loading routing matrix...</div>
-            </div>
-          </div>
-          <div class="control-section">
-            <div class="section-title">Input Channels</div>
-            <div id="mixer-container">
-              <div class="text-center" style="opacity:0.5;">Loading mixer status...</div>
-            </div>
-          </div>
-          <div class="control-section">
-            <div class="section-title">Aux Inputs</div>
-            <div id="aux-container" class="mixer-grid"></div>
-          </div>
-          <div class="control-section">
-            <div class="section-title">Mix Buses</div>
-            <div id="bus-container" class="mixer-grid"></div>
-          </div>
-          <div class="control-section">
-            <div class="section-title">DCA Groups</div>
-            <div id="dca-container" class="mixer-grid"></div>
+          <div class="text-center" style="margin-top:12px;">
+            <a href="#" id="audio-advanced-link" class="section-link" style="display:inline-flex;">
+              <span class="material-icons">chevron_right</span>
+              <span>Advanced Settings</span>
+            </a>
           </div>
         </div>
 
@@ -301,10 +277,92 @@ const SourcePage = {
   },
 
   _initAudio() {
-    this.loadMixer();
-    this._loadAudioRouting();
+    this._loadSceneOnly();
     this._wireX32QuickActions();
-    document.getElementById('btn-refresh-routing-audio')?.addEventListener('click', () => this._loadAudioRouting(true));
+    document.getElementById('audio-advanced-link')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      this._openAudioAdvanced();
+    });
+  },
+
+  async _loadSceneOnly() {
+    // Lightweight fetch — only scene info, no channels/buses/routing
+    const info = await X32API.fetchScene();
+    if (!info) {
+      const scenesContainer = document.getElementById('x32-scenes');
+      if (scenesContainer) scenesContainer.innerHTML = '<div class="text-center" style="color:#cc0000;">X32 Mixer Offline</div>';
+      return;
+    }
+    // Still need full poll for scenes list (to render scene buttons) but this is a single call
+    const state = await X32API.poll();
+    this._renderScenes(state);
+  },
+
+  _renderScenes(state) {
+    const scenesContainer = document.getElementById('x32-scenes');
+    if (!scenesContainer) return;
+
+    if (!state.online) {
+      scenesContainer.innerHTML = '<div class="text-center" style="color:#cc0000;">X32 Mixer Offline</div>';
+      return;
+    }
+
+    const activeScenes = state.scenes.filter(s => s.name && s.name.trim() !== '');
+    scenesContainer.innerHTML = activeScenes.map(s => `
+      <button class="btn scene-btn ${String(state.currentScene) === String(s.id) ? 'active-scene' : ''}" data-x32-scene="${s.id}">
+        <span class="btn-label">${s.name}</span>
+      </button>
+    `).join('');
+
+    scenesContainer.querySelectorAll('[data-x32-scene]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await X32API.loadScene(parseInt(btn.dataset.x32Scene));
+        App.showToast('Loading scene...');
+        setTimeout(() => this._loadSceneOnly(), 1000);
+      });
+    });
+  },
+
+  _openAudioAdvanced() {
+    App.showPanel('Audio — Advanced Settings', (body) => {
+      body.innerHTML = `
+        <div class="control-section">
+          <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
+            <span><span class="material-icons" style="font-size:18px;vertical-align:middle;margin-right:4px;">route</span>Audio Routing</span>
+            <button class="btn" id="btn-refresh-routing-audio" style="min-width:auto;padding:4px 10px;font-size:11px;">
+              <span class="material-icons" style="font-size:14px;">refresh</span>
+              <span class="btn-label">Refresh</span>
+            </button>
+          </div>
+          <div id="audio-routing-container">
+            <div class="text-center" style="opacity:0.5;">Loading routing matrix...</div>
+          </div>
+        </div>
+        <div class="control-section">
+          <div class="section-title">Input Channels</div>
+          <div id="mixer-container">
+            <div class="text-center" style="opacity:0.5;">Loading mixer data...</div>
+          </div>
+        </div>
+        <div class="control-section">
+          <div class="section-title">Aux Inputs</div>
+          <div id="aux-container" class="mixer-grid"></div>
+        </div>
+        <div class="control-section">
+          <div class="section-title">Mix Buses</div>
+          <div id="bus-container" class="mixer-grid"></div>
+        </div>
+        <div class="control-section">
+          <div class="section-title">DCA Groups</div>
+          <div id="dca-container" class="mixer-grid"></div>
+        </div>
+      `;
+
+      // Load full mixer data and routing (only when advanced is opened)
+      this.loadMixer();
+      this._loadAudioRouting();
+      body.querySelector('#btn-refresh-routing-audio')?.addEventListener('click', () => this._loadAudioRouting(true));
+    });
   },
 
   // UI-only refresh — reads from cached API state without HTTP calls.
@@ -312,11 +370,17 @@ const SourcePage = {
   updateStatus() {
     this._renderRouting(MoIPAPI.state);
     if (this._activeTab === 'audio') {
-      this._renderMixer(X32API.state);
-      // Scene changes alter bus send levels — reload routing matrix
-      if (X32API.state && X32API.state._sceneChanged) {
+      // Always update scenes on the main audio tab
+      this._renderScenes(X32API.state);
+      // Only update mixer/routing if advanced panel is open
+      if (document.getElementById('mixer-container')?.closest('.panel-body')) {
+        this._renderMixer(X32API.state);
+        if (X32API.state && X32API.state._sceneChanged) {
+          X32API.state._sceneChanged = false;
+          this._loadAudioRouting(true);
+        }
+      } else if (X32API.state && X32API.state._sceneChanged) {
         X32API.state._sceneChanged = false;
-        this._loadAudioRouting(true);
       }
     }
   },
@@ -386,24 +450,8 @@ const SourcePage = {
       });
     });
 
-    // Scenes
-    const scenesContainer = document.getElementById('x32-scenes');
-    if (scenesContainer) {
-      const activeScenes = state.scenes.filter(s => s.name && s.name.trim() !== '');
-      scenesContainer.innerHTML = activeScenes.map(s => `
-        <button class="btn scene-btn ${String(state.currentScene) === String(s.id) ? 'active-scene' : ''}" data-x32-scene="${s.id}">
-          <span class="btn-label">${s.name}</span>
-        </button>
-      `).join('');
-
-      scenesContainer.querySelectorAll('[data-x32-scene]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          await X32API.loadScene(parseInt(btn.dataset.x32Scene));
-          App.showToast('Loading scene...');
-          setTimeout(() => this.loadMixer(), 1000);
-        });
-      });
-    }
+    // Also update scenes on the main page if visible
+    this._renderScenes(state);
 
     // Aux channels
     const auxContainer = document.getElementById('aux-container');
@@ -2069,12 +2117,18 @@ const SourcePage = {
 
           <div class="help-section">
             <h3>Audio Tab - Mixer Scenes</h3>
-            <p class="help-note">Saved mixer presets. Click to load a scene — this resets all channel volumes and mutes to the saved configuration. Requires confirmation.</p>
+            <p class="help-note">Saved mixer presets. Click to load a scene — this resets all channel volumes and mutes to the saved configuration.</p>
           </div>
 
           <div class="help-section">
-            <h3>Audio Tab - Input Channels, Buses & DCAs</h3>
-            <p class="help-note">Shows individual channel faders with volume sliders and mute buttons. Aux inputs, mix buses, and DCA groups each show mute state and volume levels. Only channels with names assigned on the X32 are shown.</p>
+            <h3>Audio Tab - Advanced Settings</h3>
+            <p class="help-note">Opens a panel with detailed mixer controls. These are loaded on-demand for faster page loading.</p>
+            <dl class="help-list">
+              <dt>Audio Routing</dt>
+              <dd>Matrix showing which source groups (Microphones, Band, etc.) are routed to which destinations (Main L/R, Monitor, etc.).</dd>
+              <dt>Input Channels, Aux, Buses, DCAs</dt>
+              <dd>Individual channel faders with volume sliders and mute buttons. Only channels with names assigned on the X32 are shown.</dd>
+            </dl>
           </div>
 
           <div class="help-section">
