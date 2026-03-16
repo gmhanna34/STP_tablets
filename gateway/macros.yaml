@@ -198,8 +198,8 @@ macros:
             on_fail: skip
             verify: true
       - type: verify_pending
-        timeout: 8
-        retries: 2
+        timeout: 15
+        retries: 3
         message: "Verifying Chapel TV power switches"
       # IR Power On - Round 1
       - type: moip_ir
@@ -316,8 +316,8 @@ macros:
         message: "Turning on Chapel IR Transmitter"
         verify: true
       - type: verify_pending
-        timeout: 10
-        retries: 2
+        timeout: 15
+        retries: 3
         message: "Verifying Chapel audio switches"
 
   chapel_audio_off:
@@ -340,8 +340,8 @@ macros:
         message: "Turning off Chapel microphones"
         verify: true
       - type: verify_pending
-        timeout: 8
-        retries: 2
+        timeout: 15
+        retries: 3
         message: "Verifying Chapel audio off"
 
   chapel_ac_on:
@@ -919,8 +919,8 @@ macros:
         message: "Turning on Social Hall Amplifier"
         verify: true
       - type: verify_pending
-        timeout: 10
-        retries: 2
+        timeout: 15
+        retries: 3
         message: "Verifying Main Church audio switches"
 
   main_audio_off:
@@ -950,8 +950,8 @@ macros:
         message: "Turning off lapel mic"
         verify: true
       - type: verify_pending
-        timeout: 8
-        retries: 2
+        timeout: 15
+        retries: 3
         message: "Verifying audio off"
 
   main_proj_only_on:
@@ -1967,8 +1967,8 @@ macros:
         message: "Turning on Social Hall Amplifier"
         verify: true
       - type: verify_pending
-        timeout: 10
-        retries: 2
+        timeout: 15
+        retries: 3
         message: "Verifying Social Hall audio switches"
 
   social_audio_off:
@@ -1998,8 +1998,8 @@ macros:
         message: "Turning off Social Hall Wireless Mics"
         verify: true
       - type: verify_pending
-        timeout: 8
-        retries: 2
+        timeout: 15
+        retries: 3
         message: "Verifying Social Hall audio off"
 
   social_ac_on:
