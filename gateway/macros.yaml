@@ -130,8 +130,8 @@ macros:
         message: "Turning on Main Audio Sub"
         verify: true
       - type: verify_pending
-        timeout: 10
-        retries: 2
+        timeout: 15
+        retries: 3
         message: "Verifying shared audio switches turned on"
       # Audio routing
       - type: moip_switch
