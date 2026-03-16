@@ -2,7 +2,7 @@
 
 > **Audience:** AV operators and volunteers. This guide walks through every page of the tablet control panel, explaining what you see and how to use it.
 >
-> **Screenshot placeholders:** Sections marked with `[SCREENSHOT: ...]` are where you should insert actual screenshots from the running system.
+> **Screenshots:** Placeholder images are included below. To add real screenshots, replace the `.svg` files in `docs/images/` with `.png` screenshots of the same name (and update the file extensions below), or simply replace the SVG content.
 
 ---
 
@@ -54,7 +54,7 @@
 - **Battery badge** = shows battery percentage for battery-powered displays
 - **Temperature badge** = shows current room temperature on thermostat buttons
 
-[SCREENSHOT: Navigation bar with status indicators]
+![Navigation bar with status indicators](images/01-nav-bar-status-indicators.svg)
 
 ---
 
@@ -77,7 +77,7 @@ The Home page is your landing screen after opening the app.
 - Access the AI help assistant for quick answers
 - Restart the app if something looks wrong
 
-[SCREENSHOT: Home page]
+![Home page](images/02-home-page.svg)
 
 ---
 
@@ -89,7 +89,7 @@ Controls the main sanctuary AV system -- projectors, audio, climate, and video r
 
 ### Layout Overview
 
-[SCREENSHOT: Main Church page -- full view]
+![Main Church page — full view](images/03-main-church-full-view.svg)
 
 ### Top Section: Quick Actions
 
@@ -113,7 +113,7 @@ Two large buttons at the top:
 
 Both buttons show a **step-by-step progress overlay** as they execute.
 
-[SCREENSHOT: Progress overlay during All Systems On]
+![Progress overlay during All Systems On](images/04-main-church-progress-overlay.svg)
 
 ### Video Section
 
@@ -152,7 +152,7 @@ These buttons change what appears on ALL Main Church displays simultaneously. Th
 | **Apple TV (Page #s)** | Hymnal/liturgy app with page number overlay |
 | **Google Streamer** | Cast content from phone/laptop |
 
-[SCREENSHOT: Video source buttons with one highlighted]
+![Video source buttons with active source highlighted](images/05-main-church-video-sources.svg)
 
 ### People Counts
 
@@ -177,7 +177,7 @@ Tap "Advanced Settings" at the bottom to expand additional controls:
 
 Controls the Chapel TVs, audio, climate, and video routing.
 
-[SCREENSHOT: Chapel page]
+![Chapel page](images/06-chapel-page.svg)
 
 ### Top Section: Quick Actions
 
@@ -215,7 +215,7 @@ Buttons are **disabled** when Chapel TVs are off (grayed out).
 
 Controls the 8-panel Social Hall video wall, audio, and climate.
 
-[SCREENSHOT: Social Hall page]
+![Social Hall page](images/07-social-hall-page.svg)
 
 ### Layout
 
@@ -234,7 +234,7 @@ Same pattern as other room pages:
 
 Simple controls for the gym TV and audio.
 
-[SCREENSHOT: Gym page]
+![Gym page](images/08-gym-page.svg)
 
 - **Video On / Off**
 - **Audio On / Off**
@@ -248,7 +248,7 @@ Simple controls for the gym TV and audio.
 
 Controls two independent TVs, video conferencing, and climate.
 
-[SCREENSHOT: Conference Room page]
+![Conference Room page](images/09-conference-room-page.svg)
 
 ### Unique Feature: Two Independent TVs
 
@@ -271,7 +271,7 @@ Each TV has 7 source options. The **Apple TV** option switches to direct HDMI 2 
 
 Manages OBS Studio for live streaming and recording, plus camera control.
 
-[SCREENSHOT: Live Stream page -- full view]
+![Live Stream page — full view](images/10-live-stream-full-view.svg)
 
 ### Status Bar (Top)
 
@@ -289,7 +289,7 @@ When you tap a scene:
 1. OBS switches to that scene
 2. The associated audio/video routing macro runs (e.g., loads the correct X32 mixer scene)
 
-[SCREENSHOT: Scene buttons with one active]
+![Scene buttons with active scene highlighted](images/11-live-stream-scene-buttons.svg)
 
 ### Active Camera Panel (Right Side)
 
@@ -317,7 +317,7 @@ When you tap the camera image, a control panel opens:
 - **Home:** Returns camera to home position
 - **P1/P2/P3:** Jump to saved preset positions
 
-[SCREENSHOT: PTZ control panel]
+![PTZ camera control panel](images/12-ptz-control-panel.svg)
 
 ### Stream & Record Controls
 
@@ -342,7 +342,7 @@ When you tap the camera image, a control panel opens:
 
 Advanced video and audio routing, announcements, and system testing.
 
-[SCREENSHOT: Source Routing page tabs]
+![Source Routing page tabs](images/13-source-routing-tabs.svg)
 
 ### Video Tab (Default)
 
@@ -367,7 +367,7 @@ Three sub-tabs:
 2. **Sequences** -- start multi-step announcement countdowns (Sunday School Countdown, Closing Countdown)
 3. **Custom** -- type any text, choose a voice, and have it spoken through the speakers
 
-[SCREENSHOT: Announcements tab with presets]
+![Announcements tab with presets](images/14-announcements-presets.svg)
 
 ### Test Tab
 
@@ -381,7 +381,7 @@ System diagnostic utilities (primarily for technical staff).
 
 PTZ camera control, security camera feeds, and door lock management.
 
-[SCREENSHOT: Security page]
+![Security page](images/15-security-page.svg)
 
 ### PTZ Cameras Tab
 
@@ -406,7 +406,7 @@ Live feeds from fixed security cameras (via Home Assistant). Snapshots refresh e
 
 Monitors 30+ backend services and devices. Shows which components are healthy, warning, or down.
 
-[SCREENSHOT: Health page with service cards]
+![Health page with service cards](images/16-health-page-service-cards.svg)
 
 ### Summary Tiles (Top)
 
@@ -442,7 +442,7 @@ Each monitored service has a card showing:
 
 Building occupancy and communion count analytics from Camlytics camera data.
 
-[SCREENSHOT: Occupancy page with charts]
+![Occupancy page with charts](images/17-occupancy-page-charts.svg)
 
 ### KPI Cards (Top Row)
 
@@ -477,7 +477,7 @@ Full table of all recorded services with:
 
 Administrative controls, audio mixer, thermostats, scheduling, and system configuration.
 
-[SCREENSHOT: Settings page tabs]
+![Settings page tabs](images/18-settings-page-tabs.svg)
 
 ### Tabs
 
@@ -505,7 +505,7 @@ The audio tab provides **full mixer control**:
   - Channel name
 - **Aux Inputs** (33-40), **Mix Buses** (1-16), and **DCA Groups** (1-8)
 
-[SCREENSHOT: Audio mixer faders]
+![Audio mixer faders and controls](images/19-settings-audio-mixer.svg)
 
 ### Schedule Tab Details
 
