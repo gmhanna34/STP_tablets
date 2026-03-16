@@ -279,14 +279,37 @@ class EventAutomation:
     # Profile matching
     # ------------------------------------------------------------------
 
+    _DAY_ABBREVS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+
     def _match_profile(self, event: dict) -> str:
-        """Match an event to a profile by keyword search in the title."""
+        """Match an event to a profile by keyword search in the title.
+
+        Keywords can be plain strings (match any day) or dicts with
+        'keyword' and 'days' keys for day-of-week constraints:
+            keywords:
+              - "feast"                              # any day
+              - keyword: "liturgy"
+                days: [sun]                          # Sundays only
+        """
         title = event.get("title", "").lower()
+        event_start = event.get("start")
+        event_weekday = event_start.weekday() if hasattr(event_start, "weekday") else None
+
         for profile_id, profile in self._profiles.items():
             keywords = profile.get("keywords", [])
-            for kw in keywords:
-                if kw.lower() in title:
-                    return profile_id
+            for entry in keywords:
+                if isinstance(entry, dict):
+                    kw = entry.get("keyword", "").lower()
+                    allowed_days = entry.get("days")
+                    if kw and kw in title:
+                        if allowed_days and event_weekday is not None:
+                            day_nums = [self._DAY_ABBREVS.get(d.lower()) for d in allowed_days]
+                            if event_weekday not in day_nums:
+                                continue  # keyword matches but wrong day
+                        return profile_id
+                else:
+                    if str(entry).lower() in title:
+                        return profile_id
         return self._default_profile
 
     # ------------------------------------------------------------------

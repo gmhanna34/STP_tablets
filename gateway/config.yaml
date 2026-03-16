@@ -1125,13 +1125,34 @@ event_automation:
   profiles:
     main_church:
       label: "Main Church Service"
-      keywords: ["liturgy", "mass", "matins", "midnight", "feast", "palm", "easter", "christmas", "epiphany", "pascha", "holy week", "main church"]
+      keywords:
+        - keyword: "liturgy"
+          days: [sun]                # Sunday liturgies → Main Church
+        - "mass"
+        - "matins"
+        - "midnight"
+        - "feast"
+        - "palm"
+        - "easter"
+        - "christmas"
+        - "epiphany"
+        - "pascha"
+        - "holy week"
+        - "main church"
       setup_macro: "main_full_setup"
       teardown_macro: "main_full_teardown"
       preflight_checks: ["x32_module", "moip_module", "obs_module"]
     chapel:
       label: "Chapel Service"
-      keywords: ["chapel", "vespers", "bible study", "youth", "sunday school", "meeting"]
+      keywords:
+        - keyword: "liturgy"
+          days: [mon, tue, wed, thu, fri, sat]  # Weekday liturgies → Chapel
+        - "chapel"
+        - "vespers"
+        - "bible study"
+        - "youth"
+        - "sunday school"
+        - "meeting"
       setup_macro: "chapel_full_setup"
       teardown_macro: "chapel_full_teardown"
       preflight_checks: ["x32_module", "moip_module"]

@@ -58,14 +58,20 @@ SAMPLE_CFG = {
         "profiles": {
             "main_church": {
                 "label": "Main Church Service",
-                "keywords": ["liturgy", "mass", "matins", "feast", "main church"],
+                "keywords": [
+                    {"keyword": "liturgy", "days": ["sun"]},
+                    "mass", "matins", "feast", "main church",
+                ],
                 "setup_macro": "main_full_setup",
                 "teardown_macro": "main_full_teardown",
                 "preflight_checks": ["x32_module", "moip_module"],
             },
             "chapel": {
                 "label": "Chapel Service",
-                "keywords": ["chapel", "vespers", "bible study", "youth"],
+                "keywords": [
+                    {"keyword": "liturgy", "days": ["mon", "tue", "wed", "thu", "fri", "sat"]},
+                    "chapel", "vespers", "bible study", "youth",
+                ],
                 "setup_macro": "chapel_full_setup",
                 "teardown_macro": "chapel_full_teardown",
                 "preflight_checks": ["x32_module"],
@@ -170,28 +176,54 @@ class TestProfileMatching:
     def setup_method(self):
         self.ea = EventAutomation(SAMPLE_CFG, _make_ctx())
 
-    def test_liturgy_matches_main_church(self):
-        ev = {"title": "Sunday Liturgy", "start": datetime.now(TZ)}
+    def _sunday(self):
+        """Return a Sunday datetime."""
+        return datetime(2026, 3, 15, 8, 0, tzinfo=TZ)  # Sunday
+
+    def _wednesday(self):
+        """Return a Wednesday datetime."""
+        return datetime(2026, 3, 18, 8, 0, tzinfo=TZ)  # Wednesday
+
+    def test_sunday_liturgy_matches_main_church(self):
+        ev = {"title": "Sunday Liturgy", "start": self._sunday()}
         assert self.ea._match_profile(ev) == "main_church"
 
+    def test_weekday_liturgy_matches_chapel(self):
+        ev = {"title": "Wednesday Liturgy", "start": self._wednesday()}
+        assert self.ea._match_profile(ev) == "chapel"
+
+    def test_liturgy_no_day_prefix_uses_event_date(self):
+        # Same title "Divine Liturgy" — day determines room
+        ev_sun = {"title": "Divine Liturgy", "start": self._sunday()}
+        ev_wed = {"title": "Divine Liturgy", "start": self._wednesday()}
+        assert self.ea._match_profile(ev_sun) == "main_church"
+        assert self.ea._match_profile(ev_wed) == "chapel"
+
     def test_bible_study_matches_chapel(self):
-        ev = {"title": "Chapel Bible Study", "start": datetime.now(TZ)}
+        ev = {"title": "Chapel Bible Study", "start": self._wednesday()}
         assert self.ea._match_profile(ev) == "chapel"
 
     def test_agape_matches_social_hall(self):
-        ev = {"title": "Social Hall Agape Meal", "start": datetime.now(TZ)}
+        ev = {"title": "Social Hall Agape Meal", "start": self._sunday()}
         assert self.ea._match_profile(ev) == "social_hall"
 
     def test_youth_matches_chapel(self):
-        ev = {"title": "Youth Meeting", "start": datetime.now(TZ)}
+        ev = {"title": "Youth Meeting", "start": self._wednesday()}
         assert self.ea._match_profile(ev) == "chapel"
 
+    def test_plain_keyword_matches_any_day(self):
+        # "feast" is a plain string keyword — matches regardless of day
+        ev_sun = {"title": "Feast of the Cross", "start": self._sunday()}
+        ev_wed = {"title": "Feast of the Cross", "start": self._wednesday()}
+        assert self.ea._match_profile(ev_sun) == "main_church"
+        assert self.ea._match_profile(ev_wed) == "main_church"
+
     def test_unknown_event_uses_default(self):
-        ev = {"title": "Random Unknown Event", "start": datetime.now(TZ)}
+        ev = {"title": "Random Unknown Event", "start": self._sunday()}
         assert self.ea._match_profile(ev) == "main_church"  # default_profile
 
     def test_case_insensitive_matching(self):
-        ev = {"title": "SUNDAY LITURGY", "start": datetime.now(TZ)}
+        ev = {"title": "SUNDAY LITURGY", "start": self._sunday()}
         assert self.ea._match_profile(ev) == "main_church"
 
 
