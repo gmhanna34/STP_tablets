@@ -2786,7 +2786,7 @@ const SettingsPage = {
       }
 
       html += `<div style="margin-bottom:4px;">
-        <div class="health-item" style="cursor:pointer;" data-ha-auto="${this._escAttr(a.entity_id)}">
+        <div class="health-item" style="cursor:pointer;" data-ha-auto="${this._escAttr(a.entity_id)}" data-ha-auto-id="${this._escAttr(a.id)}">
           <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
             <span class="material-icons" style="font-size:18px;color:${stateColor};">${stateIcon}</span>
             <div style="min-width:0;flex:1;">
@@ -2801,7 +2801,7 @@ const SettingsPage = {
             <span class="material-icons" style="font-size:18px;color:var(--text-secondary);">${chevron}</span>
           </div>
         </div>
-        ${isExpanded ? `<div class="ha-auto-detail" id="ha-auto-detail-${this._escAttr(a.entity_id)}" style="padding:8px 12px;margin-top:2px;background:var(--surface);border:1px solid var(--border);border-radius:0 0 8px 8px;animation:fadeIn 0.15s ease-out;">
+        ${isExpanded ? `<div class="ha-auto-detail" data-ha-detail="${this._escAttr(a.entity_id)}" style="padding:8px 12px;margin-top:2px;background:var(--surface);border:1px solid var(--border);border-radius:0 0 8px 8px;animation:fadeIn 0.15s ease-out;">
           <div style="opacity:0.5;font-size:12px;">Loading actions...</div>
         </div>` : ''}
       </div>`;
@@ -2813,6 +2813,7 @@ const SettingsPage = {
     list.querySelectorAll('[data-ha-auto]').forEach(el => {
       el.addEventListener('click', () => {
         const eid = el.dataset.haAuto;
+        const autoId = el.dataset.haAutoId;
         if (this._haAutomationsExpanded === eid) {
           this._haAutomationsExpanded = null;
         } else {
@@ -2820,7 +2821,7 @@ const SettingsPage = {
         }
         this._renderHAAutomations();
         if (this._haAutomationsExpanded) {
-          this._loadHAAutomationConfig(this._haAutomationsExpanded);
+          this._loadHAAutomationConfig(this._haAutomationsExpanded, autoId);
         }
       });
     });
@@ -2849,13 +2850,14 @@ const SettingsPage = {
     });
   },
 
-  async _loadHAAutomationConfig(entityId) {
-    const autoId = entityId.replace('automation.', '');
-    const detail = document.getElementById(`ha-auto-detail-${entityId}`);
+  async _loadHAAutomationConfig(entityId, autoId) {
+    const detail = document.querySelector(`[data-ha-detail="${entityId}"]`);
     if (!detail) return;
+    // Use HA internal ID (from attributes.id), fall back to entity_id suffix
+    const configId = autoId || entityId.replace('automation.', '');
 
     try {
-      const resp = await fetch(`/api/ha/automations/${encodeURIComponent(autoId)}/config`);
+      const resp = await fetch(`/api/ha/automations/${encodeURIComponent(configId)}/config`);
       if (!resp.ok) {
         detail.innerHTML = '<div style="font-size:12px;color:var(--text-secondary);">Could not load automation config.</div>';
         return;
