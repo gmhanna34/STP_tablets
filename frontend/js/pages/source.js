@@ -97,7 +97,8 @@ const SourcePage = {
         <div id="source-tab-audio" style="display:none;">
           <div class="control-section">
             <div class="section-title">Quick Actions</div>
-            <div class="control-grid" style="grid-template-columns:repeat(4, 1fr);" id="x32-quick-actions">
+            <div class="control-grid" style="grid-template-columns:repeat(5, 1fr);" id="x32-quick-actions">
+              <button class="btn" id="x32-power-on"><span class="material-icons">power_settings_new</span><span class="btn-label">Power On</span></button>
               <button class="btn" id="x32-mute-all"><span class="material-icons">volume_off</span><span class="btn-label">Mute All</span></button>
               <button class="btn" id="x32-unmute-all"><span class="material-icons">volume_up</span><span class="btn-label">Unmute All</span></button>
               <button class="btn" id="x32-reload-scene"><span class="material-icons">refresh</span><span class="btn-label">Reload Scene</span></button>
@@ -601,6 +602,29 @@ const SourcePage = {
   },
 
   _wireX32QuickActions() {
+    document.getElementById('x32-power-on')?.addEventListener('click', async () => {
+      if (!await App.showConfirm('Turn on the X32 Mixer?')) return;
+      const btn = document.getElementById('x32-power-on');
+      this._btnWorking(btn);
+      try {
+        const resp = await fetch('/api/ha/service/switch/turn_on', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ entity_id: 'switch.wb_004_av_audiorack1_outlet_3' }),
+          signal: AbortSignal.timeout(10000),
+        });
+        if (resp.ok) {
+          App.showToast('X32 Mixer powering on...');
+        } else {
+          App.showToast('Failed to turn on mixer', 3000, 'error');
+        }
+      } catch (e) {
+        console.error('X32 power on error:', e);
+        App.showToast('Failed to turn on mixer', 3000, 'error');
+      }
+      this._btnDone(btn);
+    });
+
     document.getElementById('x32-mute-all')?.addEventListener('click', async () => {
       if (!await App.showConfirm('Mute ALL input channels?')) return;
       const btn = document.getElementById('x32-mute-all');
