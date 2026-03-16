@@ -1093,6 +1093,16 @@ const SourcePage = {
 
       if (!progress) return;
 
+      // When a sequence starts (including from a macro), swap play→stop and show progress
+      if (data.status === 'started' || data.status === 'in_progress') {
+        if (playBtn) playBtn.style.display = 'none';
+        if (cancelBtn) cancelBtn.style.display = '';
+        progress.style.display = '';
+        if (data.status === 'started') {
+          this._logAnnounce('Sequence', `"${data.label}" — running (${data.steps_total} steps)`, 'ok');
+        }
+      }
+
       const total = data.steps_total || 1;
       const completed = data.steps_completed || 0;
       const pct = Math.round((completed / total) * 100);
