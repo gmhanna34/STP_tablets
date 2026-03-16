@@ -603,7 +603,7 @@ const SourcePage = {
 
   _wireX32QuickActions() {
     document.getElementById('x32-power-on')?.addEventListener('click', async () => {
-      if (!await App.showConfirm('Turn on the X32 Mixer?')) return;
+      if (!await App.showConfirm('Turn on the x32 Mixer?')) return;
       const btn = document.getElementById('x32-power-on');
       this._btnWorking(btn);
       try {
