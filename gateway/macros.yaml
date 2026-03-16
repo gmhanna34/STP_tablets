@@ -1903,6 +1903,9 @@ macros:
       # Round 3: Single IR pass as a last-resort backup for TVs unreachable via API.
       # Only one round — these are toggle codes, so a second pass would turn them on.
       - type: moip_ir
+        receiver: 4
+        code: "IRPowerOff"
+      - type: moip_ir
         receiver: 8
         code: "IRPowerOff"
       - type: moip_ir
@@ -1925,6 +1928,9 @@ macros:
         code: "IRPowerOff"
       - type: moip_ir
         receiver: 7
+        code: "IRPowerOff"
+      - type: moip_ir
+        receiver: 4
         code: "IRPowerOff"
       - type: notify
         message: "Social Hall video wall powered off"
