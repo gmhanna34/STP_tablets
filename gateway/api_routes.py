@@ -2028,6 +2028,19 @@ def register_api_routes(ctx):
         ea.unskip_event(event_key)
         return jsonify({"success": True}), 200
 
+    @app.route("/api/event-automation/events/<path:event_key>/teardown", methods=["POST"])
+    def api_event_automation_teardown(event_key: str):
+        ea = getattr(ctx, "event_automation", None)
+        if ea is None:
+            return jsonify({"error": "Event automation not available"}), 503
+        data = request.get_json(silent=True) or {}
+        enabled = data.get("enabled", True)
+        if enabled:
+            ea.enable_teardown(event_key)
+        else:
+            ea.disable_teardown(event_key)
+        return jsonify({"success": True, "teardown_enabled": enabled}), 200
+
     @app.route("/api/event-automation/events/<path:event_key>/override-profile", methods=["POST"])
     def api_event_automation_override_profile(event_key: str):
         ea = getattr(ctx, "event_automation", None)

@@ -1120,6 +1120,7 @@ event_automation:
   poll_interval_seconds: 900        # Re-fetch calendar every 15 minutes
   setup_lead_minutes: 30            # Run setup macros N minutes before event start
   teardown_delay_minutes: 15        # Run teardown macros N minutes after event end
+  auto_teardown: false              # Auto-teardown disabled by default; enable per-event from UI
   preflight_minutes: 45             # Run health pre-check N minutes before event start
   default_profile: "main_church"    # Fallback profile if no keyword match
   profiles:

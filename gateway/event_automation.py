@@ -41,6 +41,7 @@ class EventAutomation:
         self._preflight_minutes = int(self._cfg.get("preflight_minutes", 45))
         self._calendar_url = self._cfg.get("calendar_url", "")
         self._default_profile = self._cfg.get("default_profile", "")
+        self._auto_teardown = bool(self._cfg.get("auto_teardown", False))
 
         # Profiles: keyword → macro mapping
         self._profiles: Dict[str, dict] = self._cfg.get("profiles", {})
@@ -54,6 +55,7 @@ class EventAutomation:
         self._skipped: set = set()               # event_keys that the user manually skipped
         self._override_profiles: Dict[str, str] = {}  # event_key -> profile_id override
         self._preflight_results: Dict[str, dict] = {}  # event_key -> {checks, timestamp}
+        self._teardown_enabled: set = set()      # event_keys with per-event teardown enabled
 
         # Thread control
         self._stop = threading.Event()
@@ -127,6 +129,7 @@ class EventAutomation:
                     "teardown_time": teardown_time.isoformat(),
                     "preflight_time": preflight_time.isoformat(),
                     "status": status,
+                    "teardown_enabled": self._auto_teardown or event_key in self._teardown_enabled,
                     "preflight_result": self._preflight_results.get(event_key),
                 })
         result.sort(key=lambda e: e["start"])
@@ -150,6 +153,18 @@ class EventAutomation:
         """Remove skip flag from an event."""
         self._skipped.discard(event_key)
         logger.info(f"Event automation: unskipped event {event_key}")
+        return True
+
+    def enable_teardown(self, event_key: str) -> bool:
+        """Enable auto-teardown for a specific event."""
+        self._teardown_enabled.add(event_key)
+        logger.info(f"Event automation: teardown enabled for {event_key}")
+        return True
+
+    def disable_teardown(self, event_key: str) -> bool:
+        """Disable auto-teardown for a specific event."""
+        self._teardown_enabled.discard(event_key)
+        logger.info(f"Event automation: teardown disabled for {event_key}")
         return True
 
     def override_profile(self, event_key: str, profile_id: str) -> bool:
@@ -201,6 +216,7 @@ class EventAutomation:
             "upcoming_events": upcoming,
             "setup_lead_minutes": self._setup_lead,
             "teardown_delay_minutes": self._teardown_delay,
+            "auto_teardown": self._auto_teardown,
             "profiles_count": len(self._profiles),
         }
 
@@ -368,8 +384,9 @@ class EventAutomation:
                         if macro_key:
                             self._fire_macro(event_key, macro_key, "setup", ev.get("title", ""))
 
-                    # Teardown: fire once after teardown delay
-                    if now >= teardown_time and fired_state == "setup":
+                    # Teardown: fire once after teardown delay (only if enabled)
+                    teardown_on = self._auto_teardown or event_key in self._teardown_enabled
+                    if teardown_on and now >= teardown_time and fired_state == "setup":
                         macro_key = profile.get("teardown_macro", "")
                         if macro_key:
                             self._fire_macro(event_key, macro_key, "teardown", ev.get("title", ""))
@@ -501,6 +518,7 @@ class EventAutomation:
             self._skipped.discard(key)
             self._override_profiles.pop(key, None)
             self._preflight_results.pop(key, None)
+            self._teardown_enabled.discard(key)
 
 
 def _parse_rfc822(date_str: str) -> Optional[datetime]:

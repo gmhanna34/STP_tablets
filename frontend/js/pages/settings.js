@@ -1898,10 +1898,11 @@ const SettingsPage = {
       bar.innerHTML = `<span style="font-size:12px;color:var(--text-secondary);"><span class="material-icons" style="font-size:14px;vertical-align:text-bottom;">power_off</span> Automation disabled in config</span>`;
       return;
     }
+    const teardownLabel = s.auto_teardown ? `Teardown ${s.teardown_delay_minutes || 15}m after` : 'Teardown off (per-event)';
     bar.innerHTML = `
       <span class="schedule-status-chip schedule-status-ok"><span class="material-icons">event_available</span> ${s.upcoming_events || 0} upcoming</span>
       <span class="schedule-status-chip"><span class="material-icons">timer</span> Setup ${s.setup_lead_minutes || 30}m before</span>
-      <span class="schedule-status-chip"><span class="material-icons">timer_off</span> Teardown ${s.teardown_delay_minutes || 15}m after</span>
+      <span class="schedule-status-chip"><span class="material-icons">timer_off</span> ${teardownLabel}</span>
     `;
   },
 
@@ -1924,9 +1925,15 @@ const SettingsPage = {
       return;
     }
 
+    // Show only next 5 events by default
+    const maxVisible = 5;
+    const showAll = this._eaShowAll || false;
+    const visibleEvents = showAll ? this._eaEvents : this._eaEvents.slice(0, maxVisible);
+    const hasMore = this._eaEvents.length > maxVisible;
+
     // Group by date
     const groups = {};
-    for (const ev of this._eaEvents) {
+    for (const ev of visibleEvents) {
       const date = ev.start.split('T')[0];
       if (!groups[date]) groups[date] = [];
       groups[date].push(ev);
@@ -1954,6 +1961,9 @@ const SettingsPage = {
                ${ev.preflight_result.all_ok ? 'Preflight OK' : 'Preflight Warning'}
              </span>`
           : '';
+        const teardownBadge = ev.teardown_enabled
+          ? '<span style="font-size:10px;padding:1px 5px;border-radius:6px;background:#e3f2fd;color:#1565c0;">Teardown</span>'
+          : '';
 
         html += `<div class="health-item" style="margin-bottom:4px;cursor:pointer;" data-ea-key="${this._escAttr(ev.key)}">
           <div style="min-width:0;flex:1;">
@@ -1965,6 +1975,7 @@ const SettingsPage = {
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
+            ${teardownBadge}
             ${preflightBadge}
             <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${statusInfo.bg};color:${statusInfo.color};">
               ${statusInfo.label}
@@ -1975,7 +1986,21 @@ const SettingsPage = {
       html += '</div>';
     }
 
+    // Show more / show less toggle
+    if (hasMore) {
+      const remaining = this._eaEvents.length - maxVisible;
+      html += showAll
+        ? `<div style="text-align:center;margin-top:4px;"><button class="btn" id="ea-toggle-more" style="min-height:auto;padding:4px 14px;font-size:11px;">Show Less</button></div>`
+        : `<div style="text-align:center;margin-top:4px;"><button class="btn" id="ea-toggle-more" style="min-height:auto;padding:4px 14px;font-size:11px;">Show ${remaining} More</button></div>`;
+    }
+
     container.innerHTML = html;
+
+    // Show more/less toggle
+    document.getElementById('ea-toggle-more')?.addEventListener('click', () => {
+      this._eaShowAll = !this._eaShowAll;
+      this._renderEAEvents(container);
+    });
 
     // Bind click handlers to open event detail
     container.querySelectorAll('[data-ea-key]').forEach(el => {
@@ -2046,6 +2071,15 @@ const SettingsPage = {
         <div class="schedule-detail-row"><span class="schedule-detail-label">Teardown at</span><span class="schedule-detail-value">${teardownTime}</span></div>
         <div class="schedule-detail-row"><span class="schedule-detail-label">Setup Macro</span><span class="schedule-detail-value"><code style="font-size:12px;">${this._esc(ev.setup_macro || 'none')}</code></span></div>
         <div class="schedule-detail-row"><span class="schedule-detail-label">Teardown Macro</span><span class="schedule-detail-value"><code style="font-size:12px;">${this._esc(ev.teardown_macro || 'none')}</code></span></div>
+        <div class="schedule-detail-row">
+          <span class="schedule-detail-label">Auto Teardown</span>
+          <span class="schedule-detail-value">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" id="ea-teardown-toggle" ${ev.teardown_enabled ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;">
+              <span style="font-size:12px;color:var(--text-secondary);">${ev.teardown_enabled ? 'Will auto-teardown after service' : 'Manual teardown only'}</span>
+            </label>
+          </span>
+        </div>
         <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
           <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Profile Override</div>
           <select class="schedule-profile-select" id="ea-profile-select" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;">
@@ -2115,6 +2149,17 @@ const SettingsPage = {
       const updated = this._eaEvents.find(e => e.key === key);
       overlay.classList.add('hidden');
       if (updated) this._openEAModal(updated);
+    });
+    document.getElementById('ea-teardown-toggle')?.addEventListener('change', async (e) => {
+      const enabled = e.target.checked;
+      await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/teardown`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
+      });
+      App.showToast(enabled ? 'Auto-teardown enabled' : 'Auto-teardown disabled', 2000);
+      this._loadEAEvents();
+      // Update label next to checkbox
+      const label = e.target.nextElementSibling;
+      if (label) label.textContent = enabled ? 'Will auto-teardown after service' : 'Manual teardown only';
     });
     document.getElementById('ea-profile-select')?.addEventListener('change', async (e) => {
       await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/override-profile`, {

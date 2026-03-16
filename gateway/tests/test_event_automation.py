@@ -272,6 +272,15 @@ class TestSkipAndOverride:
         assert self.ea.override_profile("test_key", "")
         assert "test_key" not in self.ea._override_profiles
 
+    def test_enable_teardown(self):
+        assert self.ea.enable_teardown("test_key")
+        assert "test_key" in self.ea._teardown_enabled
+
+    def test_disable_teardown(self):
+        self.ea.enable_teardown("test_key")
+        assert self.ea.disable_teardown("test_key")
+        assert "test_key" not in self.ea._teardown_enabled
+
 
 # ---------------------------------------------------------------------------
 # Get Upcoming Events
@@ -310,6 +319,7 @@ class TestGetUpcomingEvents:
         assert "setup_macro" in ev
         assert "teardown_macro" in ev
         assert "status" in ev
+        assert "teardown_enabled" in ev
 
     def test_upcoming_status(self):
         events = self.ea.get_upcoming_events(hours=48)
@@ -324,6 +334,30 @@ class TestGetUpcomingEvents:
         events = self.ea.get_upcoming_events(hours=48)
         skipped = next(e for e in events if e["key"] == key)
         assert skipped["status"] == "skipped"
+
+    def test_teardown_disabled_by_default(self):
+        events = self.ea.get_upcoming_events(hours=48)
+        for ev in events:
+            assert ev["teardown_enabled"] is False
+
+    def test_teardown_enabled_per_event(self):
+        events = self.ea.get_upcoming_events(hours=48)
+        key = events[0]["key"]
+        self.ea.enable_teardown(key)
+        events = self.ea.get_upcoming_events(hours=48)
+        toggled = next(e for e in events if e["key"] == key)
+        assert toggled["teardown_enabled"] is True
+
+    def test_teardown_enabled_globally(self):
+        cfg = dict(SAMPLE_CFG)
+        cfg["event_automation"] = dict(cfg["event_automation"], auto_teardown=True)
+        ea = EventAutomation(cfg, _make_ctx())
+        now = datetime.now(TZ)
+        ea._events = [
+            {"title": "Sunday Liturgy", "start": now + timedelta(hours=2), "end": now + timedelta(hours=5)},
+        ]
+        events = ea.get_upcoming_events(hours=48)
+        assert events[0]["teardown_enabled"] is True
 
     def test_events_sorted_by_start(self):
         events = self.ea.get_upcoming_events(hours=48)
@@ -363,6 +397,7 @@ class TestGetStatus:
         assert status["enabled"] is True
         assert status["profiles_count"] == 3
         assert status["setup_lead_minutes"] == 30
+        assert status["auto_teardown"] is False
 
     def test_status_when_disabled(self):
         cfg = {"event_automation": {"enabled": False}}
@@ -472,6 +507,7 @@ class TestCleanup:
         ea._skipped.add(key)
         ea._override_profiles[key] = "chapel"
         ea._preflight_results[key] = {"all_ok": True}
+        ea._teardown_enabled.add(key)
 
         ea._cleanup_old_state(now)
 
@@ -479,3 +515,4 @@ class TestCleanup:
         assert key not in ea._skipped
         assert key not in ea._override_profiles
         assert key not in ea._preflight_results
+        assert key not in ea._teardown_enabled
