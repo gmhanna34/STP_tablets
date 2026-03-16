@@ -510,24 +510,6 @@ const SettingsPage = {
             </div>
           </div>
 
-          <!-- HA Automations Panel -->
-          <div id="ha-automations-overlay" class="overlay hidden">
-            <div class="modal" style="width:95%;max-width:700px;height:85vh;display:flex;flex-direction:column;">
-              <div class="modal-header-bar">
-                <h2>Home Assistant Automations</h2>
-                <button class="modal-close" id="ha-automations-close">
-                  <span class="material-icons">close</span>
-                </button>
-              </div>
-              <div style="padding:8px 12px 0;">
-                <input type="text" id="ha-automations-search" placeholder="Search automations..."
-                  style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
-              </div>
-              <div class="modal-body" id="ha-automations-body" style="flex:1;overflow-y:auto;padding:8px 12px;">
-                <div class="text-center" style="opacity:0.5;padding:30px;">Loading automations...</div>
-              </div>
-            </div>
-          </div>
 
           <div class="control-section col-span-6">
             <div class="section-title">System Information</div>
@@ -693,13 +675,6 @@ const SettingsPage = {
     document.getElementById('btn-ha-browse')?.addEventListener('click', () => this.openHABrowserPanel());
     document.getElementById('btn-ha-yaml')?.addEventListener('click', () => this.downloadHAYaml());
     document.getElementById('btn-ha-automations')?.addEventListener('click', () => this._openHAAutomations());
-    document.getElementById('ha-automations-close')?.addEventListener('click', () => {
-      document.getElementById('ha-automations-overlay')?.classList.add('hidden');
-    });
-    document.getElementById('ha-automations-overlay')?.addEventListener('click', (e) => {
-      if (e.target.id === 'ha-automations-overlay') e.target.classList.add('hidden');
-    });
-    document.getElementById('ha-automations-search')?.addEventListener('input', () => this._filterHAAutomations());
 
     // Logout
     document.getElementById('btn-logout')?.addEventListener('click', () => {
@@ -2781,51 +2756,65 @@ const SettingsPage = {
 
   _haAutomations: [],
   _haAutomationsExpanded: null,
+  _haAutomationsPanelBody: null,
 
   async _openHAAutomations() {
-    const overlay = document.getElementById('ha-automations-overlay');
-    const body = document.getElementById('ha-automations-body');
-    const search = document.getElementById('ha-automations-search');
-    if (!overlay || !body) return;
-
-    overlay.classList.remove('hidden');
-    if (search) search.value = '';
-    body.innerHTML = '<div class="text-center" style="opacity:0.5;padding:30px;">Loading automations...</div>';
+    const self = this;
     this._haAutomationsExpanded = null;
 
-    try {
-      const resp = await fetch('/api/ha/automations');
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-      this._haAutomations = data.automations || [];
-      this._renderHAAutomations();
-    } catch (e) {
-      body.innerHTML = `<div style="color:var(--down);text-align:center;padding:20px;">Failed to load automations: ${e.message}</div>`;
-    }
-  },
+    App.showPanel('Home Assistant Automations', async (body) => {
+      self._haAutomationsPanelBody = body;
 
-  _filterHAAutomations() {
-    this._haAutomationsExpanded = null;
-    this._renderHAAutomations();
+      body.innerHTML = `
+        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+          <input type="text" id="ha-automations-search" placeholder="Search automations..."
+            style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:14px;font-family:inherit;">
+          <span id="ha-automations-count" style="font-size:12px;opacity:0.6;white-space:nowrap;"></span>
+        </div>
+        <div id="ha-automations-list">
+          <div style="opacity:0.5;padding:20px;text-align:center;">Loading automations...</div>
+        </div>
+      `;
+
+      body.querySelector('#ha-automations-search')?.addEventListener('input', () => {
+        self._haAutomationsExpanded = null;
+        self._renderHAAutomations();
+      });
+
+      try {
+        const resp = await fetch('/api/ha/automations');
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        self._haAutomations = data.automations || [];
+        self._renderHAAutomations();
+      } catch (e) {
+        body.querySelector('#ha-automations-list').innerHTML =
+          `<div style="color:var(--danger);text-align:center;padding:20px;">Failed to load automations: ${e.message}</div>`;
+      }
+    });
   },
 
   _renderHAAutomations() {
-    const body = document.getElementById('ha-automations-body');
-    const search = (document.getElementById('ha-automations-search')?.value || '').toLowerCase();
+    const body = this._haAutomationsPanelBody;
     if (!body) return;
+    const list = body.querySelector('#ha-automations-list');
+    const countEl = body.querySelector('#ha-automations-count');
+    const search = (body.querySelector('#ha-automations-search')?.value || '').toLowerCase();
+    if (!list) return;
 
     const filtered = this._haAutomations.filter(a => {
       if (!search) return true;
       return a.friendly_name.toLowerCase().includes(search) || a.entity_id.toLowerCase().includes(search);
     });
 
+    if (countEl) countEl.textContent = `${filtered.length} automation${filtered.length !== 1 ? 's' : ''}`;
+
     if (filtered.length === 0) {
-      body.innerHTML = '<div style="opacity:0.5;text-align:center;padding:20px;">No automations found.</div>';
+      list.innerHTML = '<div style="opacity:0.5;text-align:center;padding:20px;">No automations found.</div>';
       return;
     }
 
-    let html = `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">${filtered.length} automation${filtered.length !== 1 ? 's' : ''}</div>`;
-
+    let html = '';
     for (const a of filtered) {
       const isExpanded = this._haAutomationsExpanded === a.entity_id;
       const chevron = isExpanded ? 'expand_less' : 'expand_more';
@@ -2862,25 +2851,26 @@ const SettingsPage = {
       </div>`;
     }
 
-    body.innerHTML = html;
+    list.innerHTML = html;
 
     // Bind expand/collapse
-    body.querySelectorAll('[data-ha-auto]').forEach(el => {
+    list.querySelectorAll('[data-ha-auto]').forEach(el => {
       el.addEventListener('click', () => {
         const eid = el.dataset.haAuto;
         if (this._haAutomationsExpanded === eid) {
           this._haAutomationsExpanded = null;
-          this._renderHAAutomations();
         } else {
           this._haAutomationsExpanded = eid;
-          this._renderHAAutomations();
-          this._loadHAAutomationConfig(eid);
+        }
+        this._renderHAAutomations();
+        if (this._haAutomationsExpanded) {
+          this._loadHAAutomationConfig(this._haAutomationsExpanded);
         }
       });
     });
 
     // Bind trigger buttons
-    body.querySelectorAll('.ha-auto-trigger').forEach(btn => {
+    list.querySelectorAll('.ha-auto-trigger').forEach(btn => {
       btn.addEventListener('click', async () => {
         const eid = btn.dataset.triggerId;
         btn.disabled = true;
@@ -2892,8 +2882,6 @@ const SettingsPage = {
           });
           if (resp.ok) {
             App.showToast('Automation triggered', 2000);
-            // Refresh list after a moment to get updated last_triggered
-            setTimeout(() => this._openHAAutomations(), 1500);
           } else {
             App.showToast('Trigger failed', 2000, 'error');
           }
