@@ -98,7 +98,7 @@ const SourcePage = {
           <div class="control-section">
             <div class="section-title">Quick Actions</div>
             <div class="control-grid" style="grid-template-columns:repeat(5, 1fr);" id="x32-quick-actions">
-              <button class="btn" id="x32-power-on"><span class="material-icons">power_settings_new</span><span class="btn-label">Power On</span></button>
+              <button class="btn" id="x32-power-on"><span class="material-icons">power_settings_new</span><span class="btn-label">Power On x32</span></button>
               <button class="btn" id="x32-mute-all"><span class="material-icons">volume_off</span><span class="btn-label">Mute All</span></button>
               <button class="btn" id="x32-unmute-all"><span class="material-icons">volume_up</span><span class="btn-label">Unmute All</span></button>
               <button class="btn" id="x32-reload-scene"><span class="material-icons">refresh</span><span class="btn-label">Reload Scene</span></button>
