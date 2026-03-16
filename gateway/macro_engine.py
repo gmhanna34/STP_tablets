@@ -6,6 +6,7 @@ import concurrent.futures
 import json
 import logging
 import os
+import socket
 import time
 from typing import Any, Dict, Optional, Set
 
@@ -711,10 +712,16 @@ def _step_tts_announce(ctx, step: dict, tablet: str) -> dict:
     """Execute a TTS announcement step (preset, sequence, or inline text)."""
     if not ctx.announcements:
         return {"success": False, "error": "Announcement module not available"}
-    # Build gateway origin for audio URLs
+    # Build gateway origin for audio URLs — must use a LAN-reachable IP
+    # so the WiiM speaker (via HA play_media) can fetch the audio file.
+    # 127.0.0.1 is unreachable from external devices.
     gw_cfg = ctx.cfg.get("gateway", {})
     port = gw_cfg.get("port", 20858)
-    gateway_origin = f"http://127.0.0.1:{port}"
+    try:
+        lan_ip = socket.gethostbyname(socket.gethostname())
+    except Exception:
+        lan_ip = "127.0.0.1"
+    gateway_origin = f"http://{lan_ip}:{port}"
     result = ctx.announcements.execute_macro_step(step, gateway_origin, tablet)
     ok = result.get("success", False) and "error" not in result
     if ok:
