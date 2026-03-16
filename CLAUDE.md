@@ -40,8 +40,14 @@ STP_tablets/              → Gateway + Frontend (this repo)
 │   └── assets/
 ├── hooks/                → Git hooks (copy to .git/hooks/ after clone)
 │   └── pre-commit        ← Runs tests + auto-increments version (YY-NNN)
-├── CLAUDE.md
-└── DEPLOYMENT.md
+├── docs/                 → All documentation
+│   ├── DEPLOYMENT.md     ← Operations guide
+│   ├── MIGRATION_GUIDE_MAC.md ← macOS setup
+│   ├── MIGRATION_GUIDE_PC.md  ← Windows setup
+│   ├── MACRO_REFERENCE.md     ← All macros & buttons explained
+│   ├── PAGE_GUIDE.md          ← Page-by-page UI walkthrough
+│   └── ...
+└── CLAUDE.md             ← AI assistant project context (stays at root)
 
 STP_scripts/              → Middleware proxies (archived, rollback only)
 STP_healthdash/           → Monitoring dashboard (archived, absorbed in Phase 4)
@@ -185,8 +191,8 @@ The gateway has been modularized into 17 Python modules (~11,000 lines total):
 - **Server:** Currently Windows PC; migrating to Mac Mini (see Consolidation Plan / Phase 8 below)
 - **OBS + Camlytics:** Remain on existing Windows PC (GPU/display dependent)
 - **Tablets:** iPads and Android tablets in kiosk mode on LAN
-- See `DEPLOYMENT.md` for full operations guide
-- See `MIGRATION_GUIDE_PC.md` and `MIGRATION_GUIDE_MAC.md` for fresh-install setup
+- See `docs/DEPLOYMENT.md` for full operations guide
+- See `docs/MIGRATION_GUIDE_PC.md` and `docs/MIGRATION_GUIDE_MAC.md` for fresh-install setup
 
 ## Credentials (dev/test)
 
@@ -335,7 +341,7 @@ After consolidation, only **one repo** is actively maintained:
 
 Two comprehensive migration guides exist for setting up the system on a fresh machine:
 
-- **`MIGRATION_GUIDE_PC.md`** — Windows PC setup (NSSM services, PowerShell firewall, .bat scripts)
-- **`MIGRATION_GUIDE_MAC.md`** — macOS setup (launchd plists, Homebrew, shell scripts)
+- **`docs/MIGRATION_GUIDE_PC.md`** — Windows PC setup (NSSM services, PowerShell firewall, .bat scripts)
+- **`docs/MIGRATION_GUIDE_MAC.md`** — macOS setup (launchd plists, Homebrew, shell scripts)
 
 > **Note:** These guides reflect the **consolidated** single-gateway architecture. Only one Python process from one repo (`STP_tablets`) needs to be deployed. OBS Studio and Camlytics remain on the Windows PC.
