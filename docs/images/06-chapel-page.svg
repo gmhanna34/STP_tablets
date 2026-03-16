@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450">
+  <rect width="800" height="450" fill="#1a1a2e" rx="12"/>
+  <rect x="4" y="4" width="792" height="442" fill="none" stroke="#4a4a6a" stroke-width="2" stroke-dasharray="12,6" rx="10"/>
+  <text x="400" y="195" text-anchor="middle" fill="#8888aa" font-family="system-ui,sans-serif" font-size="22">SCREENSHOT NEEDED</text>
+  <text x="400" y="235" text-anchor="middle" fill="#ccccdd" font-family="system-ui,sans-serif" font-size="18" font-weight="bold">Chapel page</text>
+  <text x="400" y="290" text-anchor="middle" fill="#666680" font-family="system-ui,sans-serif" font-size="14">Replace this file with an actual screenshot (.png)</text>
+</svg>
