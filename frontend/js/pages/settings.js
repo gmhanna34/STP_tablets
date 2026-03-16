@@ -494,7 +494,7 @@ const SettingsPage = {
 
           <div class="control-section col-span-6">
             <div class="section-title">Home Assistant</div>
-            <div class="control-grid" style="grid-template-columns:1fr 1fr;">
+            <div class="control-grid" style="grid-template-columns:1fr 1fr 1fr;">
               <button class="btn" id="btn-ha-browse">
                 <span class="material-icons">search</span>
                 <span class="btn-label">Browse Entities</span>
@@ -503,6 +503,29 @@ const SettingsPage = {
                 <span class="material-icons">download</span>
                 <span class="btn-label">Download YAML</span>
               </button>
+              <button class="btn" id="btn-ha-automations">
+                <span class="material-icons">smart_toy</span>
+                <span class="btn-label">Automations</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- HA Automations Panel -->
+          <div id="ha-automations-overlay" class="overlay hidden">
+            <div class="modal" style="width:95%;max-width:700px;height:85vh;display:flex;flex-direction:column;">
+              <div class="modal-header-bar">
+                <h2>Home Assistant Automations</h2>
+                <button class="modal-close" id="ha-automations-close">
+                  <span class="material-icons">close</span>
+                </button>
+              </div>
+              <div style="padding:8px 12px 0;">
+                <input type="text" id="ha-automations-search" placeholder="Search automations..."
+                  style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+              </div>
+              <div class="modal-body" id="ha-automations-body" style="flex:1;overflow-y:auto;padding:8px 12px;">
+                <div class="text-center" style="opacity:0.5;padding:30px;">Loading automations...</div>
+              </div>
             </div>
           </div>
 
@@ -669,6 +692,14 @@ const SettingsPage = {
     // HA Entity Browser
     document.getElementById('btn-ha-browse')?.addEventListener('click', () => this.openHABrowserPanel());
     document.getElementById('btn-ha-yaml')?.addEventListener('click', () => this.downloadHAYaml());
+    document.getElementById('btn-ha-automations')?.addEventListener('click', () => this._openHAAutomations());
+    document.getElementById('ha-automations-close')?.addEventListener('click', () => {
+      document.getElementById('ha-automations-overlay')?.classList.add('hidden');
+    });
+    document.getElementById('ha-automations-overlay')?.addEventListener('click', (e) => {
+      if (e.target.id === 'ha-automations-overlay') e.target.classList.add('hidden');
+    });
+    document.getElementById('ha-automations-search')?.addEventListener('input', () => this._filterHAAutomations());
 
     // Logout
     document.getElementById('btn-logout')?.addEventListener('click', () => {
@@ -2742,6 +2773,292 @@ const SettingsPage = {
     } catch (e) {
       App.showToast('Failed to download YAML', 3000, 'error');
     }
+  },
+
+  // =========================================================================
+  // HA AUTOMATIONS PANEL
+  // =========================================================================
+
+  _haAutomations: [],
+  _haAutomationsExpanded: null,
+
+  async _openHAAutomations() {
+    const overlay = document.getElementById('ha-automations-overlay');
+    const body = document.getElementById('ha-automations-body');
+    const search = document.getElementById('ha-automations-search');
+    if (!overlay || !body) return;
+
+    overlay.classList.remove('hidden');
+    if (search) search.value = '';
+    body.innerHTML = '<div class="text-center" style="opacity:0.5;padding:30px;">Loading automations...</div>';
+    this._haAutomationsExpanded = null;
+
+    try {
+      const resp = await fetch('/api/ha/automations');
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      this._haAutomations = data.automations || [];
+      this._renderHAAutomations();
+    } catch (e) {
+      body.innerHTML = `<div style="color:var(--down);text-align:center;padding:20px;">Failed to load automations: ${e.message}</div>`;
+    }
+  },
+
+  _filterHAAutomations() {
+    this._haAutomationsExpanded = null;
+    this._renderHAAutomations();
+  },
+
+  _renderHAAutomations() {
+    const body = document.getElementById('ha-automations-body');
+    const search = (document.getElementById('ha-automations-search')?.value || '').toLowerCase();
+    if (!body) return;
+
+    const filtered = this._haAutomations.filter(a => {
+      if (!search) return true;
+      return a.friendly_name.toLowerCase().includes(search) || a.entity_id.toLowerCase().includes(search);
+    });
+
+    if (filtered.length === 0) {
+      body.innerHTML = '<div style="opacity:0.5;text-align:center;padding:20px;">No automations found.</div>';
+      return;
+    }
+
+    let html = `<div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">${filtered.length} automation${filtered.length !== 1 ? 's' : ''}</div>`;
+
+    for (const a of filtered) {
+      const isExpanded = this._haAutomationsExpanded === a.entity_id;
+      const chevron = isExpanded ? 'expand_less' : 'expand_more';
+      const stateColor = a.state === 'on' ? 'var(--ok)' : 'var(--text-secondary)';
+      const stateIcon = a.state === 'on' ? 'toggle_on' : 'toggle_off';
+
+      let lastTriggered = 'Never';
+      if (a.last_triggered) {
+        const dt = new Date(a.last_triggered);
+        if (dt.getFullYear() > 2000) {
+          lastTriggered = this._haRelativeTime(dt);
+        }
+      }
+
+      html += `<div style="margin-bottom:4px;">
+        <div class="health-item" style="cursor:pointer;" data-ha-auto="${this._escAttr(a.entity_id)}">
+          <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
+            <span class="material-icons" style="font-size:18px;color:${stateColor};">${stateIcon}</span>
+            <div style="min-width:0;flex:1;">
+              <div class="health-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._esc(a.friendly_name)}</div>
+              <div style="font-size:11px;color:var(--text-secondary);">Last: ${lastTriggered}</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <button class="btn ha-auto-trigger" data-trigger-id="${this._escAttr(a.entity_id)}" style="min-height:auto;padding:4px 10px;font-size:11px;" title="Run now" onclick="event.stopPropagation();">
+              <span class="material-icons" style="font-size:14px;">play_arrow</span> Run
+            </button>
+            <span class="material-icons" style="font-size:18px;color:var(--text-secondary);">${chevron}</span>
+          </div>
+        </div>
+        ${isExpanded ? `<div class="ha-auto-detail" id="ha-auto-detail-${this._escAttr(a.entity_id)}" style="padding:8px 12px;margin-top:2px;background:var(--surface);border:1px solid var(--border);border-radius:0 0 8px 8px;animation:fadeIn 0.15s ease-out;">
+          <div style="opacity:0.5;font-size:12px;">Loading actions...</div>
+        </div>` : ''}
+      </div>`;
+    }
+
+    body.innerHTML = html;
+
+    // Bind expand/collapse
+    body.querySelectorAll('[data-ha-auto]').forEach(el => {
+      el.addEventListener('click', () => {
+        const eid = el.dataset.haAuto;
+        if (this._haAutomationsExpanded === eid) {
+          this._haAutomationsExpanded = null;
+          this._renderHAAutomations();
+        } else {
+          this._haAutomationsExpanded = eid;
+          this._renderHAAutomations();
+          this._loadHAAutomationConfig(eid);
+        }
+      });
+    });
+
+    // Bind trigger buttons
+    body.querySelectorAll('.ha-auto-trigger').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const eid = btn.dataset.triggerId;
+        btn.disabled = true;
+        try {
+          const resp = await fetch('/api/ha/service/automation/trigger', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ entity_id: eid }),
+          });
+          if (resp.ok) {
+            App.showToast('Automation triggered', 2000);
+            // Refresh list after a moment to get updated last_triggered
+            setTimeout(() => this._openHAAutomations(), 1500);
+          } else {
+            App.showToast('Trigger failed', 2000, 'error');
+          }
+        } catch (e) {
+          App.showToast('Trigger failed', 2000, 'error');
+        }
+        btn.disabled = false;
+      });
+    });
+  },
+
+  async _loadHAAutomationConfig(entityId) {
+    const autoId = entityId.replace('automation.', '');
+    const detail = document.getElementById(`ha-auto-detail-${entityId}`);
+    if (!detail) return;
+
+    try {
+      const resp = await fetch(`/api/ha/automations/${encodeURIComponent(autoId)}/config`);
+      if (!resp.ok) {
+        detail.innerHTML = '<div style="font-size:12px;color:var(--text-secondary);">Could not load automation config.</div>';
+        return;
+      }
+      const config = await resp.json();
+      let html = '';
+
+      // Triggers
+      const triggers = config.trigger || config.triggers || [];
+      if (triggers.length > 0) {
+        html += '<div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Triggers</div>';
+        for (const t of triggers) {
+          const desc = t.alias || t.platform || t.trigger || t.type || JSON.stringify(t).substring(0, 80);
+          html += `<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:2px;">
+            <span class="material-icons" style="font-size:14px;color:var(--accent);">bolt</span>
+            <span>${this._esc(String(desc))}</span>
+          </div>`;
+        }
+      }
+
+      // Conditions
+      const conditions = config.condition || config.conditions || [];
+      if (conditions.length > 0) {
+        html += '<div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-top:8px;margin-bottom:4px;">Conditions</div>';
+        for (const c of conditions) {
+          const desc = c.alias || c.condition || JSON.stringify(c).substring(0, 80);
+          html += `<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:2px;">
+            <span class="material-icons" style="font-size:14px;color:var(--warn);">filter_alt</span>
+            <span>${this._esc(String(desc))}</span>
+          </div>`;
+        }
+      }
+
+      // Actions
+      const actions = config.action || config.actions || [];
+      if (actions.length > 0) {
+        html += '<div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-top:8px;margin-bottom:4px;">Actions</div>';
+        for (const a of actions) {
+          html += this._renderHAAction(a, 0);
+        }
+      }
+
+      if (!html) {
+        html = '<div style="font-size:12px;color:var(--text-secondary);">No configuration details available.</div>';
+      }
+
+      detail.innerHTML = html;
+    } catch (e) {
+      detail.innerHTML = `<div style="font-size:12px;color:var(--down);">Error: ${e.message}</div>`;
+    }
+  },
+
+  _renderHAAction(action, depth) {
+    const indent = depth * 16;
+    const alias = action.alias ? `<strong>${this._esc(action.alias)}</strong> — ` : '';
+
+    // Service call
+    if (action.service || action.action) {
+      const svc = action.service || action.action;
+      const target = action.target?.entity_id || action.entity_id || '';
+      const targetStr = Array.isArray(target) ? target.join(', ') : target;
+      return `<div style="display:flex;align-items:flex-start;gap:6px;font-size:12px;margin-bottom:2px;margin-left:${indent}px;">
+        <span class="material-icons" style="font-size:14px;color:var(--info);flex-shrink:0;margin-top:1px;">play_circle</span>
+        <span>${alias}<code style="font-size:11px;">${this._esc(svc)}</code>${targetStr ? ` → <span style="color:var(--text-secondary);">${this._esc(targetStr)}</span>` : ''}</span>
+      </div>`;
+    }
+
+    // Delay
+    if (action.delay !== undefined) {
+      const d = typeof action.delay === 'object' ? JSON.stringify(action.delay) : action.delay;
+      return `<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:2px;margin-left:${indent}px;">
+        <span class="material-icons" style="font-size:14px;color:var(--text-secondary);">hourglass_empty</span>
+        <span>${alias}Delay: ${this._esc(String(d))}</span>
+      </div>`;
+    }
+
+    // Choose
+    if (action.choose) {
+      let html = `<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:2px;margin-left:${indent}px;">
+        <span class="material-icons" style="font-size:14px;color:var(--accent);">call_split</span>
+        <span>${alias}<em>Choose</em></span>
+      </div>`;
+      for (const option of action.choose) {
+        const label = option.alias || 'Option';
+        html += `<div style="font-size:11px;margin-left:${indent + 16}px;margin-bottom:2px;color:var(--text-secondary);">${this._esc(label)}</div>`;
+        for (const sub of (option.sequence || [])) {
+          html += this._renderHAAction(sub, depth + 2);
+        }
+      }
+      if (action.default) {
+        html += `<div style="font-size:11px;margin-left:${indent + 16}px;margin-bottom:2px;color:var(--text-secondary);">Default</div>`;
+        for (const sub of action.default) {
+          html += this._renderHAAction(sub, depth + 2);
+        }
+      }
+      return html;
+    }
+
+    // Repeat
+    if (action.repeat) {
+      let html = `<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:2px;margin-left:${indent}px;">
+        <span class="material-icons" style="font-size:14px;color:var(--accent);">replay</span>
+        <span>${alias}<em>Repeat</em></span>
+      </div>`;
+      for (const sub of (action.repeat.sequence || [])) {
+        html += this._renderHAAction(sub, depth + 1);
+      }
+      return html;
+    }
+
+    // If/Then/Else
+    if (action.if) {
+      let html = `<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:2px;margin-left:${indent}px;">
+        <span class="material-icons" style="font-size:14px;color:var(--warn);">call_split</span>
+        <span>${alias}<em>If/Then</em></span>
+      </div>`;
+      for (const sub of (action.then || [])) {
+        html += this._renderHAAction(sub, depth + 1);
+      }
+      if (action.else) {
+        html += `<div style="font-size:11px;margin-left:${indent + 16}px;margin-bottom:2px;color:var(--text-secondary);">Else</div>`;
+        for (const sub of action.else) {
+          html += this._renderHAAction(sub, depth + 1);
+        }
+      }
+      return html;
+    }
+
+    // Fallback — show raw JSON
+    const raw = JSON.stringify(action, null, 0).substring(0, 100);
+    return `<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:2px;margin-left:${indent}px;">
+      <span class="material-icons" style="font-size:14px;color:var(--text-secondary);">code</span>
+      <span>${alias}<code style="font-size:11px;word-break:break-all;">${this._esc(raw)}</code></span>
+    </div>`;
+  },
+
+  _haRelativeTime(date) {
+    const now = new Date();
+    const diff = now - date;
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   },
 
   // =========================================================================

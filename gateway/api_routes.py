@@ -1495,6 +1495,52 @@ def register_api_routes(ctx):
         except Exception as e:
             return jsonify({"error": str(e)}), 503
 
+    # ---- Home Assistant Automations ----
+
+    @app.route("/api/ha/automations")
+    def ha_automations():
+        """Return all HA automations with state, last_triggered, and friendly_name."""
+        if mock_mode:
+            return jsonify({"automations": [], "mock": True}), 200
+        try:
+            all_entities, err = fetch_all_ha_entities(ctx)
+            if err:
+                return jsonify({"error": err}), 503
+        except Exception as e:
+            return jsonify({"error": str(e)}), 503
+        automations = []
+        for entity in all_entities:
+            eid = entity.get("entity_id", "")
+            if not eid.startswith("automation."):
+                continue
+            attrs = entity.get("attributes", {})
+            automations.append({
+                "entity_id": eid,
+                "id": attrs.get("id", eid.split(".", 1)[1]),
+                "friendly_name": attrs.get("friendly_name", eid),
+                "state": entity.get("state", "unknown"),
+                "last_triggered": attrs.get("last_triggered"),
+                "current": attrs.get("current", False),
+            })
+        automations.sort(key=lambda a: a["friendly_name"].lower())
+        return jsonify({"automations": automations}), 200
+
+    @app.route("/api/ha/automations/<path:automation_id>/config")
+    def ha_automation_config(automation_id: str):
+        """Fetch the full config (triggers, conditions, actions) for a specific automation."""
+        ha_cfg_ha = cfg.get("home_assistant", {})
+        if mock_mode:
+            return jsonify({"id": automation_id, "action": [], "mock": True}), 200
+        url = f"{ha_cfg_ha['url']}/api/config/automation/config/{automation_id}"
+        headers = {"Authorization": f"Bearer {ha_cfg_ha['token']}", "Content-Type": "application/json"}
+        try:
+            resp = http_requests.get(url, headers=headers, timeout=ha_cfg_ha.get("timeout", 10))
+            if resp.status_code == 404:
+                return jsonify({"error": "Automation config not found"}), 404
+            return jsonify(resp.json()), resp.status_code
+        except Exception as e:
+            return jsonify({"error": str(e)}), 503
+
     # ---- TTS & Announcements ----
     # TTS generation via edge-tts, announcement presets/sequences, WiiM playback.
     # The announcement module (announcement_module.py) handles all logic.
