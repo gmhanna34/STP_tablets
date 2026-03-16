@@ -61,9 +61,6 @@ class EventAutomation:
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
-        # Load persisted overrides from database
-        self._load_persisted_state()
-
     # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------
@@ -110,6 +107,8 @@ class EventAutomation:
         if not self._calendar_url:
             logger.warning("Event automation enabled but no calendar_url configured")
             return
+        # Load persisted overrides now that ctx.db is available
+        self._load_persisted_state()
         self._thread = threading.Thread(target=self._run_loop, daemon=True, name="event-automation")
         self._thread.start()
         logger.info(f"Event automation started (poll every {self._poll_interval}s, "

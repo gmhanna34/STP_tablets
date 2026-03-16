@@ -335,6 +335,8 @@ class TestPersistence:
             {"event_key": "ev3", "field": "teardown", "value": ""},
         ]
         ea = EventAutomation(SAMPLE_CFG, ctx)
+        # _load_persisted_state is called in start(), simulate it directly
+        ea._load_persisted_state()
         assert "ev1" in ea._skipped
         assert ea._override_profiles.get("ev2") == "chapel"
         assert "ev3" in ea._teardown_enabled
