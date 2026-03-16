@@ -490,6 +490,49 @@ class TestVerifyPending:
         assert result["success"] is True
         assert result["steps_completed"] == 3
 
+    def test_failed_ha_service_with_verify_and_skip_still_queues(self):
+        """A failed ha_service (e.g. HA 500) with on_fail: skip + verify should
+        still queue verification so verify_pending can retry it."""
+        from macro_engine import _execute_step, _VerificationQueue
+
+        ctx = _make_ctx()
+        ctx.mock_mode = False  # Need real ha_service path to hit failure
+
+        step = {
+            "type": "ha_service", "domain": "switch", "service": "turn_on",
+            "data": {"entity_id": "switch.social_hall_amp"},
+            "on_fail": "skip",
+            "verify": True,
+        }
+        # HA is not configured (no url/token) so the call will fail
+        vq = _VerificationQueue()
+        result = _execute_step(ctx, step, "test-tablet", 0, verify_queue=vq)
+        assert result["success"] is False
+        # But the verification should still be queued for retry at verify_pending
+        assert len(vq) == 1
+        entry = vq.drain()[0]
+        assert entry.entity_id == "switch.social_hall_amp"
+        assert entry.expected_state == "on"
+
+    def test_failed_ha_service_with_abort_does_not_queue(self):
+        """A failed ha_service with on_fail: abort should NOT queue verification."""
+        from macro_engine import _execute_step, _VerificationQueue
+
+        ctx = _make_ctx()
+        ctx.mock_mode = False
+
+        step = {
+            "type": "ha_service", "domain": "switch", "service": "turn_on",
+            "data": {"entity_id": "switch.test"},
+            "on_fail": "abort",
+            "verify": True,
+        }
+        vq = _VerificationQueue()
+        result = _execute_step(ctx, step, "test-tablet", 0, verify_queue=vq)
+        assert result["success"] is False
+        # Should NOT queue — the macro will abort, not skip
+        assert len(vq) == 0
+
     def test_backward_compat_no_verify(self):
         """Steps without verify behave exactly as before."""
         ctx = _make_ctx({

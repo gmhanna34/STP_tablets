@@ -444,13 +444,20 @@ def _execute_step(ctx, step: dict, tablet: str, depth: int,
             return _step_ha_check(ctx, step)
         elif step_type == "ha_service":
             result = _step_ha_service(ctx, step, tablet)
-            # Queue background verification if step has verify and execution succeeded
-            if result["success"] and verify_queue is not None:
-                entry = _resolve_verify(step)
-                if entry:
-                    verify_queue.add(entry)
-                    logger.debug(f"Queued verification for {entry.entity_id} "
-                                 f"(expect={entry.expected_state})")
+            # Queue background verification whether the call succeeded or failed.
+            # On success: verify the device actually changed state.
+            # On failure (with on_fail: skip): verify_pending will retry the call,
+            # catching transient HA 500 errors that would otherwise be silently skipped.
+            if verify_queue is not None:
+                on_fail = step.get("on_fail", "abort")
+                should_queue = result["success"] or on_fail == "skip"
+                if should_queue:
+                    entry = _resolve_verify(step)
+                    if entry:
+                        verify_queue.add(entry)
+                        status = "ok" if result["success"] else "failed"
+                        logger.debug(f"Queued verification for {entry.entity_id} "
+                                     f"(expect={entry.expected_state}, call={status})")
             return result
         elif step_type == "door_timed_unlock":
             return _step_door_timed_unlock(ctx, step, tablet)
