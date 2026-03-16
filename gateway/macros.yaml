@@ -616,7 +616,7 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.sw_019_av_1moipcontroller" }
+        data: { entity_id: "switch.wb_003_av_floorswitch2_outlet_10" }
         on_fail: skip
         message: "Turning on MoIP controller"
         verify: true
@@ -1747,7 +1747,7 @@ macros:
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.sw_019_av_1moipcontroller" }
+        data: { entity_id: "switch.wb_003_av_floorswitch2_outlet_10" }
         on_fail: skip
         message: "Turning on MoIP controller"
         verify: true
