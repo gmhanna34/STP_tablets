@@ -55,6 +55,13 @@ class Database:
                 last_run TEXT,
                 created TEXT DEFAULT (datetime('now'))
             );
+            CREATE TABLE IF NOT EXISTS event_overrides (
+                event_key TEXT NOT NULL,
+                field TEXT NOT NULL,
+                value TEXT DEFAULT '',
+                updated_at TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (event_key, field)
+            );
             CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(timestamp);
             CREATE INDEX IF NOT EXISTS idx_audit_tablet ON audit_log(tablet_id);
         """)
@@ -204,4 +211,30 @@ class Database:
     def delete_schedule(self, sched_id: int):
         conn = self._get_conn()
         conn.execute("DELETE FROM schedules WHERE id=?", (sched_id,))
+        conn.commit()
+
+    # --- Event Automation Overrides ---
+
+    def save_event_override(self, event_key: str, field: str, value: str = ""):
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT INTO event_overrides (event_key, field, value) VALUES (?, ?, ?) "
+            "ON CONFLICT(event_key, field) DO UPDATE SET value=excluded.value, updated_at=datetime('now')",
+            (event_key, field, value),
+        )
+        conn.commit()
+
+    def delete_event_override(self, event_key: str, field: str):
+        conn = self._get_conn()
+        conn.execute("DELETE FROM event_overrides WHERE event_key=? AND field=?", (event_key, field))
+        conn.commit()
+
+    def get_event_overrides(self) -> list:
+        conn = self._get_conn()
+        rows = conn.execute("SELECT event_key, field, value FROM event_overrides").fetchall()
+        return [dict(r) for r in rows]
+
+    def delete_event_overrides_for_key(self, event_key: str):
+        conn = self._get_conn()
+        conn.execute("DELETE FROM event_overrides WHERE event_key=?", (event_key,))
         conn.commit()

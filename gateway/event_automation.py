@@ -61,6 +61,44 @@ class EventAutomation:
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
 
+        # Load persisted overrides from database
+        self._load_persisted_state()
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+
+    def _load_persisted_state(self):
+        """Load overrides, skips, and teardown flags from the database."""
+        try:
+            rows = self._ctx.db.get_event_overrides()
+            for row in rows:
+                key, field, value = row["event_key"], row["field"], row["value"]
+                if field == "skip":
+                    self._skipped.add(key)
+                elif field == "profile":
+                    self._override_profiles[key] = value
+                elif field == "teardown":
+                    self._teardown_enabled.add(key)
+            if rows:
+                logger.info(f"Event automation: loaded {len(rows)} persisted overrides from database")
+        except Exception as e:
+            logger.warning(f"Event automation: failed to load persisted state: {e}")
+
+    def _persist(self, event_key: str, field: str, value: str = ""):
+        """Save an override to the database."""
+        try:
+            self._ctx.db.save_event_override(event_key, field, value)
+        except Exception as e:
+            logger.warning(f"Event automation: failed to persist {field} for {event_key}: {e}")
+
+    def _unpersist(self, event_key: str, field: str):
+        """Remove an override from the database."""
+        try:
+            self._ctx.db.delete_event_override(event_key, field)
+        except Exception as e:
+            logger.warning(f"Event automation: failed to unpersist {field} for {event_key}: {e}")
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -146,24 +184,28 @@ class EventAutomation:
     def skip_event(self, event_key: str) -> bool:
         """Mark an event to be skipped (no auto-setup/teardown)."""
         self._skipped.add(event_key)
+        self._persist(event_key, "skip")
         logger.info(f"Event automation: skipped event {event_key}")
         return True
 
     def unskip_event(self, event_key: str) -> bool:
         """Remove skip flag from an event."""
         self._skipped.discard(event_key)
+        self._unpersist(event_key, "skip")
         logger.info(f"Event automation: unskipped event {event_key}")
         return True
 
     def enable_teardown(self, event_key: str) -> bool:
         """Enable auto-teardown for a specific event."""
         self._teardown_enabled.add(event_key)
+        self._persist(event_key, "teardown")
         logger.info(f"Event automation: teardown enabled for {event_key}")
         return True
 
     def disable_teardown(self, event_key: str) -> bool:
         """Disable auto-teardown for a specific event."""
         self._teardown_enabled.discard(event_key)
+        self._unpersist(event_key, "teardown")
         logger.info(f"Event automation: teardown disabled for {event_key}")
         return True
 
@@ -173,8 +215,10 @@ class EventAutomation:
             return False
         if profile_id:
             self._override_profiles[event_key] = profile_id
+            self._persist(event_key, "profile", profile_id)
         else:
             self._override_profiles.pop(event_key, None)
+            self._unpersist(event_key, "profile")
         logger.info(f"Event automation: profile override {event_key} -> {profile_id or 'auto'}")
         return True
 
@@ -519,6 +563,10 @@ class EventAutomation:
             self._override_profiles.pop(key, None)
             self._preflight_results.pop(key, None)
             self._teardown_enabled.discard(key)
+            try:
+                self._ctx.db.delete_event_overrides_for_key(key)
+            except Exception:
+                pass
 
 
 def _parse_rfc822(date_str: str) -> Optional[datetime]:

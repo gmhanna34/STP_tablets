@@ -93,6 +93,7 @@ def _make_ctx():
     ctx.mock_mode = True
     ctx.health = None
     ctx.db = MagicMock()
+    ctx.db.get_event_overrides.return_value = []
     ctx.socketio = MagicMock()
     return ctx
 
@@ -280,6 +281,74 @@ class TestSkipAndOverride:
         self.ea.enable_teardown("test_key")
         assert self.ea.disable_teardown("test_key")
         assert "test_key" not in self.ea._teardown_enabled
+
+
+# ---------------------------------------------------------------------------
+# Persistence
+# ---------------------------------------------------------------------------
+
+class TestPersistence:
+    def test_skip_persists_to_db(self):
+        ctx = _make_ctx()
+        ea = EventAutomation(SAMPLE_CFG, ctx)
+        ea.skip_event("test_key")
+        ctx.db.save_event_override.assert_called_with("test_key", "skip", "")
+
+    def test_unskip_removes_from_db(self):
+        ctx = _make_ctx()
+        ea = EventAutomation(SAMPLE_CFG, ctx)
+        ea.skip_event("test_key")
+        ea.unskip_event("test_key")
+        ctx.db.delete_event_override.assert_called_with("test_key", "skip")
+
+    def test_override_profile_persists(self):
+        ctx = _make_ctx()
+        ea = EventAutomation(SAMPLE_CFG, ctx)
+        ea.override_profile("test_key", "chapel")
+        ctx.db.save_event_override.assert_called_with("test_key", "profile", "chapel")
+
+    def test_override_profile_reset_removes(self):
+        ctx = _make_ctx()
+        ea = EventAutomation(SAMPLE_CFG, ctx)
+        ea.override_profile("test_key", "chapel")
+        ea.override_profile("test_key", "")
+        ctx.db.delete_event_override.assert_called_with("test_key", "profile")
+
+    def test_enable_teardown_persists(self):
+        ctx = _make_ctx()
+        ea = EventAutomation(SAMPLE_CFG, ctx)
+        ea.enable_teardown("test_key")
+        ctx.db.save_event_override.assert_called_with("test_key", "teardown", "")
+
+    def test_disable_teardown_removes(self):
+        ctx = _make_ctx()
+        ea = EventAutomation(SAMPLE_CFG, ctx)
+        ea.enable_teardown("test_key")
+        ea.disable_teardown("test_key")
+        ctx.db.delete_event_override.assert_called_with("test_key", "teardown")
+
+    def test_load_persisted_state(self):
+        ctx = _make_ctx()
+        ctx.db.get_event_overrides.return_value = [
+            {"event_key": "ev1", "field": "skip", "value": ""},
+            {"event_key": "ev2", "field": "profile", "value": "chapel"},
+            {"event_key": "ev3", "field": "teardown", "value": ""},
+        ]
+        ea = EventAutomation(SAMPLE_CFG, ctx)
+        assert "ev1" in ea._skipped
+        assert ea._override_profiles.get("ev2") == "chapel"
+        assert "ev3" in ea._teardown_enabled
+
+    def test_cleanup_deletes_from_db(self):
+        ctx = _make_ctx()
+        ea = EventAutomation(SAMPLE_CFG, ctx)
+        now = datetime.now(TZ)
+        old_event = {"title": "Old", "start": now - timedelta(hours=48), "end": now - timedelta(hours=45)}
+        key = EventAutomation._event_key(old_event)
+        ea._events = [old_event]
+        ea._skipped.add(key)
+        ea._cleanup_old_state(now)
+        ctx.db.delete_event_overrides_for_key.assert_called_with(key)
 
 
 # ---------------------------------------------------------------------------
