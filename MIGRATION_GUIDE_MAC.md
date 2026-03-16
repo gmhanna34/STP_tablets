@@ -1,6 +1,6 @@
 # STP AV Control System — Migration Guide (macOS / Mac Mini)
 
-> **Purpose:** Step-by-step instructions to install, configure, and run the entire St. Paul AV Control System on a **fresh Mac** (Mac Mini, MacBook, iMac, etc.). This covers every service: middleware proxies (X32, MoIP, OBS), the STP Gateway, the tablet frontend, HealthDash monitoring, OBS Studio, The Home Remote (THR), and Camlytics occupancy counting.
+> **Purpose:** Step-by-step instructions to install, configure, and run the St. Paul AV Control System on a **fresh Mac** (Mac Mini, MacBook, iMac, etc.). The system runs as a single consolidated gateway process from one repository (`STP_tablets`). OBS Studio and Camlytics remain on the existing Windows PC.
 
 ---
 
@@ -10,64 +10,52 @@
 2. [Prerequisites & Required Downloads](#2-prerequisites--required-downloads)
 3. [Network Configuration](#3-network-configuration)
 4. [Install Developer Tools & Homebrew](#4-install-developer-tools--homebrew)
-5. [Install Git & Clone Repositories](#5-install-git--clone-repositories)
-6. [Install Python & Create Virtual Environments](#6-install-python--create-virtual-environments)
-7. [Install Middleware Dependencies](#7-install-middleware-dependencies)
-8. [Install Gateway Dependencies](#8-install-gateway-dependencies)
-9. [Install HealthDash Dependencies](#9-install-healthdash-dependencies)
-10. [Configure Environment Variables & Secrets](#10-configure-environment-variables--secrets)
-11. [Configure the Gateway](#11-configure-the-gateway)
-12. [Install & Configure OBS Studio](#12-install--configure-obs-studio)
-13. [Install & Configure The Home Remote (THR)](#13-install--configure-the-home-remote-thr)
-14. [Install & Configure Camlytics](#14-install--configure-camlytics)
-15. [Start All Services](#15-start-all-services)
-16. [Automate Startup with launchd](#16-automate-startup-with-launchd)
-17. [Verify Everything Works](#17-verify-everything-works)
-18. [Configure Tablets](#18-configure-tablets)
-19. [Security Checklist](#19-security-checklist)
-20. [Backup & Maintenance](#20-backup--maintenance)
-21. [Troubleshooting](#21-troubleshooting)
-22. [Mac-Specific Considerations](#22-mac-specific-considerations)
+5. [Install Git & Clone Repository](#5-install-git--clone-repository)
+6. [Install Python & Create Virtual Environment](#6-install-python--create-virtual-environment)
+7. [Install Gateway Dependencies](#7-install-gateway-dependencies)
+8. [Configure Environment Variables & Secrets](#8-configure-environment-variables--secrets)
+9. [Configure the Gateway](#9-configure-the-gateway)
+10. [Start the Gateway](#10-start-the-gateway)
+11. [Automate Startup with launchd](#11-automate-startup-with-launchd)
+12. [Verify Everything Works](#12-verify-everything-works)
+13. [Configure Tablets](#13-configure-tablets)
+14. [Security Checklist](#14-security-checklist)
+15. [Backup & Maintenance](#15-backup--maintenance)
+16. [Troubleshooting](#16-troubleshooting)
+17. [Mac-Specific Considerations](#17-mac-specific-considerations)
 
 ---
 
 ## 1. System Overview
 
-The system consists of **5 Python services**, **1 desktop app (OBS)**, **1 legacy tablet app (THR)**, and **1 analytics platform (Camlytics)**:
+The system runs as a **single consolidated gateway process** from one repository:
 
 | Component | Port | Description |
 |-----------|------|-------------|
-| X32 Middleware | 3400 | Audio mixer proxy (OSC/UDP to Behringer X32) |
-| MoIP Middleware | 5002 | Video matrix proxy (Telnet to Binary MoIP controller) |
-| OBS Middleware | 4456 | Streaming proxy (WebSocket to OBS Studio) |
-| STP Gateway | 20858 | Unified API + WebSocket hub + static file server |
-| HealthDash | 20855 | System health monitoring dashboard |
-| OBS Studio | 4455 | Live streaming/recording software (WebSocket server) |
-| The Home Remote | — | Legacy tablet control app (Android/iOS) |
-| Camlytics | — | People counting / occupancy analytics |
+| STP Gateway | 20858 | Unified API + WebSocket hub + all protocol modules + health monitoring + static file server |
+
+All middleware (X32, MoIP, OBS) and HealthDash have been absorbed into the gateway. OBS Studio and Camlytics remain on the existing Windows PC.
 
 ### Architecture
 
 ```
-Tablets / Browsers ──► STP Gateway (:20858)
-                          │
-                ┌─────────┼─────────┐
-                ▼         ▼         ▼
-          X32 Proxy  MoIP Proxy  OBS Proxy
-           :3400      :5002       :4456
-              │         │           │
-              ▼         ▼           ▼
-          X32 Mixer  MoIP Ctrl  OBS Studio
-         .1.231    10.100.20.11  :4455
-
-Gateway also talks directly to:
-  • 10 PTZ Cameras (10.100.60.201-210)
-  • 4 Epson Projectors (10.100.60.233-236)
-  • Home Assistant (10.100.60.245:8123)
-  • 7 WattBox PDUs (10.100.60.61-67)
-  • Camlytics Cloud API
-
-HealthDash (:20855) monitors all of the above.
+MAC MINI (new)                         WINDOWS PC (existing)
+─────────────────────────              ─────────────────────
+STP Gateway :20858                     OBS Studio :4455
+ ├─ REST API + Socket.IO               Camlytics (analytics)
+ ├─ Static frontend
+ ├─ X32 module ──── OSC/UDP ──────►  Behringer X32 (.60.231)
+ ├─ MoIP module ─── Telnet ──────►   Binary MoIP (10.100.20.11)
+ ├─ OBS module ──── WebSocket ───►   OBS Studio (Windows IP:4455)
+ ├─ PTZ module ──── HTTP/CGI ────►   10 cameras (.60.201-.210)
+ ├─ Epson module ── HTTP ────────►   4 projectors (.60.233-.236)
+ ├─ HA module ───── REST ────────►   Home Assistant (.60.245)
+ ├─ Health monitor (built-in, 30+ checks)
+ ├─ Occupancy module (Camlytics Cloud API)
+ ├─ Announcement module (TTS via edge-tts + WiiM)
+ ├─ Event automation (calendar-driven macros)
+ ├─ Macro engine
+ └─ Audit log (SQLite)
 ```
 
 ---
@@ -82,9 +70,10 @@ HealthDash (:20855) monitors all of the above.
 | Homebrew | Latest | https://brew.sh |
 | Python | 3.11+ | `brew install python@3.11` |
 | Git | Latest | Comes with Xcode CLT (or `brew install git`) |
-| OBS Studio | 30+ | `brew install --cask obs` |
-| ffprobe (ffmpeg) | Latest | `brew install ffmpeg` |
+| ffprobe (ffmpeg) | Latest | `brew install ffmpeg` (for RTSP health checks) |
 | A text editor | — | VS Code (`brew install --cask visual-studio-code`) |
+
+> **Note:** OBS Studio and Camlytics stay on the existing Windows PC (they need GPU/display access). The gateway's OBS module connects to the Windows machine's IP remotely.
 
 ### Hardware Requirements
 
@@ -130,7 +119,7 @@ By default, macOS blocks incoming connections. You need to allow the Python serv
 **Option C: Use `pf` firewall rules (advanced):**
 ```bash
 # Add to /etc/pf.conf (requires sudo)
-pass in on en0 proto tcp from any to any port { 3400, 4455, 4456, 5002, 20855, 20858 }
+pass in on en0 proto tcp from any to any port { 20858 }
 ```
 
 ### Required Network Routes
@@ -140,7 +129,7 @@ Ensure the Mac can reach:
 | Destination | Purpose |
 |-------------|---------|
 | 10.100.60.201-210 | PTZ Cameras |
-| 10.100.60.233-236 | Epson Projectors |
+| 10.100.60.233-236 | Epson Projectors (epson1-4) |
 | 10.100.60.231 | Behringer X32 Mixer |
 | 10.100.60.61-67 | WattBox PDUs |
 | 10.100.60.245:8123 | Home Assistant |
@@ -188,7 +177,7 @@ brew --version
 
 ---
 
-## 5. Install Git & Clone Repositories
+## 5. Install Git & Clone Repository
 
 ### Verify Git
 
@@ -197,41 +186,30 @@ Git comes with Xcode CLT. Verify:
 git --version
 ```
 
-### Clone All Repositories
+### Clone the Repository
+
+Only one repo is needed -- everything is consolidated:
 
 ```bash
 mkdir -p ~/STP
 cd ~/STP
 
 git clone <your-STP_tablets-repo-url> STP_tablets
-git clone <your-STP_scripts-repo-url> STP_scripts
-git clone <your-STP_healthdash-repo-url> STP_healthdash
-git clone <your-STP_THRFiles_Current-repo-url> STP_THRFiles_Current
 ```
 
 Your directory structure should look like:
 
 ```
 ~/STP/
-├── STP_tablets/          # Gateway + Frontend
-│   ├── gateway/
-│   └── frontend/
-├── STP_scripts/          # Middleware proxies
-│   ├── x32-flask.py
-│   ├── moip-flask.py
-│   ├── obs-flask.py
-│   └── requirements.txt
-├── STP_healthdash/       # Health monitoring
-│   ├── app.py
-│   ├── config.yaml
-│   └── requirements.txt
-└── STP_THRFiles_Current/ # THR project files
-    └── Main Project v26-012_Mainchurch.hrp
+└── STP_tablets/          # Gateway + Frontend (everything)
+    ├── gateway/          # Python backend (17 modules)
+    ├── frontend/         # Tablet web UI
+    └── hooks/            # Git hooks (pre-commit)
 ```
 
 ---
 
-## 6. Install Python & Create Virtual Environments
+## 6. Install Python & Create Virtual Environment
 
 ### Install Python via Homebrew
 
@@ -249,58 +227,28 @@ pip3 --version
 
 > **Note:** On macOS, always use `python3` and `pip3` (not `python` and `pip`).
 
-### Create Virtual Environments
-
-Create separate virtual environments for each service group:
+### Create Virtual Environment
 
 ```bash
-# Middleware venv
-cd ~/STP/STP_scripts
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-deactivate
-
-# Gateway venv
 cd ~/STP/STP_tablets/gateway
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 deactivate
-
-# Git pre-commit hook — not tracked by git, must be installed after each fresh clone.
-# A tracked copy is kept at hooks/pre-commit for easy setup.
-# The hook runs gateway tests first (aborts on failure), then auto-increments
-# the version in frontend/config/settings.json (format: YY-NNN).
-cp ~/STP/STP_tablets/hooks/pre-commit ~/STP/STP_tablets/.git/hooks/pre-commit
-chmod +x ~/STP/STP_tablets/.git/hooks/pre-commit
-
-# HealthDash venv
-cd ~/STP/STP_healthdash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-deactivate
 ```
 
----
+### Install Pre-commit Hook
 
-## 7. Install Middleware Dependencies
+The pre-commit hook runs the test suite and auto-increments the version before each commit. A tracked copy is kept at `hooks/pre-commit`:
 
 ```bash
-cd ~/STP/STP_scripts
-source .venv/bin/activate
-pip install -r requirements.txt
-deactivate
+cp ~/STP/STP_tablets/hooks/pre-commit ~/STP/STP_tablets/.git/hooks/pre-commit
+chmod +x ~/STP/STP_tablets/.git/hooks/pre-commit
 ```
-
-Expected packages:
-- `flask==3.0.3`
-- `waitress==2.1.2`
 
 ---
 
-## 8. Install Gateway Dependencies
+## 7. Install Gateway Dependencies
 
 ```bash
 cd ~/STP/STP_tablets/gateway
@@ -318,28 +266,16 @@ Expected packages:
 - `requests==2.32.3`
 - `pyyaml==6.0.2`
 - `python-dotenv==1.0.1`
+- `xair-api>=2.4.0` (X32 mixer OSC/UDP)
+- `websocket-client>=1.6.0` (OBS WebSocket)
+- `pandas>=2.0` (occupancy analytics)
+- `bcrypt>=4.0` (user authentication)
+- `edge-tts>=7.0` (TTS announcements)
+- `pytest>=8.0` / `pytest-cov>=5.0` (testing)
 
 ---
 
-## 9. Install HealthDash Dependencies
-
-```bash
-cd ~/STP/STP_healthdash
-source .venv/bin/activate
-pip install -r requirements.txt
-deactivate
-```
-
-Expected packages:
-- `Flask==3.0.0`
-- `requests==2.31.0`
-- `PyYAML==6.0.1`
-- `psutil==5.9.8`
-- `waitress==2.1.2`
-
----
-
-## 10. Configure Environment Variables & Secrets
+## 8. Configure Environment Variables & Secrets
 
 ### Create the `.env` file
 
@@ -355,16 +291,36 @@ Edit `~/STP/STP_tablets/gateway/.env` with your actual credentials:
 ```env
 # STP Gateway Secrets — keep out of version control
 
-MOIP_API_KEY=moip-key-your-actual-key-here
-X32_API_KEY=x32-key-your-actual-key-here
+# Home Assistant
 HA_URL=https://your-ha-instance.ui.nabu.casa
 HA_TOKEN=your-long-lived-home-assistant-access-token
+
+# WattBox PDU
+WATTBOX_USERNAME=admin
 WATTBOX_PASSWORD=your-wattbox-password
+
+# OBS Studio
+OBS_WS_PASSWORD=your-obs-websocket-password
+
+# MoIP Video Matrix
+MOIP_USERNAME=your-moip-username
+MOIP_PASSWORD=your-moip-password
+MOIP_HA_WEBHOOK_ID=your-webhook-id
+
+# Fully Kiosk Browser
+FULLY_KIOSK_PASSWORD=your-fully-kiosk-password
+
+# Security
 FLASK_SECRET_KEY=generate-a-long-random-string-here
 SETTINGS_PIN=your-settings-pin
+SECURE_PIN=your-secure-pin
 REMOTE_AUTH_USER=your-admin-username
 REMOTE_AUTH_PASS=your-admin-password
-FULLY_KIOSK_PASSWORD=your-fully-kiosk-password
+
+# Health Dashboard Alerts
+HEALTHDASH_WEBHOOK_URL=your-webhook-url
+
+# AI Chatbot (optional)
 ANTHROPIC_API_KEY=sk-ant-your-key-here
 ```
 
@@ -380,7 +336,7 @@ ANTHROPIC_API_KEY=sk-ant-your-key-here
 
 ---
 
-## 11. Configure the Gateway
+## 9. Configure the Gateway
 
 ### Edit `config.yaml`
 
@@ -392,19 +348,13 @@ gateway:
   port: 20858
   static_dir: "../frontend"    # Relative path to frontend directory
 
-middleware:
-  moip:
-    url: "http://127.0.0.1:5002"
-  x32:
-    url: "http://127.0.0.1:3400"
-  obs:
-    url: "http://127.0.0.1:4456"
+# middleware: null              # No middleware section needed (all absorbed)
 
 # Verify these IPs match your actual device addresses:
 ptz_cameras:
   MainChurch_Rear:    { ip: "10.100.60.201", name: "Cam1921681201" }
   MainChurch_Altar:   { ip: "10.100.60.202", name: "Cam1921681202" }
-  # ... (verify all 10+ cameras)
+  # ... (verify all 10 cameras)
 
 projectors:
   epson1: { ip: "10.100.60.233", name: "PRJ_FrontLeft" }
@@ -422,6 +372,12 @@ security:
     - "47.150."
 ```
 
+**Important for Mac migration:** Update the OBS WebSocket URL in config.yaml to point to the Windows PC's IP instead of `127.0.0.1`:
+```yaml
+obs:
+  ws_url: "ws://<windows-pc-ip>:4455"
+```
+
 ### Edit `macros.yaml`
 
 The macro configuration at `~/STP/STP_tablets/gateway/macros.yaml` defines all automation sequences. Review and verify:
@@ -432,187 +388,18 @@ The macro configuration at `~/STP/STP_tablets/gateway/macros.yaml` defines all a
 
 ### Edit Frontend Config
 
-**`~/STP/STP_tablets/frontend/config/settings.json`** — Verify the HealthDash URL:
-```json
-{
-  "healthCheck": {
-    "url": "external.stpauloc.org:20855"
-  }
-}
-```
-
 **`~/STP/STP_tablets/frontend/config/devices.json`** — Verify MoIP transmitter/receiver IDs and scene definitions.
 
 **`~/STP/STP_tablets/frontend/config/permissions.json`** — Verify tablet locations and role assignments.
 
-### Configure Middleware Scripts
-
-The middleware scripts in `STP_scripts/` have hardcoded values. Verify these in each file:
-
-**`x32-flask.py`:**
-- `X32_MIXER_IP` = `10.100.60.231`
-- API key must match the gateway's `.env` `X32_API_KEY`
-- Listen port: `3400`
-
-**`moip-flask.py`:**
-- `MOIP_HOST` = `10.100.20.11`
-- `MOIP_PORT` = `23`
-- API key must match the gateway's `.env` `MOIP_API_KEY`
-- Listen port: `5002`
-
-**`obs-flask.py`:**
-- OBS WebSocket URL: `ws://127.0.0.1:4455`
-- Listen port: `4456`
-
-### Configure HealthDash
-
-Edit `~/STP/STP_healthdash/config.yaml`:
-- Verify all service URLs and ports
-- Set the dashboard password
-- Set the Home Assistant URL and token (for recovery actions)
-- Verify alert webhook URL
-
 ---
 
-## 12. Install & Configure OBS Studio
+## 10. Start the Gateway
 
-### Install OBS
-
-```bash
-brew install --cask obs
-```
-
-Or download from https://obsproject.com/download (choose macOS).
-
-### Configure OBS
-
-1. **Launch OBS Studio** from Applications
-2. **Enable WebSocket Server:**
-   - Go to **Tools > WebSocket Server Settings**
-   - Check **"Enable WebSocket Server"**
-   - Port: **4455** (default)
-   - If you set a password, set `OBS_WS_PASSWORD` environment variable for the OBS middleware
-3. **Import your scenes and profiles** from the old machine:
-   - Copy the OBS profile folder from the old machine:
-     - macOS location: `~/Library/Application Support/obs-studio/`
-   - Contains: `basic/profiles/`, `basic/scenes/`, `plugin_config/`
-4. **Configure streaming settings** (stream key, encoder, bitrate, etc.)
-
-### Auto-start OBS on Login
-
-1. **System Settings > General > Login Items**
-2. Click **+** and add **OBS Studio** from `/Applications/`
-3. OBS will launch automatically when you log in
-
-> **Important:** OBS requires a GUI session (it can't run headless). If the Mac is set to auto-login, OBS will start with the desktop session. If the Mac is a headless server, you'll need a virtual display driver (see [Mac-Specific Considerations](#22-mac-specific-considerations)).
-
----
-
-## 13. Install & Configure The Home Remote (THR)
-
-The Home Remote (THR) is the **legacy** tablet control app. It runs on Android/iOS tablets and uses `.hrp` project files.
-
-### On the Server (Mac)
-
-1. The THR project files are in `~/STP/STP_THRFiles_Current/`:
-   - `Main Project v26-012_Mainchurch.hrp` (latest version)
-2. **THR Designer is Windows-only** — if you need to edit `.hrp` files on Mac:
-   - Use a Windows VM (Parallels, VMware Fusion, or UTM)
-   - Or use Boot Camp (Intel Macs only)
-   - Or edit on a separate Windows machine
-3. The `.hrp` file is a self-contained project — no server-side component needed on the Mac
-
-### On Each Tablet
-
-1. Install **The Home Remote** app from Google Play / App Store
-2. Import the `.hrp` project file
-3. Configure the tablet name in THR settings to match its location:
-   - `Tablet_Mainchurch`
-   - `Tablet_Chapel`
-   - `Tablet_SocialHall`
-   - `Tablet_ConferenceRoom`
-   - `Tablet_Gym`
-   - `Tablet_Lobby`
-   - `Tablet_Office`
-
-> **Note:** The new web-based frontend (`STP_tablets/frontend/`) is the modern replacement for THR. Both can run simultaneously during transition.
-
----
-
-## 14. Install & Configure Camlytics
-
-### Camlytics on macOS
-
-Camlytics is **primarily a Windows application**. On macOS, you have these options:
-
-**Option A: Use Camlytics Cloud only (Recommended)**
-- The gateway already pulls data from Camlytics Cloud API
-- No local Camlytics installation needed if analytics are processed in the cloud
-- The existing report URLs in `config.yaml` will continue to work
-
-**Option B: Run Camlytics in a Windows VM**
-- Use Parallels Desktop, VMware Fusion, or UTM to run Windows
-- Install Camlytics in the VM
-- Configure camera feeds (RTSP streams from UniFi NVR)
-
-**Option C: Alternative people-counting software**
-- Some alternatives run natively on macOS (e.g., Frigate NVR in Docker)
-
-### Camlytics Cloud Integration (No Installation Required)
-
-The gateway pulls data from Camlytics Cloud API. These URLs are configured in `config.yaml`:
-
-```yaml
-camlytics:
-  communion_url: "https://cloud.camlytics.com/feed/report/<your-report-id>"
-  occupancy_url_peak: "https://cloud.camlytics.com/feed/report/<your-report-id>"
-  occupancy_url_live: "https://cloud.camlytics.com/feed/report/<your-report-id>"
-  enter_url: "https://cloud.camlytics.com/feed/report/<your-report-id>"
-```
-
-### Install ffprobe (for RTSP camera health checks)
-
-```bash
-brew install ffmpeg
-```
-
-Verify:
-```bash
-ffprobe -version
-```
-
----
-
-## 15. Start All Services
-
-Services must start in this specific order because of dependencies.
+Only one service needs to start -- the consolidated gateway handles everything.
 
 ### Manual Startup (for testing)
 
-Open **5 separate Terminal windows** (or use Terminal tabs with `Cmd+T`):
-
-**Tab 1 — X32 Middleware:**
-```bash
-cd ~/STP/STP_scripts
-source .venv/bin/activate
-python3 x32-flask.py
-```
-
-**Tab 2 — MoIP Middleware:**
-```bash
-cd ~/STP/STP_scripts
-source .venv/bin/activate
-python3 moip-flask.py
-```
-
-**Tab 3 — OBS Middleware:**
-```bash
-cd ~/STP/STP_scripts
-source .venv/bin/activate
-python3 obs-flask.py
-```
-
-**Tab 4 — STP Gateway** (wait a few seconds after middleware starts):
 ```bash
 cd ~/STP/STP_tablets/gateway
 source .venv/bin/activate
@@ -626,206 +413,61 @@ python3 gateway.py --mock       # Mock mode (no real devices)
 python3 gateway.py --config alt.yaml  # Custom config
 ```
 
-**Tab 5 — HealthDash:**
-```bash
-cd ~/STP/STP_healthdash
-source .venv/bin/activate
-python3 app.py
-```
-
 ### Startup Shell Script
 
-Create `~/STP/start-all.sh`:
+Create `~/STP/start-gateway.sh`:
 
 ```bash
 #!/bin/bash
 # ============================================
-#  STP AV Control System — Start All Services
+#  STP AV Control System — Start Gateway
 # ============================================
 
 STP_DIR="$HOME/STP"
 LOG_DIR="$STP_DIR/logs"
 mkdir -p "$LOG_DIR"
 
-echo "============================================"
-echo " Starting STP AV Control System"
-echo "============================================"
-
-echo "[1/5] Starting X32 Middleware..."
-cd "$STP_DIR/STP_scripts"
-source .venv/bin/activate
-nohup python3 x32-flask.py > "$LOG_DIR/x32-startup.log" 2>&1 &
-echo "  PID: $!"
-deactivate
-
-echo "[2/5] Starting MoIP Middleware..."
-cd "$STP_DIR/STP_scripts"
-source .venv/bin/activate
-nohup python3 moip-flask.py > "$LOG_DIR/moip-startup.log" 2>&1 &
-echo "  PID: $!"
-deactivate
-
-echo "[3/5] Starting OBS Middleware..."
-cd "$STP_DIR/STP_scripts"
-source .venv/bin/activate
-nohup python3 obs-flask.py > "$LOG_DIR/obs-startup.log" 2>&1 &
-echo "  PID: $!"
-deactivate
-
-echo "Waiting for middleware to initialize..."
-sleep 5
-
-echo "[4/5] Starting STP Gateway..."
+echo "Starting STP Gateway..."
 cd "$STP_DIR/STP_tablets/gateway"
 source .venv/bin/activate
 nohup python3 gateway.py > "$LOG_DIR/gateway-startup.log" 2>&1 &
 echo "  PID: $!"
 deactivate
 
-echo "Waiting for gateway to initialize..."
-sleep 3
-
-echo "[5/5] Starting HealthDash..."
-cd "$STP_DIR/STP_healthdash"
-source .venv/bin/activate
-nohup python3 app.py > "$LOG_DIR/healthdash-startup.log" 2>&1 &
-echo "  PID: $!"
-deactivate
-
 echo ""
 echo "============================================"
-echo " All services started!"
-echo " Gateway:    http://localhost:20858/"
-echo " HealthDash: http://localhost:20855/"
+echo " Gateway started!"
+echo " URL: http://localhost:20858/"
 echo "============================================"
 ```
 
 Make it executable:
 ```bash
-chmod +x ~/STP/start-all.sh
+chmod +x ~/STP/start-gateway.sh
 ```
 
-### Stop All Script
+### Stop Script
 
-Create `~/STP/stop-all.sh`:
+Create `~/STP/stop-gateway.sh`:
 
 ```bash
 #!/bin/bash
-# ============================================
-#  STP AV Control System — Stop All Services
-# ============================================
-
-echo "Stopping all STP services..."
-
-# Find and kill Python processes for our scripts
-pkill -f "x32-flask.py" 2>/dev/null && echo "  Stopped X32 Middleware" || echo "  X32 Middleware not running"
-pkill -f "moip-flask.py" 2>/dev/null && echo "  Stopped MoIP Middleware" || echo "  MoIP Middleware not running"
-pkill -f "obs-flask.py" 2>/dev/null && echo "  Stopped OBS Middleware" || echo "  OBS Middleware not running"
-pkill -f "gateway.py" 2>/dev/null && echo "  Stopped STP Gateway" || echo "  STP Gateway not running"
-pkill -f "STP_healthdash.*app.py" 2>/dev/null && echo "  Stopped HealthDash" || echo "  HealthDash not running"
-
-echo "All services stopped."
+echo "Stopping STP Gateway..."
+pkill -f "gateway.py" 2>/dev/null && echo "  Stopped" || echo "  Not running"
 ```
 
 Make it executable:
 ```bash
-chmod +x ~/STP/stop-all.sh
+chmod +x ~/STP/stop-gateway.sh
 ```
 
 ---
 
-## 16. Automate Startup with launchd
+## 11. Automate Startup with launchd
 
-macOS uses `launchd` (not systemd) for service management. Create plist files for each service.
+macOS uses `launchd` (not systemd) for service management. Only one plist file is needed.
 
-### Create launchd Service Files
-
-**`~/Library/LaunchAgents/com.stpaul.x32-middleware.plist`**
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.stpaul.x32-middleware</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Users/YOUR_USERNAME/STP/STP_scripts/.venv/bin/python3</string>
-        <string>x32-flask.py</string>
-    </array>
-    <key>WorkingDirectory</key>
-    <string>/Users/YOUR_USERNAME/STP/STP_scripts</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/Users/YOUR_USERNAME/STP/logs/x32-launchd.log</string>
-    <key>StandardErrorPath</key>
-    <string>/Users/YOUR_USERNAME/STP/logs/x32-launchd-err.log</string>
-    <key>ThrottleInterval</key>
-    <integer>10</integer>
-</dict>
-</plist>
-```
-
-**`~/Library/LaunchAgents/com.stpaul.moip-middleware.plist`**
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.stpaul.moip-middleware</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Users/YOUR_USERNAME/STP/STP_scripts/.venv/bin/python3</string>
-        <string>moip-flask.py</string>
-    </array>
-    <key>WorkingDirectory</key>
-    <string>/Users/YOUR_USERNAME/STP/STP_scripts</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/Users/YOUR_USERNAME/STP/logs/moip-launchd.log</string>
-    <key>StandardErrorPath</key>
-    <string>/Users/YOUR_USERNAME/STP/logs/moip-launchd-err.log</string>
-    <key>ThrottleInterval</key>
-    <integer>10</integer>
-</dict>
-</plist>
-```
-
-**`~/Library/LaunchAgents/com.stpaul.obs-middleware.plist`**
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.stpaul.obs-middleware</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Users/YOUR_USERNAME/STP/STP_scripts/.venv/bin/python3</string>
-        <string>obs-flask.py</string>
-    </array>
-    <key>WorkingDirectory</key>
-    <string>/Users/YOUR_USERNAME/STP/STP_scripts</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/Users/YOUR_USERNAME/STP/logs/obs-launchd.log</string>
-    <key>StandardErrorPath</key>
-    <string>/Users/YOUR_USERNAME/STP/logs/obs-launchd-err.log</string>
-    <key>ThrottleInterval</key>
-    <integer>10</integer>
-</dict>
-</plist>
-```
+### Create launchd Service File
 
 **`~/Library/LaunchAgents/com.stpaul.gateway.plist`**
 ```xml
@@ -856,45 +498,16 @@ macOS uses `launchd` (not systemd) for service management. Create plist files fo
 </plist>
 ```
 
-**`~/Library/LaunchAgents/com.stpaul.healthdash.plist`**
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.stpaul.healthdash</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Users/YOUR_USERNAME/STP/STP_healthdash/.venv/bin/python3</string>
-        <string>app.py</string>
-    </array>
-    <key>WorkingDirectory</key>
-    <string>/Users/YOUR_USERNAME/STP/STP_healthdash</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/Users/YOUR_USERNAME/STP/logs/healthdash-launchd.log</string>
-    <key>StandardErrorPath</key>
-    <string>/Users/YOUR_USERNAME/STP/logs/healthdash-launchd-err.log</string>
-    <key>ThrottleInterval</key>
-    <integer>10</integer>
-</dict>
-</plist>
-```
+> **IMPORTANT:** Replace `YOUR_USERNAME` with your actual macOS username. Find it with: `whoami`
 
-> **IMPORTANT:** Replace `YOUR_USERNAME` with your actual macOS username in ALL plist files. Find it with: `whoami`
+### Setup Script
 
-### Setup Script for launchd
-
-Create `~/STP/setup-launchd.sh` to automate the setup:
+Create `~/STP/setup-launchd.sh`:
 
 ```bash
 #!/bin/bash
 # ============================================
-#  Setup launchd services for STP
+#  Setup launchd service for STP Gateway
 # ============================================
 
 USERNAME=$(whoami)
@@ -903,43 +516,21 @@ LOG_DIR="$HOME/STP/logs"
 
 mkdir -p "$LOG_DIR"
 
-echo "Setting up launchd services for user: $USERNAME"
+echo "Setting up launchd service for user: $USERNAME"
 
-# Fix username in all plist files
-for plist in "$PLIST_DIR"/com.stpaul.*.plist; do
-    if [ -f "$plist" ]; then
-        sed -i '' "s/YOUR_USERNAME/$USERNAME/g" "$plist"
-        echo "  Updated: $(basename $plist)"
-    fi
-done
+# Fix username in plist file
+PLIST="$PLIST_DIR/com.stpaul.gateway.plist"
+if [ -f "$PLIST" ]; then
+    sed -i '' "s/YOUR_USERNAME/$USERNAME/g" "$PLIST"
+    echo "  Updated: $(basename $PLIST)"
+fi
 
-echo ""
-echo "Loading services..."
-
-# Load in dependency order
-launchctl load "$PLIST_DIR/com.stpaul.x32-middleware.plist"
-echo "  Loaded X32 Middleware"
-
-launchctl load "$PLIST_DIR/com.stpaul.moip-middleware.plist"
-echo "  Loaded MoIP Middleware"
-
-launchctl load "$PLIST_DIR/com.stpaul.obs-middleware.plist"
-echo "  Loaded OBS Middleware"
-
-sleep 5
-echo "  (waited for middleware init)"
-
-launchctl load "$PLIST_DIR/com.stpaul.gateway.plist"
+echo "Loading service..."
+launchctl load "$PLIST"
 echo "  Loaded STP Gateway"
 
-sleep 3
-echo "  (waited for gateway init)"
-
-launchctl load "$PLIST_DIR/com.stpaul.healthdash.plist"
-echo "  Loaded HealthDash"
-
 echo ""
-echo "All services loaded. They will auto-start on login."
+echo "Gateway loaded. It will auto-start on login."
 echo "Check status: launchctl list | grep stpaul"
 ```
 
@@ -947,56 +538,34 @@ echo "Check status: launchctl list | grep stpaul"
 chmod +x ~/STP/setup-launchd.sh
 ```
 
-### Managing launchd Services
+### Managing the launchd Service
 
 ```bash
-# Check if services are running
+# Check if service is running
 launchctl list | grep stpaul
 
-# Stop a service
+# Stop the gateway
 launchctl unload ~/Library/LaunchAgents/com.stpaul.gateway.plist
 
-# Start a service
+# Start the gateway
 launchctl load ~/Library/LaunchAgents/com.stpaul.gateway.plist
 
-# Restart a service (unload then load)
+# Restart (unload then load)
 launchctl unload ~/Library/LaunchAgents/com.stpaul.gateway.plist
 launchctl load ~/Library/LaunchAgents/com.stpaul.gateway.plist
-
-# Stop all STP services
-for plist in ~/Library/LaunchAgents/com.stpaul.*.plist; do
-    launchctl unload "$plist" 2>/dev/null
-done
-
-# Start all STP services
-for plist in ~/Library/LaunchAgents/com.stpaul.*.plist; do
-    launchctl load "$plist" 2>/dev/null
-done
 ```
 
 ---
 
-## 17. Verify Everything Works
+## 12. Verify Everything Works
 
-### Test Each Service
+### Test the Gateway
 
 Open Terminal and run:
 
 ```bash
-# X32 Middleware
-curl http://127.0.0.1:3400/health
-
-# MoIP Middleware
-curl http://127.0.0.1:5002/status
-
-# OBS Middleware
-curl http://127.0.0.1:4456/health
-
-# STP Gateway
 curl http://127.0.0.1:20858/api/health
-
-# HealthDash
-curl http://127.0.0.1:20855/api/summary
+# Expected: {"healthy": true, "version": "...", "mock_mode": false}
 ```
 
 ### Test the Frontend
@@ -1008,11 +577,9 @@ http://localhost:20858/
 
 You should see the St. Paul Control Panel with the home dashboard.
 
-### Test HealthDash
+### Test Health Monitoring
 
-```
-http://localhost:20855/
-```
+Navigate to `http://localhost:20858/#health` in the browser to see the health dashboard.
 
 ### Test from a Tablet
 
@@ -1024,7 +591,7 @@ http://10.100.60.XX:20858/
 
 ---
 
-## 18. Configure Tablets
+## 13. Configure Tablets
 
 ### New Web UI Tablets
 
@@ -1059,22 +626,19 @@ For tablets in kiosk mode:
 
 ---
 
-## 19. Security Checklist
+## 14. Security Checklist
 
 Before going live, verify:
 
-- [ ] Changed `SETTINGS_PIN` from default `1234`
-- [ ] Changed `FLASK_SECRET_KEY` to a random string
-- [ ] Changed `REMOTE_AUTH_USER` and `REMOTE_AUTH_PASS` from defaults
-- [ ] Changed HealthDash password from default `Companion4Us`
+- [ ] Set `SETTINGS_PIN` in `.env` (change from default `1234`)
+- [ ] Set `FLASK_SECRET_KEY` in `.env` to a random string
+- [ ] Set `REMOTE_AUTH_USER` and `REMOTE_AUTH_PASS` in `.env`
 - [ ] Changed WattBox password from default `WBAdmin1`
 - [ ] Verified `allowed_ips` in `config.yaml` matches your actual network
 - [ ] Home Assistant long-lived access token is valid
 - [ ] `.env` file is NOT committed to git (check `.gitignore`)
-- [ ] Ports 3400, 4456, 5002 are NOT exposed to the internet
-- [ ] Only ports 20858 and 20855 are accessible from the LAN
+- [ ] Only port 20858 is accessible from the LAN
 - [ ] OBS WebSocket password is set (if accessible beyond localhost)
-- [ ] Middleware API keys match between middleware scripts and gateway config
 - [ ] macOS firewall is configured correctly
 - [ ] macOS auto-login is configured (for unattended operation)
 - [ ] FileVault is enabled (disk encryption)
@@ -1082,7 +646,7 @@ Before going live, verify:
 
 ---
 
-## 20. Backup & Maintenance
+## 15. Backup & Maintenance
 
 ### What to Back Up
 
@@ -1091,12 +655,11 @@ Before going live, verify:
 | Gateway config | `~/STP/STP_tablets/gateway/config.yaml` | After any change |
 | Gateway secrets | `~/STP/STP_tablets/gateway/.env` | After any change |
 | Macros | `~/STP/STP_tablets/gateway/macros.yaml` | After any change |
+| Announcements | `~/STP/STP_tablets/gateway/announcements.yaml` | After any change |
+| Users | `~/STP/STP_tablets/gateway/users.yaml` | After any change |
 | Frontend config | `~/STP/STP_tablets/frontend/config/` | After any change |
-| HealthDash config | `~/STP/STP_healthdash/config.yaml` | After any change |
 | Audit database | `~/STP/STP_tablets/gateway/stp_gateway.db` | Weekly |
-| OBS profiles | `~/Library/Application Support/obs-studio/` | After scene changes |
-| THR project files | `~/STP/STP_THRFiles_Current/` | After updates |
-| launchd plists | `~/Library/LaunchAgents/com.stpaul.*.plist` | After changes |
+| launchd plist | `~/Library/LaunchAgents/com.stpaul.gateway.plist` | After changes |
 
 ### Time Machine Backup
 
@@ -1127,34 +690,29 @@ deactivate
 
 Logs auto-rotate (5 MB, 5 backups):
 - Gateway: `~/STP/STP_tablets/gateway/logs/stp-gateway.log`
-- HealthDash: `~/STP/STP_healthdash/logs/healthdash.log`
 - launchd logs: `~/STP/logs/*.log`
 
 ### Updating Code
 
 ```bash
 cd ~/STP/STP_tablets && git pull origin main
-cd ~/STP/STP_scripts && git pull origin main
-cd ~/STP/STP_healthdash && git pull origin main
 ```
 
-Then restart the affected services:
+Then restart the gateway:
 ```bash
-# Example: restart gateway
 launchctl unload ~/Library/LaunchAgents/com.stpaul.gateway.plist
 launchctl load ~/Library/LaunchAgents/com.stpaul.gateway.plist
 ```
 
 ---
 
-## 21. Troubleshooting
+## 16. Troubleshooting
 
-### Service won't start
+### Gateway won't start
 
 ```bash
 # Check if port is already in use
 lsof -i :20858
-lsof -i :3400
 
 # Validate YAML config
 cd ~/STP/STP_tablets/gateway
@@ -1191,18 +749,18 @@ netstat -rn
 3. Check macOS firewall isn't blocking the port
 4. Check the gateway logs for connection errors
 
-### OBS middleware can't connect to OBS
+### OBS module can't connect to OBS
 
-1. Verify OBS Studio is running
+1. Verify OBS Studio is running on the Windows PC
 2. Verify WebSocket Server is enabled: **Tools > WebSocket Server Settings**
-3. Check port 4455 is correct
-4. If password-protected, set `OBS_WS_PASSWORD`
+3. Check the OBS WebSocket URL in `config.yaml` points to the Windows PC's IP (not `127.0.0.1`)
+4. If password-protected, set `OBS_WS_PASSWORD` in `.env`
 
 ### launchd service keeps restarting
 
 ```bash
 # Check the error log
-cat ~/STP/logs/<service>-launchd-err.log
+cat ~/STP/logs/gateway-launchd-err.log
 
 # Check launchd status (exit code)
 launchctl list | grep stpaul
@@ -1234,12 +792,12 @@ CFLAGS="-I$(brew --prefix)/include" pip3 install eventlet
 chmod -R u+rw ~/STP/
 
 # Fix plist permissions
-chmod 644 ~/Library/LaunchAgents/com.stpaul.*.plist
+chmod 644 ~/Library/LaunchAgents/com.stpaul.gateway.plist
 ```
 
 ---
 
-## 22. Mac-Specific Considerations
+## 17. Mac-Specific Considerations
 
 ### Prevent Sleep (Critical for Server)
 
@@ -1280,8 +838,8 @@ If the Mac Mini runs without a monitor:
 
 1. **Screen Sharing** (built-in VNC): **System Settings > General > Sharing > Screen Sharing**
 2. **SSH Access**: **System Settings > General > Sharing > Remote Login**
-3. For OBS to work headless, you may need a **dummy HDMI plug** (HDMI display emulator dongle) to keep the GPU active
-4. Access OBS remotely via VNC/Screen Sharing
+
+> **Note:** OBS Studio runs on the Windows PC, not the Mac. The gateway connects to it remotely via WebSocket.
 
 ### macOS Updates
 
@@ -1310,36 +868,31 @@ brew cleanup
 
 ```
 GATEWAY:        http://<server>:20858/
-HEALTHDASH:     http://<server>:20855/
+HEALTH PAGE:    http://<server>:20858/#health
 SETTINGS PIN:   (set in .env)
 
-START ORDER:    x32-flask → moip-flask → obs-flask → gateway → healthdash
-
+START:          cd ~/STP/STP_tablets/gateway && source .venv/bin/activate && python3 gateway.py
 MOCK MODE:      cd ~/STP/STP_tablets/gateway && source .venv/bin/activate && python3 gateway.py --mock
 
-START ALL:      ~/STP/start-all.sh
-STOP ALL:       ~/STP/stop-all.sh
+START SCRIPT:   ~/STP/start-gateway.sh
+STOP SCRIPT:    ~/STP/stop-gateway.sh
 
 LOGS:
   Gateway:      ~/STP/STP_tablets/gateway/logs/stp-gateway.log
-  HealthDash:   ~/STP/STP_healthdash/logs/healthdash.log
-  launchd:      ~/STP/logs/*.log
+  launchd:      ~/STP/logs/gateway-launchd.log
 
 CONFIG FILES:
   Gateway:      ~/STP/STP_tablets/gateway/config.yaml
   Secrets:      ~/STP/STP_tablets/gateway/.env
   Macros:       ~/STP/STP_tablets/gateway/macros.yaml
+  Announcements:~/STP/STP_tablets/gateway/announcements.yaml
+  Users:        ~/STP/STP_tablets/gateway/users.yaml
   Frontend:     ~/STP/STP_tablets/frontend/config/{settings,devices,permissions}.json
-  HealthDash:   ~/STP/STP_healthdash/config.yaml
-  launchd:      ~/Library/LaunchAgents/com.stpaul.*.plist
+  launchd:      ~/Library/LaunchAgents/com.stpaul.gateway.plist
 
-REPOS:
-  STP_tablets           Gateway + Frontend
-  STP_scripts           Middleware (X32, MoIP, OBS)
-  STP_healthdash        Health Monitoring
-  STP_THRFiles_Current  Legacy THR Project Files
+REPO:           STP_tablets (single repo — everything consolidated)
 
-OBS PROFILES:   ~/Library/Application Support/obs-studio/
+TESTS:          cd ~/STP/STP_tablets/gateway && pytest tests/
 
 SERVICE MANAGEMENT:
   launchctl list | grep stpaul                     # Check status

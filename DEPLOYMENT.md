@@ -31,49 +31,45 @@ A unified AV control platform for **St. Paul American Coptic Orthodox Church** t
 - **Automation** -- Home Assistant integration
 - **Monitoring** -- HealthDash service dashboard
 
-The system runs across **three repositories** and **five services**.
+The system runs as a **single consolidated gateway** from one repository (`STP_tablets`).
 
 ---
 
 ## 2. Architecture
 
 ```
-                        +-----------------+
-   Tablets / Browsers   |   HealthDash    |
-          |             |   :20855        |
-          v             +--------+--------+
-   +------+------+              |
-   | STP Gateway  |<- - polls - +
-   |   :8080      |
-   +--+---+---+---+
-      |   |   |
-      v   v   v
-   +--++ ++-+ +--+
-   |X32| |Mo| |OB|
-   |:34| |IP| |S |
-   |00 | |:5| |:4|
-   +---+ |00| |45|
-         |2 | |6 |
-         +--+ +--+
+Tablets / Browsers ──► STP Gateway (:20858)
+                          │
+              ┌───────────┼───────────┬──────────┬───────────┐
+              ▼           ▼           ▼          ▼           ▼
+         X32 Module  MoIP Module  OBS Module  PTZ Direct  Epson Direct
+         (built-in)  (built-in)   (built-in)
+              │           │           │          │           │
+              ▼           ▼           ▼          ▼           ▼
+         X32 Mixer   MoIP Ctrl   OBS Studio  10 Cameras  4 Projectors
+        .60.231     10.100.20.11   :4455     .60.201-210 .60.233-236
 
-   X32 Middleware  ------>  Behringer X32 Mixer (10.100.60.231)
-   MoIP Middleware ------>  Binary MoIP Controller (10.100.20.11:23)
-   OBS Middleware  ------>  OBS WebSocket (127.0.0.1:4455)
-   STP Gateway     ------>  PTZ Cameras (10.100.60.201-210)
-   STP Gateway     ------>  Epson Projectors (10.100.60.111-114)
-   STP Gateway     ------>  Home Assistant (10.100.60.245:8123)
+Gateway also talks directly to:
+  • Home Assistant (10.100.60.245:8123) — power, WattBox, EcoFlow
+  • Camlytics Cloud API — occupancy analytics
+  • WiiM speakers — TTS announcements
+
+Built-in services:
+  • Health monitoring (30+ checks, alerts, recovery)
+  • Occupancy analytics (CSV parsing, Chart.js dashboard)
+  • TTS announcements (edge-tts generation, WiiM playback)
+  • Event automation (calendar-driven setup/teardown macros)
+  • User management (bcrypt auth, roles)
 ```
 
 ### Component Responsibilities
 
-| Component | Repo | Port | Role |
-|-----------|------|------|------|
-| **STP Gateway** | `STP_tablets/gateway/` | 8080 | Unified API + static file server + WebSocket hub |
-| **X32 Middleware** | `STP_scripts/x32-flask.py` | 3400 | Audio mixer proxy (OSC over UDP) |
-| **MoIP Middleware** | `STP_scripts/moip-flask.py` | 5002 | Video matrix proxy (Telnet) |
-| **OBS Middleware** | `STP_scripts/obs-flask.py` | 4456 | Streaming proxy (WebSocket) |
-| **HealthDash** | `STP_healthdash/` | 20855 | System health monitoring dashboard |
+| Component | Location | Port | Role |
+|-----------|----------|------|------|
+| **STP Gateway** | `STP_tablets/gateway/` | 20858 | Unified API + static file server + WebSocket hub + all protocol modules |
 | **Frontend** | `STP_tablets/frontend/` | (served by gateway) | Tablet web UI |
+
+> **Note:** All middleware (X32, MoIP, OBS) and HealthDash have been absorbed into the gateway. The standalone scripts in `STP_scripts/` and `STP_healthdash/` are archived as rollback options only.
 
 ---
 
@@ -83,11 +79,11 @@ The system runs across **three repositories** and **five services**.
 
 | Requirement | Version | Notes |
 |-------------|---------|-------|
-| Python | 3.9+ | Tested with 3.11 |
+| Python | 3.11+ | Tested with 3.11 and 3.13 |
 | pip | latest | For package installation |
 | Git | 2.x+ | Repository management |
-| OBS Studio | 30+ | With WebSocket Server enabled (Settings > WebSocket Server) |
-| ffprobe | latest | Only needed if HealthDash monitors RTSP camera streams |
+| OBS Studio | 30+ | With WebSocket Server enabled (on same or remote machine) |
+| ffprobe | latest | Only needed for RTSP camera health checks |
 
 ### Hardware (on-network)
 
@@ -96,7 +92,7 @@ The system runs across **three repositories** and **five services**.
 | Behringer X32 Mixer | 10.100.60.231 | OSC / UDP |
 | Binary MoIP Controller | 10.100.20.11 | Telnet (:23) |
 | 10 PTZ Cameras | 10.100.60.201-210 | HTTP CGI |
-| 4 Epson Projectors | 10.100.60.111-114 | HTTP API |
+| 4 Epson Projectors | 10.100.60.233-236 | HTTP API |
 | 7 WattBox PDUs | 10.100.60.61-67 | HTTP + Basic Auth |
 | Home Assistant | 10.100.60.245:8123 | REST API |
 | Insteon Hub | 10.100.60.193:25105 | HTTP |
@@ -104,9 +100,9 @@ The system runs across **three repositories** and **five services**.
 ### Network
 
 - Server must be on the `10.100.60.x` subnet
-- Firewall must allow inbound TCP on ports: **8080** (gateway), **20855** (healthdash)
+- Firewall must allow inbound TCP on port: **20858** (gateway)
 - Outbound access to cameras, projectors, mixer, MoIP controller
-- Optional: outbound HTTPS to Home Assistant Cloud URL
+- Optional: outbound HTTPS to Home Assistant Cloud URL and Camlytics Cloud
 
 ---
 
@@ -117,10 +113,31 @@ The system runs across **three repositories** and **five services**.
 ```
 STP_tablets/
 ├── gateway/
-│   ├── gateway.py                  # Main gateway application (~1,800 lines)
-│   ├── config.yaml                 # All configuration (IPs, keys, polling)
+│   ├── gateway.py                  # Entry point shim (→ gateway_app.py)
+│   ├── gateway_app.py              # Flask/SocketIO setup, startup (~600 lines)
+│   ├── api_routes.py               # REST endpoint handlers (~3,500 lines)
+│   ├── auth.py                     # IP allowlist, PIN, sessions, permissions
+│   ├── macro_engine.py             # Macro parsing, execution (~1,270 lines)
+│   ├── polling.py                  # Background pollers, state cache, watchdog
+│   ├── scheduler.py                # Cron-like schedule execution
+│   ├── database.py                 # SQLite audit log, schedule DB
+│   ├── socket_handlers.py          # SocketIO events, rooms, heartbeat
+│   ├── x32_module.py               # Direct X32 mixer OSC/UDP
+│   ├── moip_module.py              # Direct MoIP controller Telnet
+│   ├── obs_module.py               # Direct OBS Studio WebSocket
+│   ├── health_module.py            # Built-in health monitoring (~1,360 lines)
+│   ├── occupancy_module.py         # Occupancy analytics (CSV + pandas)
+│   ├── announcement_module.py      # TTS announcements (edge-tts + WiiM)
+│   ├── event_automation.py         # Calendar-driven event automation
+│   ├── user_module.py              # User account management (bcrypt)
+│   ├── config.yaml                 # Device IPs, polling intervals, health checks
 │   ├── macros.yaml                 # Named action sequences (20+ macros)
-│   ├── requirements.txt            # Gateway-specific dependencies
+│   ├── announcements.yaml          # TTS announcement definitions
+│   ├── users.yaml                  # User account database
+│   ├── .env                        # Secrets (not committed, see .env.example)
+│   ├── .env.example                # Template for secrets
+│   ├── requirements.txt            # All Python dependencies
+│   ├── tests/                      # 12 test files (~3,000 lines)
 │   └── logs/
 │       └── stp-gateway.log
 ├── frontend/
@@ -128,7 +145,7 @@ STP_tablets/
 │   ├── config/
 │   │   ├── devices.json           # Hardware definitions, scenes, IR codes
 │   │   ├── permissions.json       # Per-tablet page access matrix
-│   │   └── settings.json         # App settings, endpoint URLs
+│   │   └── settings.json         # App metadata, version (YY-NNN format)
 │   ├── css/
 │   │   └── styles.css             # Dark tablet theme + responsive
 │   ├── js/
@@ -139,11 +156,11 @@ STP_tablets/
 │   │   │   ├── obs.js            # OBS streaming API
 │   │   │   ├── x32.js            # X32 audio API
 │   │   │   ├── moip.js           # MoIP video API
-│   │   │   ├── wattbox.js        # WattBox power API
 │   │   │   ├── ptz.js            # PTZ camera API
 │   │   │   ├── epson.js          # Epson projector API
 │   │   │   ├── health.js         # Health polling API
-│   │   │   └── macro.js          # Macro button API
+│   │   │   ├── macro.js          # Macro button API
+│   │   │   └── notifications.js  # Notification system
 │   │   └── pages/                 # Page view controllers
 │   │       ├── home.js           # Dashboard landing page
 │   │       ├── main.js           # Main church controls
@@ -154,111 +171,41 @@ STP_tablets/
 │   │       ├── stream.js         # Live stream + camera controls
 │   │       ├── source.js         # Video source matrix
 │   │       ├── security.js       # Security cameras
+│   │       ├── health.js         # Health monitoring dashboard
+│   │       ├── occupancy.js      # Occupancy analytics
 │   │       └── settings.js       # Admin settings + audit log
 │   └── assets/images/              # UI graphics
 │       └── church-seal.svg        # Church logo
+├── hooks/
+│   └── pre-commit                  # Runs tests + auto-increments version
 ├── CLAUDE.md
 └── DEPLOYMENT.md
 ```
 
-### STP_scripts (Middleware -- separate repo)
-
-```
-STP_scripts/
-├── moip-flask.py                   # MoIP video matrix middleware
-├── x32-flask.py                    # X32 audio mixer middleware
-├── obs-flask.py                    # OBS streaming middleware
-└── requirements.txt                # Middleware dependencies
-```
-
-### STP_healthdash (Monitoring -- separate repo)
-
-```
-STP_healthdash/
-├── app.py                          # Health monitoring app (~1,400 lines)
-├── config.yaml                     # Service definitions + alert config
-├── requirements.txt                # Dependencies
-├── logs/
-│   └── healthdash.log
-├── static/
-│   ├── app.js                     # Dashboard frontend JS
-│   ├── styles.css                 # Dashboard styling
-│   └── logo.png
-└── templates/
-    ├── base.html
-    ├── dashboard.html
-    └── login.html
-```
+> **Note:** The `STP_scripts/`, `STP_healthdash/`, and `STP_Occupancy/` repos are archived. All functionality has been absorbed into the gateway. They remain available as rollback options only.
 
 ---
 
 ## 5. Installation
 
-### 5.1 Clone Repositories
+### 5.1 Clone Repository
 
 ```bash
-# All repos should be siblings in the same parent directory
 cd /path/to/projects
-
 git clone <STP_tablets_url>
-git clone <STP_scripts_url>
-git clone <STP_healthdash_url>
 ```
 
 The gateway serves the frontend from a sibling directory (`../frontend`). Verify this layout:
 
 ```
-projects/
-├── STP_tablets/           # gateway + frontend (this repo)
-│   ├── gateway/
-│   └── frontend/
-├── STP_scripts/           # middleware proxies
-└── STP_healthdash/        # monitoring dashboard
+STP_tablets/
+├── gateway/
+└── frontend/
 ```
 
-### 5.2 Install Middleware Dependencies
+### 5.2 Create Virtual Environment & Install Dependencies
 
 ```bash
-cd STP_scripts
-pip install -r requirements.txt
-```
-
-This installs:
-- `flask==3.0.3`
-- `waitress==2.1.2`
-
-### 5.3 Install Gateway Dependencies
-
-```bash
-cd STP_tablets/gateway
-pip install -r requirements.txt
-```
-
-This installs:
-- `flask==3.0.3`
-- `flask-socketio==5.4.1`
-- `eventlet==0.37.0`
-- `requests==2.32.3`
-- `pyyaml==6.0.2`
-
-### 5.4 Install HealthDash Dependencies
-
-```bash
-cd STP_healthdash
-pip install -r requirements.txt
-```
-
-This installs:
-- `Flask==3.0.0`
-- `requests==2.31.0`
-- `PyYAML==6.0.1`
-- `psutil==5.9.8`
-- `waitress==2.1.2`
-
-### 5.5 (Recommended) Use Virtual Environments
-
-```bash
-# For each service, create an isolated venv
 cd STP_tablets/gateway
 python -m venv .venv
 source .venv/bin/activate    # Linux/macOS
@@ -266,32 +213,57 @@ source .venv/bin/activate    # Linux/macOS
 pip install -r requirements.txt
 ```
 
+This installs:
+- `flask==3.0.3`
+- `flask-socketio==5.4.1`
+- `python-socketio>=5.11,<6`
+- `python-engineio>=4.9,<5`
+- `eventlet==0.37.0`
+- `requests==2.32.3`
+- `pyyaml==6.0.2`
+- `python-dotenv==1.0.1`
+- `xair-api>=2.4.0` (X32 mixer OSC/UDP)
+- `websocket-client>=1.6.0` (OBS WebSocket)
+- `pandas>=2.0` (occupancy analytics)
+- `bcrypt>=4.0` (user authentication)
+- `edge-tts>=7.0` (TTS announcements)
+- `pytest>=8.0` / `pytest-cov>=5.0` (testing)
+
+### 5.3 Configure Secrets
+
+```bash
+cd STP_tablets/gateway
+cp .env.example .env
+# Edit .env with your actual credentials
+```
+
+See `.env.example` for the full list of required secrets (HA token, WattBox password, OBS password, MoIP credentials, etc.).
+
+### 5.4 Install Pre-commit Hook
+
+```bash
+cp hooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+The hook runs the full test suite and auto-increments the version in `frontend/config/settings.json` before each commit.
+
 ---
 
 ## 6. Configuration Reference
 
 ### 6.1 Gateway Configuration (`gateway/config.yaml`)
 
+`config.yaml` contains **non-sensitive** configuration only. All secrets are in `.env`.
+
 ```yaml
 gateway:
   host: "0.0.0.0"             # Bind address (0.0.0.0 = all interfaces)
-  port: 8080                   # HTTP + WebSocket port
+  port: 20858                  # HTTP + WebSocket port
   debug: false                 # Flask debug mode (never true in prod)
   static_dir: "../frontend"   # Path to frontend (relative to gateway/)
 
-middleware:
-  moip:
-    url: "http://127.0.0.1:5002"
-    api_key: "moip-key-234lkj234lkj2345;lkj234@53"
-    timeout: 5                 # seconds
-  x32:
-    url: "http://127.0.0.1:3400"
-    api_key: "x32-key-your-secret-key-here"
-    timeout: 5
-  obs:
-    url: "http://127.0.0.1:4456"
-    api_key: ""                # Empty = no auth
-    timeout: 10
+# middleware: null             # Middleware section removed (all absorbed)
 
 ptz_cameras:
   MainChurch_Rear:   { ip: "10.100.60.201", name: "Cam1921681201" }
@@ -306,14 +278,13 @@ ptz_cameras:
   Gym:               { ip: "10.100.60.210", name: "Cam1921681210" }
 
 projectors:
-  epson1: { ip: "10.100.60.111", name: "PRJ_FrontLeft" }
-  epson2: { ip: "10.100.60.112", name: "PRJ_FrontRight" }
-  epson3: { ip: "10.100.60.113", name: "PRJ_RearLeft" }
-  epson4: { ip: "10.100.60.114", name: "PRJ_RearRight" }
+  epson1: { ip: "10.100.60.233", name: "PRJ_FrontLeft" }
+  epson2: { ip: "10.100.60.234", name: "PRJ_FrontRight" }
+  epson3: { ip: "10.100.60.236", name: "PRJ_RearLeft" }
+  epson4: { ip: "10.100.60.235", name: "PRJ_RearRight" }
 
 home_assistant:
-  url: "https://your-ha-instance.ui.nabu.casa"
-  token: "your-long-lived-access-token"
+  # URL and token loaded from .env (HA_URL, HA_TOKEN)
   timeout: 10
 
 security:
@@ -324,7 +295,7 @@ security:
     - "172.16."
     - "127.0.0.1"
     - "47.150."
-  settings_pin: "1234"        # PIN for settings page access
+  # settings_pin loaded from .env (SETTINGS_PIN)
 
 polling:                       # Background state poll intervals (seconds)
   moip: 10
@@ -333,49 +304,46 @@ polling:                       # Background state poll intervals (seconds)
   projectors: 30
 
 database:
-  path: "stp_gateway.db"      # SQLite audit log
+  path: "stp_gateway.db"      # SQLite audit log + schedules
 
 logging:
   path: "logs/stp-gateway.log"
   level: "INFO"                # DEBUG, INFO, WARNING, ERROR
   max_bytes: 5242880           # 5 MB per log file
   backup_count: 5              # Keep 5 rotated log files
+
+# healthdash:                  # Health check service definitions (30+ services)
+# x32:                         # X32 mixer connection settings
+# moip:                        # MoIP controller connection settings
+# obs:                         # OBS WebSocket connection settings
 ```
 
-### 6.2 Middleware Configuration
+### 6.2 Secrets (`.env`)
 
-The middleware scripts (`x32-flask.py`, `moip-flask.py`, `obs-flask.py`) use hardcoded
-configuration or environment variables. Key values:
+All secrets are stored in `gateway/.env` (loaded by python-dotenv). See `.env.example` for the template:
 
-**X32 Middleware** (`x32-flask.py`):
 ```
-X32_MIXER_IP=10.100.60.231     # Behringer X32 IP address
-X32_PORT=3400                  # Flask listen port
-X32_API_KEY=x32-key-...        # Must match gateway config
-X32_PING_SECONDS=2.0           # Mixer heartbeat interval
-X32_SNAPSHOT_SECONDS=6.0       # Full state capture interval
-```
-
-**MoIP Middleware** (`moip-flask.py`):
-```
-Hardcoded in file:
-  MOIP_HOST = 10.100.20.11    # Binary MoIP controller
-  MOIP_PORT = 23              # Telnet port
-  API_KEY = moip-key-...      # Must match gateway config
-  Flask port = 5002
-```
-
-**OBS Middleware** (`obs-flask.py`):
-```
-OBS_WS_URL=ws://127.0.0.1:4455   # OBS WebSocket URL
-OBS_PORT=4456                     # Flask listen port
-OBS_PING_SECONDS=3.0
-OBS_SNAPSHOT_SECONDS=6.0
+HA_URL=                        # Home Assistant URL
+HA_TOKEN=                      # Home Assistant long-lived access token
+WATTBOX_USERNAME=              # WattBox PDU credentials
+WATTBOX_PASSWORD=
+OBS_WS_PASSWORD=               # OBS WebSocket password (if set)
+MOIP_USERNAME=                 # MoIP controller credentials
+MOIP_PASSWORD=
+MOIP_HA_WEBHOOK_ID=            # HA webhook for MoIP watchdog
+FULLY_KIOSK_PASSWORD=          # Fully Kiosk Browser admin password
+FLASK_SECRET_KEY=              # Flask session secret
+SETTINGS_PIN=                  # PIN for settings page access
+SECURE_PIN=                    # PIN for secure operations
+REMOTE_AUTH_USER=              # Remote auth credentials
+REMOTE_AUTH_PASS=
+HEALTHDASH_WEBHOOK_URL=        # Alert webhook URL
+ANTHROPIC_API_KEY=             # AI chatbot (optional)
 ```
 
 ### 6.3 Frontend Configuration
 
-**`frontend/config/settings.json`** -- App metadata, endpoint URLs, polling intervals
+**`frontend/config/settings.json`** -- App metadata, version (auto-incremented YY-NNN format by pre-commit hook)
 
 **`frontend/config/devices.json`** -- Hardware definitions:
 - MoIP transmitters (28) and receivers (28)
@@ -386,55 +354,25 @@ OBS_SNAPSHOT_SECONDS=6.0
 - Tablet IDs: `Tablet_Mainchurch`, `Tablet_Chapel`, `Tablet_SocialHall`, etc.
 - Each tablet gets a boolean map of which pages (home, main, chapel, ...) it can access
 
-### 6.4 HealthDash Configuration (`STP_healthdash/config.yaml`)
+### 6.4 Health Monitoring Configuration
 
-See the full file in the repo. Key sections:
+Health check definitions are in `gateway/config.yaml` under the `healthdash:` section. Key sub-sections:
 
-- **`app`** -- Port 20855, refresh interval, timeouts
-- **`security`** -- Trusted IP prefixes, login password
-- **`home_assistant`** -- URL + token for recovery actions
+- **`services`** -- List of ~30+ monitored services with check types (http, http_json, tcp, process, obs_rpc, ffprobe_rtsp, composite, heartbeat_group)
 - **`alerts`** -- Webhook URL + default thresholds
-- **`services`** -- List of ~30+ monitored services grouped by type
+- Health monitoring is built into the gateway -- no separate service needed
 
 ---
 
 ## 7. Service Startup
 
-### 7.1 Required Startup Order
+### 7.1 Starting the Gateway
 
-Services must start in this order because the gateway depends on the middleware:
+Only one service needs to be started -- the consolidated gateway handles everything:
 
-```
-Step 1:  X32 Middleware     (port 3400)
-Step 2:  MoIP Middleware    (port 5002)
-Step 3:  OBS Middleware     (port 4456)
-Step 4:  STP Gateway        (port 8080)  -- depends on steps 1-3
-Step 5:  HealthDash          (port 20855) -- monitors all above
-```
-
-### 7.2 Starting Each Service
-
-**Terminal 1 -- X32 Middleware:**
-```bash
-cd /path/to/STP_scripts
-python x32-flask.py
-```
-
-**Terminal 2 -- MoIP Middleware:**
-```bash
-cd /path/to/STP_scripts
-python moip-flask.py
-```
-
-**Terminal 3 -- OBS Middleware:**
-```bash
-cd /path/to/STP_scripts
-python obs-flask.py
-```
-
-**Terminal 4 -- STP Gateway:**
 ```bash
 cd /path/to/STP_tablets/gateway
+source .venv/bin/activate
 python gateway.py
 ```
 
@@ -446,41 +384,19 @@ Gateway CLI options:
 --port PORT      Override listen port
 ```
 
-**Terminal 5 -- HealthDash:**
-```bash
-cd /path/to/STP_healthdash
-python app.py
-```
-
-### 7.3 Verifying Services Are Running
+### 7.2 Verifying the Gateway Is Running
 
 ```bash
 # Gateway health check
-curl http://127.0.0.1:8080/api/health
+curl http://127.0.0.1:20858/api/health
 # Expected: {"healthy": true, "version": "...", "mock_mode": false}
-
-# X32 middleware
-curl http://127.0.0.1:3400/health
-# Expected: {"healthy": true, "cur_scene": ..., "cur_scene_name": "..."}
-
-# MoIP middleware
-curl http://127.0.0.1:5002/status
-# Expected: {"healthy": true, ...}
-
-# OBS middleware
-curl http://127.0.0.1:4456/health
-# Expected: JSON with OBS status
-
-# HealthDash
-curl http://127.0.0.1:20855/api/summary
-# Expected: {"down": 0, "warning": 0, "healthy": N}
 ```
 
-### 7.4 Accessing the Frontend
+### 7.3 Accessing the Frontend
 
 Open a browser or tablet to:
 ```
-http://<server-ip>:8080/
+http://<server-ip>:20858/
 ```
 
 The gateway serves the `frontend/` directory as static files and provides
@@ -492,7 +408,7 @@ the Socket.IO client library at `/socket.io/socket.io.js`.
 
 ### 8.1 Gateway API Endpoints
 
-All endpoints are relative to `http://<server>:8080`.
+All endpoints are relative to `http://<server>:20858`.
 
 #### System
 
@@ -583,7 +499,7 @@ Scene execution is server-side with retry logic and real-time Socket.IO progress
 
 ### 8.2 Socket.IO Events
 
-The gateway runs Flask-SocketIO on the same port (8080).
+The gateway runs Flask-SocketIO on the same port (20858).
 
 #### Client -> Server
 
@@ -641,10 +557,10 @@ PTZ CAMERAS
   10.100.60.210    Gym
 
 EPSON PROJECTORS
-  10.100.60.111    Front Left  (epson1)
-  10.100.60.112    Front Right (epson2)
-  10.100.60.113    Rear Left   (epson3)
-  10.100.60.114    Rear Right  (epson4)
+  10.100.60.233    Front Left  (epson1)
+  10.100.60.234    Front Right (epson2)
+  10.100.60.236    Rear Left   (epson3)
+  10.100.60.235    Rear Right  (epson4)
 
 WATTBOX PDUs
   10.100.60.61     WattBox 1 (Audio Wall)
@@ -666,14 +582,12 @@ CAMERAS (RTSP via Camlytics)
 ### Port Map (localhost services)
 
 ```
- 3400   X32 Flask Middleware
- 4455   OBS WebSocket (OBS Studio native)
- 4456   OBS Flask Middleware
- 5002   MoIP Flask Middleware
- 8080   STP Gateway (HTTP + Socket.IO)
+ 4455   OBS WebSocket (OBS Studio native — may be on remote Windows PC)
  8123   Home Assistant (if local)
-20855   HealthDash Monitor
+20858   STP Gateway (HTTP + Socket.IO + all built-in modules)
 ```
+
+> **Note:** Ports 3400 (X32 middleware), 4456 (OBS middleware), 5002 (MoIP middleware), and 20855 (HealthDash) are no longer used. All functionality is built into the gateway on port 20858.
 
 ### Trusted IP Prefixes
 
@@ -704,6 +618,8 @@ These prefixes bypass authentication:
 | Stream | `#stream` | OBS scenes, stream/record, PTZ camera controls |
 | Source | `#source` | Full video source routing matrix |
 | Security | `#security` | Security camera feeds |
+| Health | `#health` | Service health monitoring dashboard |
+| Occupancy | `#occupancy` | Occupancy analytics (Chart.js charts, KPI cards) |
 | Settings | `#settings` | Admin settings, audit log (PIN protected) |
 
 ### Tablet Permission Matrix
@@ -743,16 +659,14 @@ The following actions require a confirmation dialog before executing:
 
 ---
 
-## 11. Health Monitoring (HealthDash)
+## 11. Health Monitoring (Built-in)
+
+Health monitoring is built into the gateway (absorbed from the standalone HealthDash app in Phase 4). Access it at `#health` in the frontend.
 
 ### Monitored Services
 
 | Service | Type | Check Method | Interval |
 |---------|------|-------------|----------|
-| X32 Middleware | `http_json` | GET /health, check `healthy: true` | 120s |
-| MoIP Middleware | `http_json` | GET /status, check `healthy: true` | 10s |
-| OBS Middleware | `obs_rpc` | OBS RPC health check | 10s |
-| STP Gateway | `http_json` | GET /api/health, check `healthy: true` | 10s |
 | Home Assistant | `http` | GET /api/ with bearer token | 10s |
 | Insteon | `http` | GET / (accept 200 or 401) | 10s |
 | WattBox PDUs (7) | `composite` | HTTP to each PDU with basic auth | 300s |
@@ -761,6 +675,8 @@ The following actions require a confirmation dialog before executing:
 | Camlytics Cloud | `http` | HTTPS to cloud.camlytics.com | 600s |
 | Projectors (4) | `composite` | HTTP to each projector | 60s |
 | Control Tablets (6) | `heartbeat_group` | WebSocket heartbeat tracking | 30s |
+
+9 check types supported: `http`, `http_json`, `tcp`, `process`, `process_and_tcp`, `obs_rpc`, `ffprobe_rtsp`, `composite`, `heartbeat_group`.
 
 ### Health Levels
 
@@ -773,99 +689,36 @@ The following actions require a confirmation dialog before executing:
 ### Alert System
 
 When a service transitions to Warning or Down:
-1. HealthDash fires a webhook to Home Assistant
+1. The health module fires a webhook to Home Assistant
 2. HA can trigger automations (notifications, recovery scripts)
 3. Cooldown prevents alert storms
 
-### Recovery Actions
+### Accessing Health Dashboard
 
-Some services support one-click recovery via Home Assistant scripts:
-- **X32 Middleware** -- `script.restart_x32_middleware`
-- **MoIP Middleware** -- `script.restart_moip_middleware`
-- **OBS Middleware** -- `script.restart_obs_middleware`
-
-### Accessing HealthDash
-
+Navigate to `#health` in the tablet UI, or use the API:
+```bash
+curl http://<server-ip>:20858/api/health/summary
 ```
-http://<server-ip>:20855/
-```
-
-Login required from non-trusted IPs. Password: configured in `config.yaml` under
-`security.password`.
 
 ---
 
 ## 12. Production Deployment
 
-### 12.1 Systemd Services (Linux)
+### 12.1 Systemd Service (Linux)
 
-Create service files for each component:
-
-**`/etc/systemd/system/stp-x32.service`**
-```ini
-[Unit]
-Description=STP X32 Audio Middleware
-After=network.target
-
-[Service]
-Type=simple
-User=stpaul
-WorkingDirectory=/path/to/STP_scripts
-ExecStart=/usr/bin/python3 x32-flask.py
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**`/etc/systemd/system/stp-moip.service`**
-```ini
-[Unit]
-Description=STP MoIP Video Middleware
-After=network.target
-
-[Service]
-Type=simple
-User=stpaul
-WorkingDirectory=/path/to/STP_scripts
-ExecStart=/usr/bin/python3 moip-flask.py
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**`/etc/systemd/system/stp-obs.service`**
-```ini
-[Unit]
-Description=STP OBS Streaming Middleware
-After=network.target
-
-[Service]
-Type=simple
-User=stpaul
-WorkingDirectory=/path/to/STP_scripts
-ExecStart=/usr/bin/python3 obs-flask.py
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
+Only one service file is needed:
 
 **`/etc/systemd/system/stp-gateway.service`**
 ```ini
 [Unit]
-Description=STP Gateway (Unified API + Frontend)
-After=network.target stp-x32.service stp-moip.service stp-obs.service
+Description=STP Gateway (Consolidated AV Control)
+After=network.target
 
 [Service]
 Type=simple
 User=stpaul
 WorkingDirectory=/path/to/STP_tablets/gateway
-ExecStart=/usr/bin/python3 gateway.py
+ExecStart=/path/to/STP_tablets/gateway/.venv/bin/python3 gateway.py
 Restart=on-failure
 RestartSec=10
 
@@ -873,50 +726,27 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
-**`/etc/systemd/system/stp-healthdash.service`**
-```ini
-[Unit]
-Description=STP HealthDash Monitor
-After=network.target stp-gateway.service
-
-[Service]
-Type=simple
-User=stpaul
-WorkingDirectory=/path/to/STP_healthdash
-ExecStart=/usr/bin/python3 app.py
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start all services:
+Enable and start:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable stp-x32 stp-moip stp-obs stp-gateway stp-healthdash
-sudo systemctl start stp-x32 stp-moip stp-obs
-sleep 3
+sudo systemctl enable stp-gateway
 sudo systemctl start stp-gateway
-sleep 2
-sudo systemctl start stp-healthdash
 ```
 
 ### 12.2 Windows Deployment
 
-On Windows, use Task Scheduler or NSSM (Non-Sucking Service Manager) to run each
-Python script as a Windows service. The startup order is the same.
+On Windows, use Task Scheduler or NSSM (Non-Sucking Service Manager) to run
+`gateway.py` as a Windows service. See `MIGRATION_GUIDE_PC.md` for details.
 
 ### 12.3 Log Rotation
 
-Logs are automatically rotated by the applications:
-- Gateway: 5 MB per file, 5 backups (`gateway/logs/stp-gateway.log`)
-- HealthDash: 5 MB per file, 5 backups (`STP_healthdash/logs/healthdash.log`)
+Logs are automatically rotated by the gateway:
+- 5 MB per file, 5 backups (`gateway/logs/stp-gateway.log`)
 
 ### 12.4 Database Maintenance
 
-The gateway uses SQLite for audit logging (`gateway/stp_gateway.db`). Over time this file
-will grow. Periodically archive or truncate old entries:
+The gateway uses SQLite for audit logging and schedules (`gateway/stp_gateway.db`). Over time
+this file will grow. Periodically archive or truncate old entries:
 
 ```sql
 -- Keep only last 30 days
@@ -926,13 +756,13 @@ VACUUM;
 
 ### 12.5 Security Checklist
 
-- [ ] Change `settings_pin` from default `"1234"` in gateway config
-- [ ] Change `password` from default `"Companion4Us"` in healthdash config
-- [ ] Change `secret_key` from default in healthdash config
-- [ ] Review `allowed_ips` prefixes match your actual network
+- [ ] Set `SETTINGS_PIN` in `.env` (change from default `1234`)
+- [ ] Set `FLASK_SECRET_KEY` in `.env` to a random string
+- [ ] Set `REMOTE_AUTH_USER` and `REMOTE_AUTH_PASS` in `.env`
+- [ ] Review `allowed_ips` prefixes in `config.yaml` match your actual network
 - [ ] Ensure Home Assistant token has appropriate scopes
-- [ ] Run services behind a reverse proxy (nginx) with TLS for external access
-- [ ] Never expose ports 3400, 4456, 5002 directly to the internet
+- [ ] Ensure `.env` file is NOT committed to git (check `.gitignore`)
+- [ ] Run the gateway behind a reverse proxy (nginx) with TLS for external access
 - [ ] WattBox default credentials (`admin/WBAdmin1`) should be changed on devices
 
 ---
@@ -956,38 +786,22 @@ tail -f logs/stp-gateway.log
 ### Tablets can't connect
 
 1. Verify the tablet is on a trusted IP prefix
-2. Test gateway reachability: `curl http://<gateway-ip>:8080/api/health`
+2. Test gateway reachability: `curl http://<gateway-ip>:20858/api/health`
 3. Check browser console (F12) for Socket.IO connection errors
 4. Verify `localStorage.tabletId` is set correctly
 
 ### No real-time updates
 
 1. Confirm Socket.IO is loading: check browser Network tab for `/socket.io/` requests
-2. Verify middleware services are running on expected ports
-3. Check gateway logs for polling errors
-4. The status bar shows connection state: "Connected", "Reconnecting (N)...", or "Disconnected"
-
-### Middleware service offline
-
-```bash
-# Check if the process is running
-ps aux | grep "x32-flask\|moip-flask\|obs-flask"
-
-# Test the specific service
-curl http://127.0.0.1:3400/health    # X32
-curl http://127.0.0.1:5002/status    # MoIP
-curl http://127.0.0.1:4456/health    # OBS
-
-# Restart via systemd
-sudo systemctl restart stp-x32
-```
+2. Check gateway logs for polling errors
+3. The status bar shows connection state: "Connected", "Reconnecting (N)...", or "Disconnected"
 
 ### OBS not connecting
 
 1. Verify OBS Studio is running with WebSocket Server enabled
 2. Check OBS settings: Tools > WebSocket Server Settings
-3. Default OBS WebSocket port is 4455 (the middleware listens on 4456)
-4. If password-protected, set `OBS_WS_PASSWORD` environment variable
+3. Default OBS WebSocket port is 4455
+4. If password-protected, set `OBS_WS_PASSWORD` in the gateway's `.env` file
 
 ### Home Assistant integration failing
 
@@ -996,15 +810,14 @@ sudo systemctl restart stp-x32
 3. If using Cloud URL, verify internet connectivity
 4. Check HA logs for webhook delivery issues
 
-### HealthDash shows services as down
+### Health dashboard shows services as down
 
-1. The HealthDash checks services independently -- a service showing "down"
-   means HealthDash couldn't reach it directly
-2. Verify the service URLs in `config.yaml` match actual running ports
+1. The health module checks services independently -- a service showing "down"
+   means the gateway couldn't reach it directly
+2. Verify the service URLs/IPs in `config.yaml` under `healthdash:` section
 3. Some services (WattBox, cameras) have long poll intervals (300-600s) --
    wait for the next check cycle
-4. Use the "Check Now" button in the HealthDash UI to force an immediate check
-5. For RTSP cameras: ensure `ffprobe` is installed and the path is correct
+4. For RTSP cameras: ensure `ffprobe` is installed and the path is correct
 
 ### Scene execution fails
 
@@ -1018,20 +831,21 @@ sudo systemctl restart stp-x32
 ## Quick Reference Card
 
 ```
-GATEWAY:       http://<server>:8080/
-HEALTHDASH:    http://<server>:20855/
-SETTINGS PIN:  1234 (change in config)
+GATEWAY:       http://<server>:20858/
+HEALTH PAGE:   http://<server>:20858/#health
+SETTINGS PIN:  (set in .env)
 
-START ORDER:   x32-flask -> moip-flask -> obs-flask -> gateway -> healthdash
-
-MOCK MODE:     cd STP_tablets/gateway && python gateway.py --mock
+START:         cd STP_tablets/gateway && source .venv/bin/activate && python gateway.py
+MOCK MODE:     cd STP_tablets/gateway && source .venv/bin/activate && python gateway.py --mock
 
 LOGS:
   Gateway:     STP_tablets/gateway/logs/stp-gateway.log
-  HealthDash:  STP_healthdash/logs/healthdash.log
 
 CONFIG FILES:
   Gateway:     STP_tablets/gateway/config.yaml
+  Secrets:     STP_tablets/gateway/.env
+  Macros:      STP_tablets/gateway/macros.yaml
   Frontend:    STP_tablets/frontend/config/{settings,devices,permissions}.json
-  HealthDash:  STP_healthdash/config.yaml
+
+TESTS:         cd STP_tablets/gateway && pytest tests/
 ```
