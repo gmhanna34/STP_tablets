@@ -229,6 +229,36 @@ def fetch_all_ha_entities(ctx):
     return resp.json(), None
 
 
+def _force_ha_entity_refresh(ctx, entity_ids: list):
+    """Ask HA to refresh specific entities so /api/states returns current data.
+
+    Integrations with long poll intervals (WattBox ~30s+) can leave stale
+    state in HA after a switch command.  ``homeassistant/update_entity``
+    forces an immediate poll of the underlying device.
+    """
+    ha_cfg = ctx.cfg.get("home_assistant", {})
+    if not ha_cfg.get("url") or not ha_cfg.get("token"):
+        return
+    headers = {
+        "Authorization": f"Bearer {ha_cfg['token']}",
+        "Content-Type": "application/json",
+    }
+    for eid in entity_ids:
+        try:
+            resp = http_requests.post(
+                f"{ha_cfg['url']}/api/services/homeassistant/update_entity",
+                headers=headers,
+                json={"entity_id": eid},
+                timeout=ha_cfg.get("timeout", 10),
+            )
+            if resp.status_code < 400:
+                logger.debug(f"Forced HA refresh for {eid}")
+            else:
+                logger.debug(f"HA update_entity for {eid} returned {resp.status_code}")
+        except Exception as e:
+            logger.debug(f"HA update_entity for {eid} failed: {e}")
+
+
 # ---------------------------------------------------------------------------
 # Macro execution
 # ---------------------------------------------------------------------------
@@ -1091,6 +1121,12 @@ def _step_verify_pending(ctx, step: dict, tablet: str,
         elapsed = time.time() - start
         if elapsed >= timeout:
             break
+
+        # Force HA to refresh pending entities before checking state.
+        # Without this, integrations with long poll intervals (e.g. WattBox
+        # at 30s+) may still show stale state after the command succeeded.
+        if retry_round > 0:
+            _force_ha_entity_refresh(ctx, [e.entity_id for e in entries])
 
         # Fetch all HA states in one bulk call
         entity_states = {}
