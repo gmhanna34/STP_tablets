@@ -58,14 +58,14 @@ SAMPLE_CFG = {
         "profiles": {
             "main_church": {
                 "label": "Main Church Service",
-                "keywords": ["liturgy", "mass", "vespers", "main church"],
+                "keywords": ["liturgy", "mass", "matins", "feast", "main church"],
                 "setup_macro": "main_full_setup",
                 "teardown_macro": "main_full_teardown",
                 "preflight_checks": ["x32_module", "moip_module"],
             },
             "chapel": {
                 "label": "Chapel Service",
-                "keywords": ["chapel", "bible study", "youth"],
+                "keywords": ["chapel", "vespers", "bible study", "youth"],
                 "setup_macro": "chapel_full_setup",
                 "teardown_macro": "chapel_full_teardown",
                 "preflight_checks": ["x32_module"],

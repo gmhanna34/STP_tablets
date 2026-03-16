@@ -167,7 +167,36 @@ const SettingsPage = {
       <!-- ============================================================ -->
       <div id="settings-tab-schedule" class="settings-tab-content" style="display:none;">
         <div class="page-grid">
+
+          <!-- Event Automation (calendar-driven) -->
           <div class="control-section">
+            <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
+              <span><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">event</span> Calendar Event Automation</span>
+              <button class="btn" id="btn-ea-refresh" style="min-height:auto;padding:4px 10px;font-size:11px;" title="Refresh calendar feed">
+                <span class="material-icons" style="font-size:16px;">refresh</span>
+              </button>
+            </div>
+            <div id="ea-status-bar" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
+            <div id="ea-events-container">
+              <div class="text-center" style="opacity:0.5;font-size:13px;">Loading calendar events...</div>
+            </div>
+          </div>
+
+          <!-- Event Detail Modal -->
+          <div id="ea-modal-overlay" class="overlay hidden">
+            <div class="modal schedule-modal">
+              <div class="modal-header-bar">
+                <h2 id="ea-modal-title">Event Details</h2>
+                <button class="modal-close" id="ea-modal-close">
+                  <span class="material-icons">close</span>
+                </button>
+              </div>
+              <div class="modal-body" id="ea-modal-body"></div>
+            </div>
+          </div>
+
+          <!-- Cron-style schedules -->
+          <div class="control-section" style="margin-top:16px;">
             <div class="section-title">Scheduled Automations</div>
             <div id="schedule-container">
               <div class="text-center" style="opacity:0.5;font-size:13px;">Loading schedules...</div>
@@ -522,6 +551,7 @@ const SettingsPage = {
     // ── Schedule tab ───────────────────────────────────────────────
     this.loadSchedules();
     this.loadMacroDropdown();
+    this._initEventAutomation();
 
     document.getElementById('btn-add-schedule')?.addEventListener('click', () => {
       this._resetScheduleForm();
@@ -1814,7 +1844,303 @@ const SettingsPage = {
   },
 
   // -----------------------------------------------------------------------
-  // Schedule management
+  // Event Automation (calendar-driven)
+  // -----------------------------------------------------------------------
+
+  _eaProfiles: {},
+  _eaEvents: [],
+  _eaStatus: {},
+
+  async _initEventAutomation() {
+    // Load profiles and status, then events
+    try {
+      const [profilesResp, statusResp] = await Promise.all([
+        fetch('/api/event-automation/profiles'),
+        fetch('/api/event-automation/status'),
+      ]);
+      if (profilesResp.ok) this._eaProfiles = await profilesResp.json();
+      if (statusResp.ok) {
+        this._eaStatus = await statusResp.json();
+        this._renderEAStatusBar();
+      }
+    } catch (e) { console.error('EA init error:', e); }
+
+    await this._loadEAEvents();
+
+    // Refresh button
+    document.getElementById('btn-ea-refresh')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btn-ea-refresh');
+      if (btn) btn.disabled = true;
+      try {
+        await fetch('/api/event-automation/refresh', { method: 'POST' });
+        await this._loadEAEvents();
+        App.showToast('Calendar refreshed', 2000);
+      } catch (e) {
+        App.showToast('Refresh failed', 2000, 'error');
+      }
+      if (btn) btn.disabled = false;
+    });
+
+    // Modal close
+    document.getElementById('ea-modal-close')?.addEventListener('click', () => {
+      document.getElementById('ea-modal-overlay')?.classList.add('hidden');
+    });
+    document.getElementById('ea-modal-overlay')?.addEventListener('click', (e) => {
+      if (e.target.id === 'ea-modal-overlay') e.target.classList.add('hidden');
+    });
+  },
+
+  _renderEAStatusBar() {
+    const bar = document.getElementById('ea-status-bar');
+    if (!bar) return;
+    const s = this._eaStatus;
+    if (!s.enabled) {
+      bar.innerHTML = `<span style="font-size:12px;color:var(--text-secondary);"><span class="material-icons" style="font-size:14px;vertical-align:text-bottom;">power_off</span> Automation disabled in config</span>`;
+      return;
+    }
+    bar.innerHTML = `
+      <span class="schedule-status-chip schedule-status-ok"><span class="material-icons">event_available</span> ${s.upcoming_events || 0} upcoming</span>
+      <span class="schedule-status-chip"><span class="material-icons">timer</span> Setup ${s.setup_lead_minutes || 30}m before</span>
+      <span class="schedule-status-chip"><span class="material-icons">timer_off</span> Teardown ${s.teardown_delay_minutes || 15}m after</span>
+    `;
+  },
+
+  async _loadEAEvents() {
+    const container = document.getElementById('ea-events-container');
+    if (!container) return;
+    try {
+      const resp = await fetch('/api/event-automation/events?hours=72');
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      this._eaEvents = await resp.json();
+      this._renderEAEvents(container);
+    } catch (e) {
+      container.innerHTML = '<div style="opacity:0.5;font-size:13px;text-align:center;">Failed to load calendar events.</div>';
+    }
+  },
+
+  _renderEAEvents(container) {
+    if (!this._eaEvents || this._eaEvents.length === 0) {
+      container.innerHTML = '<div style="opacity:0.5;font-size:14px;text-align:center;">No upcoming events found in calendar.</div>';
+      return;
+    }
+
+    // Group by date
+    const groups = {};
+    for (const ev of this._eaEvents) {
+      const date = ev.start.split('T')[0];
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(ev);
+    }
+
+    let html = '';
+    const todayStr = new Date().toISOString().split('T')[0];
+    for (const [date, events] of Object.entries(groups)) {
+      const dateObj = new Date(date + 'T12:00:00');
+      const dayLabel = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      const isToday = date === todayStr;
+
+      html += `<div style="margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;display:flex;align-items:center;gap:6px;">
+          ${dayLabel}
+          ${isToday ? '<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;background:var(--accent);color:#fff;">TODAY</span>' : ''}
+        </div>`;
+
+      for (const ev of events) {
+        const startTime = new Date(ev.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        const endTime = new Date(ev.end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        const statusInfo = this._eaStatusInfo(ev.status);
+        const preflightBadge = ev.preflight_result
+          ? `<span style="font-size:10px;padding:1px 5px;border-radius:6px;background:${ev.preflight_result.all_ok ? '#e8f5e9' : '#fff3e0'};color:${ev.preflight_result.all_ok ? '#2e7d32' : '#e65100'};">
+               ${ev.preflight_result.all_ok ? 'Preflight OK' : 'Preflight Warning'}
+             </span>`
+          : '';
+
+        html += `<div class="health-item" style="margin-bottom:4px;cursor:pointer;" data-ea-key="${this._escAttr(ev.key)}">
+          <div style="min-width:0;flex:1;">
+            <div class="health-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._esc(ev.title)}</div>
+            <div style="font-size:11px;color:var(--text-secondary);">
+              ${startTime} – ${endTime} &middot;
+              <span class="material-icons" style="font-size:12px;vertical-align:text-bottom;">smart_toy</span>
+              ${this._esc(ev.profile_label)}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            ${preflightBadge}
+            <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${statusInfo.bg};color:${statusInfo.color};">
+              ${statusInfo.label}
+            </span>
+          </div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+
+    container.innerHTML = html;
+
+    // Bind click handlers to open event detail
+    container.querySelectorAll('[data-ea-key]').forEach(el => {
+      el.addEventListener('click', () => {
+        const key = el.dataset.eaKey;
+        const ev = this._eaEvents.find(e => e.key === key);
+        if (ev) this._openEAModal(ev);
+      });
+    });
+  },
+
+  _eaStatusInfo(status) {
+    const map = {
+      upcoming:  { label: 'Upcoming',  bg: 'var(--surface-alt)', color: 'var(--text-secondary)' },
+      preflight: { label: 'Preflight', bg: '#e3f2fd',            color: '#1565c0' },
+      ready:     { label: 'Ready',     bg: '#fff3e0',            color: '#e65100' },
+      active:    { label: 'Active',    bg: '#e8f5e9',            color: '#2e7d32' },
+      completed: { label: 'Done',      bg: 'var(--surface-alt)', color: 'var(--ok)' },
+      skipped:   { label: 'Skipped',   bg: '#fce4ec',            color: '#c62828' },
+    };
+    return map[status] || map.upcoming;
+  },
+
+  _openEAModal(ev) {
+    const overlay = document.getElementById('ea-modal-overlay');
+    const title = document.getElementById('ea-modal-title');
+    const body = document.getElementById('ea-modal-body');
+    if (!overlay || !title || !body) return;
+
+    title.textContent = ev.title;
+
+    const profileOptions = Object.entries(this._eaProfiles)
+      .map(([id, p]) => `<option value="${id}" ${id === ev.profile_id ? 'selected' : ''}>${this._esc(p.label)}</option>`)
+      .join('');
+
+    const startTime = new Date(ev.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const endTime = new Date(ev.end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const setupTime = new Date(ev.setup_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const teardownTime = new Date(ev.teardown_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const dateLabel = new Date(ev.start).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+    const statusInfo = this._eaStatusInfo(ev.status);
+
+    let preflightHtml = '';
+    if (ev.preflight_result) {
+      const checks = ev.preflight_result.checks || {};
+      let rows = '';
+      for (const [id, check] of Object.entries(checks)) {
+        const icon = check.level === 'ok' ? 'check_circle' : check.level === 'warning' ? 'warning' : 'error';
+        const color = check.level === 'ok' ? 'var(--ok)' : check.level === 'warning' ? 'var(--warn)' : 'var(--down)';
+        rows += `<div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+          <span class="material-icons" style="font-size:14px;color:${color};">${icon}</span>
+          <span>${this._esc(check.name || id)}</span>
+          <span style="color:var(--text-secondary);">${this._esc(check.message || '')}</span>
+        </div>`;
+      }
+      preflightHtml = `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+        <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Preflight Results</div>
+        ${rows}
+      </div>`;
+    }
+
+    body.innerHTML = `
+      <div class="schedule-detail-grid">
+        <div class="schedule-detail-row"><span class="schedule-detail-label">Time</span><span class="schedule-detail-value">${startTime} – ${endTime}</span></div>
+        <div class="schedule-detail-row"><span class="schedule-detail-label">Date</span><span class="schedule-detail-value">${dateLabel}</span></div>
+        <div class="schedule-detail-row"><span class="schedule-detail-label">Status</span><span class="schedule-detail-value"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${statusInfo.bg};color:${statusInfo.color};">${statusInfo.label}</span></span></div>
+        <div class="schedule-detail-row"><span class="schedule-detail-label">Setup at</span><span class="schedule-detail-value">${setupTime}</span></div>
+        <div class="schedule-detail-row"><span class="schedule-detail-label">Teardown at</span><span class="schedule-detail-value">${teardownTime}</span></div>
+        <div class="schedule-detail-row"><span class="schedule-detail-label">Setup Macro</span><span class="schedule-detail-value"><code style="font-size:12px;">${this._esc(ev.setup_macro || 'none')}</code></span></div>
+        <div class="schedule-detail-row"><span class="schedule-detail-label">Teardown Macro</span><span class="schedule-detail-value"><code style="font-size:12px;">${this._esc(ev.teardown_macro || 'none')}</code></span></div>
+        <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
+          <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Profile Override</div>
+          <select class="schedule-profile-select" id="ea-profile-select" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;">
+            <option value="">Auto-detect</option>
+            ${profileOptions}
+          </select>
+        </div>
+        ${preflightHtml}
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+          ${ev.status !== 'skipped'
+            ? `<button class="btn" id="ea-btn-skip" style="min-height:auto;padding:6px 12px;font-size:12px;color:var(--down);">
+                 <span class="material-icons" style="font-size:16px;">block</span> Skip
+               </button>`
+            : `<button class="btn" id="ea-btn-unskip" style="min-height:auto;padding:6px 12px;font-size:12px;color:var(--ok);">
+                 <span class="material-icons" style="font-size:16px;">undo</span> Resume
+               </button>`
+          }
+          <button class="btn" id="ea-btn-setup" style="min-height:auto;padding:6px 12px;font-size:12px;background:#1565c0;border-color:#1565c0;">
+            <span class="material-icons" style="font-size:16px;">play_arrow</span> Run Setup
+          </button>
+          <button class="btn" id="ea-btn-teardown" style="min-height:auto;padding:6px 12px;font-size:12px;">
+            <span class="material-icons" style="font-size:16px;">stop</span> Teardown
+          </button>
+          <button class="btn" id="ea-btn-preflight" style="min-height:auto;padding:6px 12px;font-size:12px;">
+            <span class="material-icons" style="font-size:16px;">fact_check</span> Preflight
+          </button>
+        </div>
+      </div>
+    `;
+
+    // Bind modal actions
+    const key = ev.key;
+    document.getElementById('ea-btn-skip')?.addEventListener('click', async () => {
+      await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/skip`, { method: 'POST' });
+      App.showToast('Event skipped', 2000);
+      overlay.classList.add('hidden');
+      this._loadEAEvents();
+    });
+    document.getElementById('ea-btn-unskip')?.addEventListener('click', async () => {
+      await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/unskip`, { method: 'POST' });
+      App.showToast('Automation resumed', 2000);
+      overlay.classList.add('hidden');
+      this._loadEAEvents();
+    });
+    document.getElementById('ea-btn-setup')?.addEventListener('click', async () => {
+      const resp = await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/trigger`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'setup' }),
+      });
+      const data = await resp.json();
+      App.showToast(data.success ? 'Setup triggered' : (data.error || 'Failed'), 2000, data.success ? '' : 'error');
+      overlay.classList.add('hidden');
+      this._loadEAEvents();
+    });
+    document.getElementById('ea-btn-teardown')?.addEventListener('click', async () => {
+      const resp = await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/trigger`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'teardown' }),
+      });
+      const data = await resp.json();
+      App.showToast(data.success ? 'Teardown triggered' : (data.error || 'Failed'), 2000, data.success ? '' : 'error');
+      overlay.classList.add('hidden');
+      this._loadEAEvents();
+    });
+    document.getElementById('ea-btn-preflight')?.addEventListener('click', async () => {
+      App.showToast('Running preflight...', 2000);
+      await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/preflight`, { method: 'POST' });
+      await this._loadEAEvents();
+      const updated = this._eaEvents.find(e => e.key === key);
+      overlay.classList.add('hidden');
+      if (updated) this._openEAModal(updated);
+    });
+    document.getElementById('ea-profile-select')?.addEventListener('change', async (e) => {
+      await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/override-profile`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile: e.target.value }),
+      });
+      App.showToast(e.target.value ? 'Profile overridden' : 'Profile reset to auto', 2000);
+      this._loadEAEvents();
+    });
+
+    overlay.classList.remove('hidden');
+  },
+
+  _esc(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  },
+
+  _escAttr(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  },
+
+  // -----------------------------------------------------------------------
+  // Schedule management (cron-style)
   // -----------------------------------------------------------------------
 
   async loadSchedules() {
@@ -3390,7 +3716,24 @@ const SettingsPage = {
 
           <div class="help-section">
             <h3><span class="material-icons" style="font-size:18px;vertical-align:text-bottom;margin-right:4px;">schedule</span> Schedule Tab</h3>
-            <p class="help-note">Create and manage timed automation schedules that run macros on specific days and times.</p>
+            <p class="help-note">This tab has two sections: <strong>Calendar Event Automation</strong> (reads the church calendar and auto-runs setup/teardown macros) and <strong>Scheduled Automations</strong> (static cron-style schedules).</p>
+            <h4 style="margin-top:10px;">Calendar Event Automation</h4>
+            <p class="help-note">Automatically sets up and tears down rooms based on the church calendar. Events are matched to profiles (Main Church, Chapel, Social Hall) by keywords in the event title.</p>
+            <dl class="help-list">
+              <dt><span class="material-icons">refresh</span> Refresh</dt>
+              <dd>Re-fetches the church calendar RSS feed immediately.</dd>
+              <dt>Event Cards</dt>
+              <dd>Tap any event to see details, change its profile, run preflight checks, manually trigger setup/teardown, or skip automation for that event.</dd>
+              <dt>Profile Override</dt>
+              <dd>Change the auto-detected room profile for a specific event (e.g., force a "Chapel" event to use the Main Church setup).</dd>
+              <dt><span class="material-icons">block</span> Skip / Resume</dt>
+              <dd>Skip automation for an event so it won't auto-trigger, or resume a previously skipped event.</dd>
+              <dt><span class="material-icons">fact_check</span> Preflight</dt>
+              <dd>Checks that critical AV systems (mixer, video router, streaming) are healthy before the event starts.</dd>
+            </dl>
+            <p class="help-note">Keyword-to-profile mappings are configured in <code>config.yaml</code> under <code>event_automation.profiles</code>.</p>
+            <h4 style="margin-top:10px;">Scheduled Automations</h4>
+            <p class="help-note">Create static schedules that run macros at specific times on specific days of the week.</p>
             <dl class="help-list">
               <dt><span class="material-icons">add_alarm</span> Add Schedule</dt>
               <dd>Opens the schedule form to create a new automation. Set a name, choose a macro, pick a time, and select which days of the week it should run.</dd>
