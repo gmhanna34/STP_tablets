@@ -324,6 +324,54 @@ const SettingsPage = {
           </div>
         </div>
 
+        <!-- Raw File Editors -->
+        <div class="page-grid" style="margin-top:12px;">
+          <div class="control-section" style="grid-column:1/-1;">
+            <div class="section-title">
+              <span class="material-icons" style="font-size:18px;vertical-align:middle;margin-right:4px;">edit_note</span>
+              Raw File Editors
+            </div>
+            <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+              Edit the raw YAML configuration files directly. A backup is created on each save. Restart the gateway for changes to take effect.
+            </div>
+            <div class="control-grid" style="grid-template-columns:1fr 1fr;">
+              <button class="btn" id="btn-edit-config-yaml">
+                <span class="material-icons">settings</span>
+                <span class="btn-label">Edit config.yaml</span>
+              </button>
+              <button class="btn" id="btn-edit-macros-yaml">
+                <span class="material-icons">play_circle</span>
+                <span class="btn-label">Edit macros.yaml</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- File Editor Modal -->
+        <div id="file-editor-overlay" class="overlay hidden">
+          <div class="modal" style="width:95%;max-width:900px;height:85vh;display:flex;flex-direction:column;">
+            <div class="modal-header-bar">
+              <h2 id="file-editor-title">Edit File</h2>
+              <button class="modal-close" id="file-editor-close">
+                <span class="material-icons">close</span>
+              </button>
+            </div>
+            <div class="modal-body" style="flex:1;display:flex;flex-direction:column;padding:8px;overflow:hidden;">
+              <div id="file-editor-error" style="display:none;padding:8px 12px;margin-bottom:8px;border-radius:6px;background:#fce4ec;color:#c62828;font-size:13px;"></div>
+              <textarea id="file-editor-textarea" style="flex:1;width:100%;resize:none;font-family:'SF Mono','Consolas','Monaco',monospace;font-size:13px;line-height:1.5;padding:12px;border:1px solid var(--input-border);border-radius:6px;background:var(--input-bg);color:var(--text);tab-size:2;" spellcheck="false"></textarea>
+              <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end;">
+                <button class="btn" id="file-editor-cancel" style="min-height:auto;padding:8px 16px;">Cancel</button>
+                <button class="btn" id="file-editor-save" style="min-height:auto;padding:8px 16px;background:#1565c0;border-color:#1565c0;">
+                  <span class="material-icons" style="font-size:16px;">save</span> Save
+                </button>
+                <button class="btn" id="file-editor-save-restart" style="min-height:auto;padding:8px 16px;background:#e65100;border-color:#e65100;">
+                  <span class="material-icons" style="font-size:16px;">restart_alt</span> Save &amp; Restart
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div class="page-grid" style="margin-top:12px;">
           <div class="control-section" style="grid-column:1/-1;">
             <div class="section-title">Apply Changes</div>
@@ -564,6 +612,29 @@ const SettingsPage = {
 
     // Entity find & replace panel
     document.getElementById('btn-open-entity-fr')?.addEventListener('click', () => this._openEntityFRPanel());
+
+    // Raw file editors
+    document.getElementById('btn-edit-config-yaml')?.addEventListener('click', () => this._openFileEditor('config'));
+    document.getElementById('btn-edit-macros-yaml')?.addEventListener('click', () => this._openFileEditor('macros'));
+    document.getElementById('file-editor-close')?.addEventListener('click', () => this._closeFileEditor());
+    document.getElementById('file-editor-cancel')?.addEventListener('click', () => this._closeFileEditor());
+    document.getElementById('file-editor-overlay')?.addEventListener('click', (e) => {
+      if (e.target.id === 'file-editor-overlay') this._closeFileEditor();
+    });
+    document.getElementById('file-editor-save')?.addEventListener('click', () => this._saveFileEditor(false));
+    document.getElementById('file-editor-save-restart')?.addEventListener('click', () => this._saveFileEditor(true));
+
+    // Tab support in textarea
+    document.getElementById('file-editor-textarea')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const ta = e.target;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        ta.value = ta.value.substring(0, start) + '  ' + ta.value.substring(end);
+        ta.selectionStart = ta.selectionEnd = start + 2;
+      }
+    });
 
     // ── Admin tab ──────────────────────────────────────────────────
     // Role selection
@@ -2868,6 +2939,81 @@ const SettingsPage = {
       }
     }
     return result;
+  },
+
+  // -----------------------------------------------------------------------
+  // Raw File Editor
+  // -----------------------------------------------------------------------
+
+  _fileEditorKey: null,
+
+  async _openFileEditor(fileKey) {
+    const overlay = document.getElementById('file-editor-overlay');
+    const title = document.getElementById('file-editor-title');
+    const textarea = document.getElementById('file-editor-textarea');
+    const errorEl = document.getElementById('file-editor-error');
+    if (!overlay || !textarea) return;
+
+    this._fileEditorKey = fileKey;
+    title.textContent = `Edit ${fileKey}.yaml`;
+    errorEl.style.display = 'none';
+    textarea.value = 'Loading...';
+    textarea.disabled = true;
+    overlay.classList.remove('hidden');
+
+    try {
+      const resp = await fetch(`/api/files/${fileKey}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      textarea.value = data.content;
+      textarea.disabled = false;
+      textarea.focus();
+    } catch (e) {
+      textarea.value = '';
+      errorEl.textContent = `Failed to load ${fileKey}.yaml: ${e.message}`;
+      errorEl.style.display = 'block';
+    }
+  },
+
+  _closeFileEditor() {
+    document.getElementById('file-editor-overlay')?.classList.add('hidden');
+    this._fileEditorKey = null;
+  },
+
+  async _saveFileEditor(andRestart) {
+    const textarea = document.getElementById('file-editor-textarea');
+    const errorEl = document.getElementById('file-editor-error');
+    const saveBtn = document.getElementById(andRestart ? 'file-editor-save-restart' : 'file-editor-save');
+    if (!textarea || !this._fileEditorKey) return;
+
+    errorEl.style.display = 'none';
+    if (saveBtn) saveBtn.disabled = true;
+
+    try {
+      const resp = await fetch(`/api/files/${this._fileEditorKey}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: textarea.value }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        errorEl.textContent = data.error || 'Save failed';
+        errorEl.style.display = 'block';
+        return;
+      }
+      App.showToast(`${this._fileEditorKey}.yaml saved (${data.bytes} bytes)`, 2000);
+      if (andRestart) {
+        this._closeFileEditor();
+        try {
+          await fetch('/api/gateway/restart', { method: 'POST', signal: AbortSignal.timeout(5000) });
+        } catch (e) { /* server dies before response */ }
+      }
+    } catch (e) {
+      errorEl.textContent = `Save failed: ${e.message}`;
+      errorEl.style.display = 'block';
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
   },
 
   async _saveConfig() {

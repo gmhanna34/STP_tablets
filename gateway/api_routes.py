@@ -641,6 +641,53 @@ def register_api_routes(ctx):
         eventlet.spawn(_do_update)
         return jsonify({"success": True, "message": "Update started"}), 200
 
+    # ---- Raw File Editor (config.yaml / macros.yaml) ----
+
+    _EDITABLE_FILES = {
+        "config": os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml"),
+        "macros": os.path.join(os.path.dirname(os.path.abspath(__file__)), "macros.yaml"),
+    }
+
+    @app.route("/api/files/<file_key>")
+    def api_file_read(file_key: str):
+        path = _EDITABLE_FILES.get(file_key)
+        if not path:
+            return jsonify({"error": f"Unknown file: {file_key}"}), 404
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            return jsonify({"file": file_key, "content": content}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/files/<file_key>", methods=["PUT"])
+    def api_file_write(file_key: str):
+        path = _EDITABLE_FILES.get(file_key)
+        if not path:
+            return jsonify({"error": f"Unknown file: {file_key}"}), 404
+        data = request.get_json(silent=True) or {}
+        content = data.get("content")
+        if content is None:
+            return jsonify({"error": "No content provided"}), 400
+        # Validate YAML syntax before saving
+        try:
+            yaml.safe_load(content)
+        except yaml.YAMLError as e:
+            return jsonify({"error": f"Invalid YAML: {e}"}), 400
+        try:
+            # Create backup
+            import shutil
+            backup_path = path + ".bak"
+            shutil.copy2(path, backup_path)
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+            tablet = get_tablet_id()
+            db.log_action(tablet, f"file:save", file_key, f"Saved {file_key}.yaml ({len(content)} bytes)", "OK", 0)
+            logger.info(f"File {file_key}.yaml saved by {tablet} ({len(content)} bytes, backup at {backup_path})")
+            return jsonify({"success": True, "bytes": len(content)}), 200
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     # ---- MoIP ----
 
     @app.route("/api/moip/receivers")
