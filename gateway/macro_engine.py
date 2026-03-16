@@ -42,9 +42,17 @@ class _VerificationQueue:
 
     def __init__(self):
         self._pending: List[_VerificationEntry] = []
+        # Deferred issues: when on_fail:skip + verify:true, we hold the issue
+        # string here instead of reporting immediately. verify_pending resolves
+        # or promotes them.  Keyed by entity_id → issue string.
+        self.deferred_issues: dict = {}
 
     def add(self, entry: _VerificationEntry):
         self._pending.append(entry)
+
+    def defer_issue(self, entity_id: str, issue_text: str):
+        """Store an issue that will be resolved or promoted by verify_pending."""
+        self.deferred_issues[entity_id] = issue_text
 
     def drain(self) -> List[_VerificationEntry]:
         items = list(self._pending)
@@ -53,6 +61,7 @@ class _VerificationQueue:
 
     def clear(self):
         self._pending.clear()
+        self.deferred_issues.clear()
 
     def __len__(self):
         return len(self._pending)
@@ -312,12 +321,30 @@ def execute_macro(ctx, macro_key: str, tablet: str, depth: int = 0,
             completed += 1
             if step_type == "ha_service":
                 ran_ha_service = True
+            # Collect any unresolved deferred issues from verify_pending
+            if step_type == "verify_pending":
+                for issue_text in result.get("unresolved_issues", []):
+                    issues.append(issue_text)
         else:
             # Handle on_fail
             if on_fail == "skip":
                 step_error = result.get("error", "unknown")
-                logger.warning(f"Macro {macro_key} step {i+1} skipped: {step_error}")
-                issues.append(f"Step {i+1} skipped: {step_msg or step_type} — {step_error}")
+                issue_text = f"Step {i+1} skipped: {step_msg or step_type} — {step_error}"
+                # If this step has verify:true, defer the issue — verify_pending
+                # will clear it if the device actually changed state, or promote
+                # it to a real issue if it truly failed.
+                if step.get("verify") and verify_queue is not None:
+                    entry = _resolve_verify(step)
+                    if entry:
+                        verify_queue.defer_issue(entry.entity_id, issue_text)
+                        logger.info(f"Macro {macro_key} step {i+1}: HA returned error "
+                                    f"but verify will confirm — deferring issue")
+                    else:
+                        logger.warning(f"Macro {macro_key} step {i+1} skipped: {step_error}")
+                        issues.append(issue_text)
+                else:
+                    logger.warning(f"Macro {macro_key} step {i+1} skipped: {step_error}")
+                    issues.append(issue_text)
                 completed += 1
                 continue
             elif on_fail.startswith("retry:"):
@@ -1009,6 +1036,30 @@ def _check_ha_entity_state(ctx, entity_id: str, expected_state: str) -> bool:
         return False
 
 
+def _resolve_deferred_issues(verify_queue: _VerificationQueue,
+                             verified_entries: list,
+                             failed_entries: list) -> int:
+    """Clear deferred issues for entities that verified OK.
+
+    Returns the number of deferred issues that were cleared (resolved).
+    Failed entries' deferred issues are left in place for the caller to promote.
+    """
+    resolved = 0
+    failed_ids = {e.entity_id for e in failed_entries}
+    # All entries that aren't in the failed set are considered verified
+    for entry in verified_entries:
+        if entry.entity_id in verify_queue.deferred_issues and entry.entity_id not in failed_ids:
+            del verify_queue.deferred_issues[entry.entity_id]
+            resolved += 1
+    # Also clear any deferred issues whose entity_id isn't in the failed set
+    # (covers the case where the entry was already removed from the pending list)
+    for eid in list(verify_queue.deferred_issues):
+        if eid not in failed_ids:
+            del verify_queue.deferred_issues[eid]
+            resolved += 1
+    return resolved
+
+
 # ---------------------------------------------------------------------------
 # verify_pending — batch-check all queued verifications
 # ---------------------------------------------------------------------------
@@ -1062,6 +1113,10 @@ def _step_verify_pending(ctx, step: dict, tablet: str,
                              f"expected '{entry.expected_state}' (round {retry_round + 1})")
 
         if not still_pending:
+            resolved_count = _resolve_deferred_issues(verify_queue, entries, [])
+            if resolved_count:
+                logger.info(f"Cleared {resolved_count} deferred issue(s) — "
+                            f"device(s) confirmed in expected state despite HA error")
             logger.info(f"All {len(entries)} verifications passed "
                         f"(round {retry_round + 1}, {time.time() - start:.1f}s)")
             return {"success": True}
@@ -1099,6 +1154,16 @@ def _step_verify_pending(ctx, step: dict, tablet: str,
                    f"after {max_retries} retries: "
                    f"{[e['entity_id'] for e in failed_entities]}")
 
+    # Promote deferred issues for truly-failed entities; clear the rest
+    failed_ids = {e.entity_id for e in entries}
+    unresolved = []
+    for eid in list(verify_queue.deferred_issues):
+        if eid in failed_ids:
+            unresolved.append(verify_queue.deferred_issues.pop(eid))
+        else:
+            # Entity not in failed set — it passed earlier, clear it
+            del verify_queue.deferred_issues[eid]
+
     ctx.socketio.emit("macro_verify_failed", {
         "message": message,
         "failed": failed_entities,
@@ -1106,7 +1171,10 @@ def _step_verify_pending(ctx, step: dict, tablet: str,
     })
 
     # Continue the macro (don't abort — these were on_fail: skip steps)
-    return {"success": True}
+    result = {"success": True}
+    if unresolved:
+        result["unresolved_issues"] = unresolved
+    return result
 
 
 # ---------------------------------------------------------------------------

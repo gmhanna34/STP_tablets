@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from macro_engine import (
     _normalize_yaml_keys,
+    _resolve_deferred_issues,
     _resolve_verify,
     _VerificationEntry,
     _VerificationQueue,
@@ -548,3 +549,82 @@ class TestVerifyPending:
         result = execute_macro(ctx, "compat_test", "test-tablet")
         assert result["success"] is True
         assert result["steps_completed"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Deferred issue resolution
+# ---------------------------------------------------------------------------
+
+class TestDeferredIssues:
+    def test_deferred_issue_cleared_on_verify_success(self):
+        """When on_fail:skip + verify:true, issue should NOT appear if device
+        actually changed state (HA 500 but command went through)."""
+        q = _VerificationQueue()
+        q.defer_issue("switch.amp", "Step 1 skipped: Amp — HA returned 500")
+        entry = _VerificationEntry("switch.amp", "off", 10, 2, {})
+        # Simulate all entries verified OK
+        resolved = _resolve_deferred_issues(q, [entry], [])
+        assert resolved == 1
+        assert len(q.deferred_issues) == 0
+
+    def test_deferred_issue_promoted_on_verify_failure(self):
+        """When verify truly fails, the deferred issue should be promoted."""
+        q = _VerificationQueue()
+        q.defer_issue("switch.amp", "Step 1 skipped: Amp — HA returned 500")
+        entry = _VerificationEntry("switch.amp", "off", 10, 2, {})
+        # Simulate entry in the failed set
+        resolved = _resolve_deferred_issues(q, [], [entry])
+        assert resolved == 0
+        # Issue should still be in deferred_issues for caller to pop
+        assert "switch.amp" in q.deferred_issues
+
+    def test_clear_also_clears_deferred_issues(self):
+        """_VerificationQueue.clear() should wipe deferred_issues too."""
+        q = _VerificationQueue()
+        q.add(_VerificationEntry("switch.a", "on", 10, 2, {}))
+        q.defer_issue("switch.a", "some issue")
+        q.clear()
+        assert len(q) == 0
+        assert len(q.deferred_issues) == 0
+
+    def test_skip_without_verify_still_reports_issue_immediately(self):
+        """on_fail:skip WITHOUT verify:true should report issues immediately
+        (backward compat — no deferral)."""
+        ctx = _make_ctx({
+            "immed_test": {
+                "label": "Immediate Issue",
+                "steps": [
+                    {"type": "ha_service", "domain": "switch", "service": "turn_off",
+                     "data": {"entity_id": "switch.test"}, "on_fail": "skip",
+                     "message": "Turning off test"},
+                ],
+            }
+        })
+        # mock_mode = True means ha_service succeeds — set to False so it fails
+        ctx.mock_mode = False
+        result = execute_macro(ctx, "immed_test", "test-tablet")
+        assert result["success"] is True
+        # Issue should be reported immediately (no verify to defer to)
+        assert result.get("issue_count", 0) == 1
+        assert "skipped" in result["issues"][0].lower()
+
+    def test_skip_with_verify_defers_issue(self):
+        """on_fail:skip + verify:true should NOT report issue immediately —
+        it should be deferred to verify_pending."""
+        ctx = _make_ctx({
+            "defer_test": {
+                "label": "Deferred Issue",
+                "steps": [
+                    {"type": "ha_service", "domain": "switch", "service": "turn_off",
+                     "data": {"entity_id": "switch.test_outlet"}, "on_fail": "skip",
+                     "verify": True, "message": "Turning off outlet"},
+                    {"type": "delay", "seconds": 0.01},
+                ],
+            }
+        })
+        ctx.mock_mode = False
+        result = execute_macro(ctx, "defer_test", "test-tablet")
+        assert result["success"] is True
+        # Issue should NOT be in the result — it was deferred, and without a
+        # verify_pending step the deferred issues are just dropped (macro ends)
+        assert result.get("issue_count", 0) == 0
