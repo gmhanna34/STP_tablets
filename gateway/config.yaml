@@ -1114,6 +1114,33 @@ occupancy:
     occupancy_pacing_end: '23:45'
     service_hour_start: 18
     service_hour_end: 24
+event_automation:
+  enabled: true
+  calendar_url: "https://stpauloc.org/calendar_rss_feed.cfm?category=3"
+  poll_interval_seconds: 900        # Re-fetch calendar every 15 minutes
+  setup_lead_minutes: 30            # Run setup macros N minutes before event start
+  teardown_delay_minutes: 15        # Run teardown macros N minutes after event end
+  preflight_minutes: 45             # Run health pre-check N minutes before event start
+  default_profile: "main_church"    # Fallback profile if no keyword match
+  profiles:
+    main_church:
+      label: "Main Church Service"
+      keywords: ["liturgy", "mass", "vespers", "matins", "midnight", "feast", "palm", "easter", "christmas", "epiphany", "main church", "main_church"]
+      setup_macro: "main_full_setup"
+      teardown_macro: "main_full_teardown"
+      preflight_checks: ["x32_module", "moip_module", "obs_module"]
+    chapel:
+      label: "Chapel Service"
+      keywords: ["chapel", "bible study", "youth", "sunday school", "meeting"]
+      setup_macro: "chapel_full_setup"
+      teardown_macro: "chapel_full_teardown"
+      preflight_checks: ["x32_module", "moip_module"]
+    social_hall:
+      label: "Social Hall"
+      keywords: ["social hall", "agape", "fellowship", "luncheon", "dinner", "reception"]
+      setup_macro: "social_full_setup"
+      teardown_macro: "social_full_teardown"
+      preflight_checks: ["x32_module", "moip_module"]
 database:
   path: stp_gateway.db
 anthropic:

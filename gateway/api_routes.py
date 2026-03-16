@@ -1988,6 +1988,86 @@ def register_api_routes(ctx):
         logger.info(f"[{tablet}] Camlytics buffer update: {buf_type} = {buf_value}%")
         return jsonify({"success": True, "buffer": buf_type, "value": buf_value}), 200
 
+    # ---- Event Automation ----
+
+    @app.route("/api/event-automation/status")
+    def api_event_automation_status():
+        ea = getattr(ctx, "event_automation", None)
+        if ea is None:
+            return jsonify({"enabled": False, "error": "Event automation not available"}), 200
+        return jsonify(ea.get_status()), 200
+
+    @app.route("/api/event-automation/events")
+    def api_event_automation_events():
+        ea = getattr(ctx, "event_automation", None)
+        if ea is None:
+            return jsonify([]), 200
+        hours = request.args.get("hours", 48, type=int)
+        return jsonify(ea.get_upcoming_events(min(hours, 168))), 200
+
+    @app.route("/api/event-automation/profiles")
+    def api_event_automation_profiles():
+        ea = getattr(ctx, "event_automation", None)
+        if ea is None:
+            return jsonify({}), 200
+        return jsonify(ea.get_profiles()), 200
+
+    @app.route("/api/event-automation/events/<path:event_key>/skip", methods=["POST"])
+    def api_event_automation_skip(event_key: str):
+        ea = getattr(ctx, "event_automation", None)
+        if ea is None:
+            return jsonify({"error": "Event automation not available"}), 503
+        ea.skip_event(event_key)
+        return jsonify({"success": True}), 200
+
+    @app.route("/api/event-automation/events/<path:event_key>/unskip", methods=["POST"])
+    def api_event_automation_unskip(event_key: str):
+        ea = getattr(ctx, "event_automation", None)
+        if ea is None:
+            return jsonify({"error": "Event automation not available"}), 503
+        ea.unskip_event(event_key)
+        return jsonify({"success": True}), 200
+
+    @app.route("/api/event-automation/events/<path:event_key>/override-profile", methods=["POST"])
+    def api_event_automation_override_profile(event_key: str):
+        ea = getattr(ctx, "event_automation", None)
+        if ea is None:
+            return jsonify({"error": "Event automation not available"}), 503
+        data = request.get_json(silent=True) or {}
+        profile_id = data.get("profile", "")
+        if not ea.override_profile(event_key, profile_id):
+            return jsonify({"error": f"Unknown profile: {profile_id}"}), 404
+        return jsonify({"success": True}), 200
+
+    @app.route("/api/event-automation/events/<path:event_key>/trigger", methods=["POST"])
+    def api_event_automation_trigger(event_key: str):
+        ea = getattr(ctx, "event_automation", None)
+        if ea is None:
+            return jsonify({"error": "Event automation not available"}), 503
+        data = request.get_json(silent=True) or {}
+        action = data.get("action", "setup")
+        if action not in ("setup", "teardown"):
+            return jsonify({"error": "action must be 'setup' or 'teardown'"}), 400
+        result = ea.trigger_now(event_key, action)
+        status_code = 200 if result.get("success") else 400
+        return jsonify(result), status_code
+
+    @app.route("/api/event-automation/events/<path:event_key>/preflight", methods=["POST"])
+    def api_event_automation_preflight(event_key: str):
+        ea = getattr(ctx, "event_automation", None)
+        if ea is None:
+            return jsonify({"error": "Event automation not available"}), 503
+        result = ea.run_preflight(event_key)
+        return jsonify(result), 200
+
+    @app.route("/api/event-automation/refresh", methods=["POST"])
+    def api_event_automation_refresh():
+        ea = getattr(ctx, "event_automation", None)
+        if ea is None:
+            return jsonify({"error": "Event automation not available"}), 503
+        events, ok = ea.fetch_calendar()
+        return jsonify({"success": ok, "event_count": len(events)}), 200
+
     # ---- Schedules ----
 
     @app.route("/api/schedules")

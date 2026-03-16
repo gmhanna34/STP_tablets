@@ -244,6 +244,7 @@ class GatewayContext:
         self.occupancy = None
         self.announcements = None
         self.user_module = None
+        self.event_automation = None
 
         # Security config
         self.allowed_ips = []
@@ -361,6 +362,9 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     users_path = os.path.join(os.path.dirname(os.path.abspath(config_path)), "users.yaml")
     user_module = UserModule(users_path)
 
+    from event_automation import EventAutomation
+    event_automation = None if mock_mode else EventAutomation(cfg, None)  # ctx set below
+
     # Build the shared context
     ctx = GatewayContext()
     ctx.app = app
@@ -380,7 +384,10 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     ctx.occupancy = occupancy
     ctx.announcements = announcements
     ctx.user_module = user_module
+    ctx.event_automation = event_automation
     announcements.ctx = ctx
+    if event_automation:
+        event_automation._ctx = ctx
 
     ctx.allowed_ips = sec_cfg.get("allowed_ips", ["127.0.0.1"])
     ctx.trusted_proxy_prefixes = sec_cfg.get("trusted_proxy_prefixes", [])
@@ -447,7 +454,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     register_socket_handlers(ctx)
 
     # Store references for use in main and shutdown
-    app._modules = {"x32": x32, "moip": moip, "obs": obs, "health": health, "occupancy": occupancy, "announcements": announcements}
+    app._modules = {"x32": x32, "moip": moip, "obs": obs, "health": health, "occupancy": occupancy, "announcements": announcements, "event_automation": event_automation}
     app._db = db
     app._ctx = ctx
 
@@ -573,6 +580,10 @@ def main():
 
     start_pollers(ctx)
     start_scheduler(ctx)
+
+    # Start event automation (calendar-driven setup/teardown)
+    if ctx.event_automation:
+        ctx.event_automation.start()
 
     # Run with eventlet (supports WebSocket)
     socketio.run(app, host=host, port=port, debug=gateway_cfg.get("debug", False))

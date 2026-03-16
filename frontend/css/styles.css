@@ -4653,3 +4653,149 @@ body {
     margin: 4px 0;
   }
 }
+
+/* ── Schedule / Event Automation Page ────────────────────── */
+
+.schedule-page { padding: 16px; max-width: 900px; margin: 0 auto; }
+
+.schedule-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 16px;
+}
+.schedule-header-left { flex: 1; }
+.schedule-title { font-size: 1.5em; font-weight: 700; margin: 0; color: var(--text); }
+.schedule-subtitle { font-size: 0.85em; color: var(--text-secondary); margin-top: 4px; }
+
+.schedule-status-bar {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.schedule-status-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 16px;
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: 0.8em; color: var(--text-secondary);
+}
+.schedule-status-chip .material-icons { font-size: 16px; }
+.schedule-status-ok { color: var(--ok); border-color: var(--ok); }
+.schedule-status-disabled { color: var(--text-secondary); }
+
+.schedule-timeline { display: flex; flex-direction: column; gap: 16px; }
+.schedule-loading {
+  text-align: center; padding: 40px; color: var(--text-secondary); font-size: 0.95em;
+}
+
+.schedule-day-group {
+  background: var(--surface); border-radius: 12px;
+  border: 1px solid var(--border); overflow: hidden;
+}
+.schedule-today { border-color: var(--accent); }
+
+.schedule-day-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px; background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+}
+.schedule-day-label { font-weight: 600; font-size: 0.95em; color: var(--text); }
+.schedule-today-badge {
+  font-size: 0.7em; font-weight: 700; padding: 2px 8px;
+  border-radius: 10px; background: var(--accent); color: #fff;
+}
+
+.schedule-event-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.schedule-event-card:last-child { border-bottom: none; }
+.schedule-event-card:hover { background: var(--surface-alt); }
+
+.schedule-event-time {
+  display: flex; flex-direction: column; align-items: center;
+  min-width: 70px; font-size: 0.85em; color: var(--text-secondary);
+}
+.schedule-time-start { font-weight: 600; color: var(--text); }
+.schedule-time-sep { font-size: 0.7em; opacity: 0.5; }
+
+.schedule-event-info { flex: 1; min-width: 0; }
+.schedule-event-title {
+  font-weight: 600; font-size: 0.95em; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.schedule-event-profile {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 0.8em; color: var(--text-secondary); margin-top: 2px;
+}
+
+.schedule-event-status {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+}
+.schedule-status-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 12px;
+  font-size: 0.75em; font-weight: 600;
+}
+.schedule-ev-upcoming { }
+.schedule-ev-upcoming .schedule-status-badge,
+.schedule-status-badge.schedule-ev-upcoming { background: var(--surface-alt); color: var(--text-secondary); }
+.schedule-ev-preflight .schedule-status-badge,
+.schedule-status-badge.schedule-ev-preflight { background: #e3f2fd; color: #1565c0; }
+.schedule-ev-ready .schedule-status-badge,
+.schedule-status-badge.schedule-ev-ready { background: #fff3e0; color: #e65100; }
+.schedule-ev-active .schedule-status-badge,
+.schedule-status-badge.schedule-ev-active { background: #e8f5e9; color: #2e7d32; }
+.schedule-ev-completed .schedule-status-badge,
+.schedule-status-badge.schedule-ev-completed { background: var(--surface-alt); color: var(--ok); }
+.schedule-ev-skipped .schedule-status-badge,
+.schedule-status-badge.schedule-ev-skipped { background: #fce4ec; color: #c62828; }
+
+.schedule-preflight-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 0.7em; padding: 2px 6px; border-radius: 8px;
+}
+.preflight-ok { background: #e8f5e9; color: #2e7d32; }
+.preflight-warn { background: #fff3e0; color: #e65100; }
+
+/* Modal details */
+.schedule-modal { max-width: 500px; width: 90vw; }
+.schedule-detail-grid { display: flex; flex-direction: column; gap: 10px; }
+.schedule-detail-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 0; border-bottom: 1px solid var(--border);
+}
+.schedule-detail-label { font-size: 0.85em; color: var(--text-secondary); font-weight: 500; }
+.schedule-detail-value { font-size: 0.9em; color: var(--text); }
+.schedule-detail-section {
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+}
+.schedule-profile-select {
+  width: 100%; padding: 6px 8px; margin-top: 4px;
+  border-radius: 6px; border: 1px solid var(--input-border);
+  background: var(--input-bg); color: var(--text); font-size: 0.9em;
+}
+.schedule-preflight-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.schedule-preflight-row {
+  display: flex; align-items: center; gap: 6px; font-size: 0.85em;
+}
+
+.schedule-detail-actions {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.schedule-btn-skip { color: var(--down); }
+.schedule-btn-unskip { color: var(--ok); }
+.schedule-btn-setup { color: var(--ok); }
+.schedule-btn-teardown { color: var(--warn); }
+.schedule-btn-preflight { color: var(--info); }
+
+/* Dark theme overrides for schedule */
+[data-theme="dark"] .schedule-ev-preflight .schedule-status-badge,
+[data-theme="dark"] .schedule-status-badge.schedule-ev-preflight { background: #1a237e; color: #90caf9; }
+[data-theme="dark"] .schedule-ev-ready .schedule-status-badge,
+[data-theme="dark"] .schedule-status-badge.schedule-ev-ready { background: #4e342e; color: #ffcc80; }
+[data-theme="dark"] .schedule-ev-active .schedule-status-badge,
+[data-theme="dark"] .schedule-status-badge.schedule-ev-active { background: #1b5e20; color: #a5d6a7; }
+[data-theme="dark"] .schedule-ev-skipped .schedule-status-badge,
+[data-theme="dark"] .schedule-status-badge.schedule-ev-skipped { background: #4a1c1c; color: #ef9a9a; }
+[data-theme="dark"] .preflight-ok { background: #1b5e20; color: #a5d6a7; }
+[data-theme="dark"] .preflight-warn { background: #4e342e; color: #ffcc80; }
