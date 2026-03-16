@@ -9,31 +9,48 @@ A church AV control system that provides tablet-based control of audio, video, s
 ```
 STP_tablets/              → Gateway + Frontend (this repo)
 ├── gateway/              → Flask backend (REST API + WebSocket hub)
-│   ├── gateway.py
-│   ├── x32_module.py    ← Phase 1: direct X32 mixer OSC/UDP
-│   ├── moip_module.py   ← Phase 2: direct MoIP controller Telnet
-│   ├── obs_module.py    ← Phase 3: direct OBS Studio WebSocket
-│   ├── health_module.py ← Phase 4: built-in health monitoring
+│   ├── gateway.py        ← Entry point (shim → gateway_app.py)
+│   ├── gateway_app.py    ← Flask/SocketIO setup, GatewayContext, startup
+│   ├── api_routes.py     ← REST endpoint handlers (~3,500 lines)
+│   ├── auth.py           ← IP allowlist, PIN auth, sessions, permissions
+│   ├── macro_engine.py   ← Macro parsing, execution, step types
+│   ├── polling.py        ← Background pollers, state cache, watchdog
+│   ├── scheduler.py      ← Cron-like schedule execution
+│   ├── database.py       ← SQLite audit log, schedule DB
+│   ├── socket_handlers.py← SocketIO events, rooms, heartbeat
+│   ├── x32_module.py     ← Phase 1: direct X32 mixer OSC/UDP
+│   ├── moip_module.py    ← Phase 2: direct MoIP controller Telnet
+│   ├── obs_module.py     ← Phase 3: direct OBS Studio WebSocket
+│   ├── health_module.py  ← Phase 4: built-in health monitoring
 │   ├── occupancy_module.py ← Phase 6: occupancy analytics (CSV + download)
+│   ├── announcement_module.py ← TTS announcements via edge-tts + WiiM
+│   ├── event_automation.py ← Calendar-driven event automation
+│   ├── user_module.py    ← User account management (bcrypt)
 │   ├── config.yaml
 │   ├── macros.yaml
-│   └── requirements.txt
+│   ├── announcements.yaml ← TTS announcement definitions
+│   ├── users.yaml         ← User account database
+│   ├── requirements.txt
+│   └── tests/             ← 12 test files (~3,000 lines), run by pre-commit hook
 ├── frontend/             → Tablet UI (served as static files by gateway)
 │   ├── index.html
 │   ├── css/
 │   ├── js/
 │   ├── config/
 │   └── assets/
-├── CLAUDE.md
-└── DEPLOYMENT.md
+├── hooks/                → Git hooks (copy to .git/hooks/ after clone)
+│   └── pre-commit        ← Runs tests + auto-increments version (YY-NNN)
+├── docs/                 → All documentation
+│   ├── DEPLOYMENT.md     ← Operations guide
+│   ├── MIGRATION_GUIDE_MAC.md ← macOS setup
+│   ├── MIGRATION_GUIDE_PC.md  ← Windows setup
+│   ├── MACRO_REFERENCE.md     ← All macros & buttons explained
+│   ├── PAGE_GUIDE.md          ← Page-by-page UI walkthrough
+│   └── ...
+└── CLAUDE.md             ← AI assistant project context (stays at root)
 
 STP_scripts/              → Middleware proxies (archived, rollback only)
-├── x32-flask.py
-├── moip-flask.py
-└── obs-flask.py
-
 STP_healthdash/           → Monitoring dashboard (archived, absorbed in Phase 4)
-
 STP_Occupancy/            → Occupancy dashboard (archived, absorbed in Phase 6)
 ```
 
@@ -44,8 +61,8 @@ Tablets/Browsers (kiosk mode, 10.100.60.0/24)
        │
        ▼
 ┌──────────────────────────┐
-│   STP Gateway (:8080)    │  Flask + Flask-SocketIO
-│   gateway/gateway.py     │
+│  STP Gateway (:20858)    │  Flask + Flask-SocketIO
+│  gateway/gateway.py      │
 ├──────────────────────────┤
 │ • REST API for all devices│
 │ • Socket.IO state sync   │
@@ -54,6 +71,9 @@ Tablets/Browsers (kiosk mode, 10.100.60.0/24)
 │ • Auth (IP allowlist+PIN)│
 │ • Health monitoring      │
 │ • Occupancy analytics    │
+│ • TTS announcements      │
+│ • Event automation       │
+│ • User management        │
 └──────────┬───────────────┘
            │
      ┌─────┼─────┬──────────┬───────────┐
@@ -75,39 +95,69 @@ Tablets/Browsers (kiosk mode, 10.100.60.0/24)
 
   Health Module (built-in) — 30+ service checks, alerts, recovery
   Occupancy Module (built-in) — CSV analytics, daily download, Chart.js dashboard
+  Announcement Module (built-in) — TTS generation via edge-tts, WiiM playback
+  Event Automation (built-in) — Calendar-driven setup/teardown macros
 ```
 
 ## Key Files
 
 ### Frontend (`frontend/`)
 - **index.html** — Single-page app entry point
-- **config/settings.json** — Endpoints, version, timeouts
+- **config/settings.json** — App metadata, version (auto-incremented YY-NNN format), timeouts
 - **config/devices.json** — MoIP transmitters (28), receivers (28), video scenes
 - **config/permissions.json** — Per-tablet permission matrix (7 tablets)
 - **js/app.js** — Main controller, Socket.IO connection
 - **js/auth.js** — PIN auth + session management
 - **js/router.js** — Hash-based SPA routing
 - **js/pages/*.js** — 12 page controllers (home, main, chapel, social, gym, confroom, stream, source, security, health, occupancy, settings)
-- **js/api/*.js** — API modules (obs, x32, moip, wattbox, ptz, epson, health, macro)
+- **js/api/*.js** — API modules (obs, x32, moip, ptz, epson, health, macro, notifications)
 - **css/styles.css** — Dark theme, touch-optimized, Material Design Icons
 
 ### Backend (`gateway/`)
-- **gateway.py** — Central gateway (~1,800 lines), Flask + SocketIO
-- **config.yaml** — All secrets, device IPs, middleware URLs, polling intervals
-- **macros.yaml** — 20+ named action sequences with step types: `ha_check`, `ha_service`, `moip_switch`, `epson_power`, `delay`, `condition`
-- **occupancy_module.py** — Occupancy analytics (CSV parsing, daily download, pandas)
-- **requirements.txt** — flask, flask-socketio, eventlet, requests, pyyaml, pandas
 
-### Middleware (`STP_scripts/` — separate repo)
-- **x32-flask.py** — ~~Audio mixer proxy (HTTP → OSC/UDP), port 3400~~ **DEPRECATED** — absorbed into `gateway/x32_module.py` (Phase 1)
-- **moip-flask.py** — ~~Video matrix proxy (HTTP → Telnet), port 5002~~ **DEPRECATED** — absorbed into `gateway/moip_module.py` (Phase 2)
-- **obs-flask.py** — ~~Streaming proxy (HTTP → OBS WebSocket), port 4456~~ **DEPRECATED** — absorbed into `gateway/obs_module.py` (Phase 3)
-- Each has: background polling, ping/snapshot health, IP allowlist, API key auth, rotating logs
+The gateway has been modularized into 17 Python modules (~11,000 lines total):
 
-### Health Dashboard (`STP_healthdash/` — archived, absorbed in Phase 4)
-- ~~**app.py** — Flask monitoring app (~1,400 lines)~~ **DEPRECATED** — absorbed into `gateway/health_module.py` (Phase 4)
-- ~~**config.yaml** — 30+ service definitions~~ **DEPRECATED** — merged into `gateway/config.yaml` under `healthdash:` section
-- The standalone `STP_healthdash/app.py` remains as a rollback option
+**Core:**
+- **gateway.py** — Entry point shim (29 lines), delegates to `gateway_app.py`
+- **gateway_app.py** — Flask/SocketIO setup, GatewayContext, startup (~600 lines)
+- **api_routes.py** — REST endpoint handlers (~3,500 lines)
+- **socket_handlers.py** — SocketIO events, rooms, heartbeat (~230 lines)
+
+**Device protocol modules:**
+- **x32_module.py** — Direct X32 mixer OSC/UDP via xair-api (~880 lines)
+- **moip_module.py** — Direct MoIP controller Telnet (~640 lines)
+- **obs_module.py** — Direct OBS Studio WebSocket v5 (~430 lines)
+
+**Built-in services:**
+- **health_module.py** — 30+ health checks, 9 check types, alerts (~1,360 lines)
+- **occupancy_module.py** — CSV analytics, daily download, pandas (~450 lines)
+- **announcement_module.py** — TTS generation via edge-tts, WiiM playback (~490 lines)
+- **event_automation.py** — Calendar-driven event automation (~590 lines)
+- **user_module.py** — User account management with bcrypt (~180 lines)
+
+**Infrastructure:**
+- **auth.py** — IP allowlist, PIN auth, sessions, permissions (~540 lines)
+- **macro_engine.py** — Macro parsing, execution, step types (~1,270 lines)
+- **polling.py** — Background pollers, state cache, watchdog (~540 lines)
+- **scheduler.py** — Cron-like schedule execution (~90 lines)
+- **database.py** — SQLite audit log, schedule DB (~240 lines)
+
+**Configuration:**
+- **config.yaml** — Device IPs, polling intervals, health check definitions
+- **macros.yaml** — Named action sequences (step types: `ha_check`, `ha_service`, `moip_switch`, `epson_power`, `delay`, `condition`)
+- **announcements.yaml** — TTS announcement definitions
+- **users.yaml** — User account database
+- **.env** — Secrets (loaded via python-dotenv, see `.env.example`)
+- **requirements.txt** — flask, flask-socketio, eventlet, requests, pyyaml, pandas, xair-api, websocket-client, bcrypt, edge-tts, pytest
+
+**Tests:**
+- **tests/** — 12 test files (~3,000 lines), run automatically by the pre-commit hook before each commit
+
+### Archived Repos (rollback only)
+- **STP_scripts/** — Middleware proxies (X32, MoIP, OBS) — absorbed in Phases 1-3
+- **STP_healthdash/** — Health monitoring — absorbed in Phase 4
+- **STP_Occupancy/** — Occupancy analytics — absorbed in Phase 6
+- **STP_THRFiles_Current/** — The Home Remote — sunset in Phase 7
 
 ## Data Flow
 
@@ -131,25 +181,24 @@ Tablets/Browsers (kiosk mode, 10.100.60.0/24)
 ## Startup Order
 
 ```
-1. gateway.py          (port 20858)  ← this repo (X32 + MoIP + OBS + Health built-in)
+1. gateway.py          (port 20858)  ← this repo (everything built-in)
 ```
 
-> **Note:** `x32-flask.py` (port 3400), `moip-flask.py` (port 5002), `obs-flask.py` (port 4456), and `STP_healthdash/app.py` (port 20855) are no longer needed — the gateway handles everything directly. The standalone scripts are kept as rollback options.
+> **Note:** All standalone services have been absorbed. `x32-flask.py` (port 3400), `moip-flask.py` (port 5002), `obs-flask.py` (port 4456), and `STP_healthdash/app.py` (port 20855) are no longer needed. The standalone scripts remain in their archived repos as rollback options.
 
 ## Deployment Target
 
-- **Server:** Currently Windows PC; migrating to Mac Mini after consolidation (see Consolidation Plan below)
+- **Server:** Currently Windows PC; migrating to Mac Mini (see Consolidation Plan / Phase 8 below)
 - **OBS + Camlytics:** Remain on existing Windows PC (GPU/display dependent)
 - **Tablets:** iPads and Android tablets in kiosk mode on LAN
-- See `DEPLOYMENT.md` for full operations guide
-- See `MIGRATION_GUIDE_PC.md` and `MIGRATION_GUIDE_MAC.md` for fresh-install setup (pre-consolidation)
+- See `docs/DEPLOYMENT.md` for full operations guide
+- See `docs/MIGRATION_GUIDE_PC.md` and `docs/MIGRATION_GUIDE_MAC.md` for fresh-install setup
 
 ## Credentials (dev/test)
 
-- Settings PIN: `1234` (in gateway config.yaml)
-- HealthDash password: `Companion4Us`
-- API keys: hardcoded in config files per middleware
+- Settings PIN: `1234` (in `.env` as `SETTINGS_PIN`)
 - Auth: IP allowlist for trusted subnets, PIN for settings page only
+- All secrets stored in `gateway/.env` (see `.env.example` for full list)
 
 ## Polling Intervals
 
@@ -167,26 +216,34 @@ Tablets/Browsers (kiosk mode, 10.100.60.0/24)
 
 - **Frontend:** Vanilla JS, Socket.IO client, Chart.js (CDN), Material Design Icons, CSS Grid
 - **Backend:** Python 3, Flask, Flask-SocketIO, Eventlet, pandas
-- **Middleware:** All middleware absorbed into gateway (X32 Phase 1, MoIP Phase 2, OBS Phase 3)
 - **X32 Protocol:** xair-api (python-osc) for direct OSC/UDP communication
 - **MoIP Protocol:** Raw TCP sockets for direct Telnet communication with Binary MoIP controller (migrated from telnetlib for Python 3.13 compatibility)
-- **Database:** SQLite (audit log only)
+- **OBS Protocol:** websocket-client (sync) with manual OBS WebSocket v5 protocol handling
+- **TTS:** edge-tts for text-to-speech generation, WiiM speakers for playback
+- **User Auth:** bcrypt for password hashing, users.yaml for account storage
+- **Database:** SQLite (audit log + schedules)
 - **Monitoring:** Built-in health module (30+ checks), webhook alerts to Home Assistant
+- **Testing:** pytest (~3,000 lines of tests), enforced by pre-commit hook
+- **Secrets:** python-dotenv loading from `.env` file
 
 ## Conventions
 
 - All Python services use rotating file logs (5 MB, 5 backups)
-- Middleware pattern: background polling thread + cached state + REST endpoints
+- Background polling threads + cached state + REST endpoints
 - Two-stage health: cheap PING + heavy SNAPSHOT
-- Config in YAML files (not env vars)
+- Config in YAML files for non-sensitive settings; secrets in `.env`
 - Frontend uses hash-based routing (`#/page-name`)
 - No build tools — vanilla HTML/CSS/JS served directly
+- Pre-commit hook runs full test suite + auto-increments version (format: YY-NNN)
+- Version tracked in `frontend/config/settings.json`
 
 ## What's Been Built
 
 - Full tablet UI with 12 pages and per-tablet permissions
-- Gateway with REST + WebSocket API for all device types
-- Three middleware proxies (X32 audio, MoIP video, OBS streaming)
+- Consolidated gateway with REST + WebSocket API for all device types (single process)
+- Direct X32 mixer control via OSC/UDP (absorbed from middleware)
+- Direct MoIP video matrix control via Telnet (absorbed from middleware)
+- Direct OBS Studio control via WebSocket v5 (absorbed from middleware)
 - Macro execution engine with scheduling support
 - Scene engine for video routing presets
 - Audit logging to SQLite
@@ -196,6 +253,10 @@ Tablets/Browsers (kiosk mode, 10.100.60.0/24)
 - PTZ camera control (10 cameras, server-side to avoid CORS)
 - Epson projector control (4 projectors)
 - Home Assistant integration (power, WattBox, EcoFlow batteries)
+- TTS announcement system (edge-tts generation, WiiM speaker playback)
+- Calendar-driven event automation (setup/teardown macros for church services)
+- User account management with bcrypt password hashing
+- Comprehensive test suite (12 files, ~3,000 lines) with pre-commit enforcement
 
 ---
 
@@ -240,7 +301,7 @@ Tablets/Browsers (kiosk mode, 10.100.60.0/24)
 
 **Phase 7 (THR Sunset) — COMPLETE:** The Home Remote (THR) app has been fully sunset. The web-based tablet frontend replaces all THR functionality. `STP_THRFiles_Current` and `STP_scripts` repos archived with deprecation READMEs documenting what was absorbed and rollback procedures. No `obs_rpc` (THR bridge) health checks were active in the gateway config. THR-referencing comments in `macros.yaml` retained as design-decision documentation (explaining retry patterns). The Chrome crash recovery and network adapter fix scripts in `STP_scripts` remain useful as standalone Windows Scheduled Tasks.
 
-**Phase 8 (Mac Migration):** Clone repo to Mac Mini, create venv, copy `.env`, update OBS WebSocket URL to point to Windows machine, configure launchd, test. Note: the git pre-commit hook (runs 104 gateway tests before each commit) lives in `.git/hooks/pre-commit` and is not tracked by git — copy it from the Windows machine or recreate it on the Mac.
+**Phase 8 (Mac Migration):** Clone repo to Mac Mini, create venv, copy `.env`, update OBS WebSocket URL to point to Windows machine, configure launchd, test. Note: the git pre-commit hook (runs gateway tests before each commit) is tracked at `hooks/pre-commit` — copy it to `.git/hooks/pre-commit` after cloning (see `MIGRATION_GUIDE_MAC.md`).
 
 ### Post-Consolidation Architecture
 
@@ -280,7 +341,7 @@ After consolidation, only **one repo** is actively maintained:
 
 Two comprehensive migration guides exist for setting up the system on a fresh machine:
 
-- **`MIGRATION_GUIDE_PC.md`** — Windows PC setup (NSSM services, PowerShell firewall, .bat scripts)
-- **`MIGRATION_GUIDE_MAC.md`** — macOS setup (launchd plists, Homebrew, shell scripts)
+- **`docs/MIGRATION_GUIDE_PC.md`** — Windows PC setup (NSSM services, PowerShell firewall, .bat scripts)
+- **`docs/MIGRATION_GUIDE_MAC.md`** — macOS setup (launchd plists, Homebrew, shell scripts)
 
-> **Note:** These guides reflect the **current** multi-service architecture (5 separate Python processes across 3 repos). They will need to be updated after the consolidation plan above is complete, at which point the setup simplifies to a single Python process from a single repo.
+> **Note:** These guides reflect the **consolidated** single-gateway architecture. Only one Python process from one repo (`STP_tablets`) needs to be deployed. OBS Studio and Camlytics remain on the Windows PC.
