@@ -23,6 +23,17 @@
 #   parallel      Run sub-steps concurrently (all must succeed unless on_fail: skip)
 #   condition     If/then/else branching based on a check
 #   notify        Broadcast a message to all tablets
+#   wait_until    Poll a device/entity until it reaches expected state or times out
+#   verify_pending  Batch-check all queued verifications from prior verify: steps
+#
+# VERIFY (on ha_service steps):
+#   verify: true               Shorthand: infer entity_id from data, state from service
+#   verify:                    Explicit form:
+#     entity_id: "switch.x"
+#     state: "on"
+#     timeout: 10
+#     retries: 2
+#   The verification is queued (non-blocking) and checked at verify_pending steps.
 #
 # TTS_ANNOUNCE USAGE:
 #   Play a preset (defined in announcements.yaml):
@@ -72,9 +83,13 @@ macros:
             data: { entity_id: "switch.wb_004_av_audiorack1_outlet_3" }
             on_fail: skip
             message: "Turning on X32 Mixer (was off)"
-          - type: delay
-            seconds: 40
-            message: "Waiting for X32 mixer to boot up"
+            verify: true
+          - type: wait_until
+            target: x32
+            condition: connected
+            timeout: 45
+            poll_interval: 2
+            message: "Waiting for X32 mixer to come online"
           - type: x32_scene
             scene: 0
             message: "Loading X32 default scene"
@@ -85,33 +100,39 @@ macros:
             data: { entity_id: "switch.wb_004_av_audiorack1_outlet_3" }
             on_fail: skip
             message: "Turning on X32 Mixer"
+            verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.wb_008_av_audiorack2_outlet_10" }
         on_fail: skip
         message: "Turning on Antennas (W_020_AV_1Antennas)"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.wb_004_av_audiorack1_outlet_7" }
         on_fail: skip
         message: "Turning on Social Hall & PA Amp (Kasa)"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.wb_008_av_audiorack2_outlet_6" }
         on_fail: skip
         message: "Turning on PA Amp"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.wb_008_av_audiorack2_outlet_5" }
         on_fail: skip
         message: "Turning on Main Audio Sub"
-      - type: delay
-        seconds: 5
-        message: "Waiting for shared audio to initialize"
+        verify: true
+      - type: verify_pending
+        timeout: 10
+        retries: 2
+        message: "Verifying shared audio switches turned on"
       # Audio routing
       - type: moip_switch
         tx: 13
@@ -145,31 +166,41 @@ macros:
             service: "turn_on"
             data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_1" }
             on_fail: skip
+            verify: true
           - type: ha_service
             domain: "switch"
             service: "turn_on"
             data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_2" }
             on_fail: skip
+            verify: true
           - type: ha_service
             domain: "switch"
             service: "turn_on"
             data: { entity_id: "switch.bat_chapeltv_1_ac_enabled" }
             on_fail: skip
+            verify: true
           - type: ha_service
             domain: "switch"
             service: "turn_on"
             data: { entity_id: "switch.bat_chapeltv_1_dc12v_enabled" }
             on_fail: skip
+            verify: true
           - type: ha_service
             domain: "switch"
             service: "turn_on"
             data: { entity_id: "switch.bat_chapeltv_2_ac_enabled" }
             on_fail: skip
+            verify: true
           - type: ha_service
             domain: "switch"
             service: "turn_on"
             data: { entity_id: "switch.bat_chapeltv_2_dc12v_enabled" }
             on_fail: skip
+            verify: true
+      - type: verify_pending
+        timeout: 8
+        retries: 2
+        message: "Verifying Chapel TV power switches"
       # IR Power On - Round 1
       - type: moip_ir
         receiver: 09
@@ -260,6 +291,7 @@ macros:
         data: { entity_id: "switch.wb_004_av_audiorack1_outlet_12" }
         on_fail: skip
         message: "Turning on Chapel microphones"
+        verify: true
       # Chapel amplifier
       - type: ha_service
         domain: "switch"
@@ -267,6 +299,7 @@ macros:
         data: { entity_id: "switch.wb_008_av_audiorack2_outlet_8" }
         on_fail: skip
         message: "Turning on Chapel Amplifier"
+        verify: true
       # WattBox IR outlets
       - type: ha_service
         domain: "switch"
@@ -274,12 +307,18 @@ macros:
         data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_2" }
         on_fail: skip
         message: "Turning on Chapel Screens IR"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_4" }
         on_fail: skip
         message: "Turning on Chapel IR Transmitter"
+        verify: true
+      - type: verify_pending
+        timeout: 10
+        retries: 2
+        message: "Verifying Chapel audio switches"
 
   chapel_audio_off:
     label: "Chapel Audio Off"
@@ -292,14 +331,18 @@ macros:
         data: { entity_id: "switch.wb_008_av_audiorack2_outlet_8" }
         on_fail: skip
         message: "Turning off Chapel Amplifier"
-      - type: delay
-        seconds: 5
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_off"
         data: { entity_id: "switch.wb_004_av_audiorack1_outlet_12" }
         on_fail: skip
         message: "Turning off Chapel microphones"
+        verify: true
+      - type: verify_pending
+        timeout: 8
+        retries: 2
+        message: "Verifying Chapel audio off"
 
   chapel_ac_on:
     label: "Chapel A/C On"
@@ -576,14 +619,20 @@ macros:
         data: { entity_id: "switch.sw_019_av_1moipcontroller" }
         on_fail: skip
         message: "Turning on MoIP controller"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.sw_003_hall_leftspeaker2" }
         on_fail: skip
         message: "Turning on Blackmagic ATEM"
+        verify: true
+      - type: verify_pending
+        timeout: 8
+        retries: 2
+        message: "Verifying MoIP controller and ATEM switches"
       - type: delay
-        seconds: 5
+        seconds: 3
         message: "Waiting for ATEM to initialize"
       - type: obs_emit
         action: "CallVendorRequest"
@@ -610,21 +659,29 @@ macros:
             service: "turn_on"
             data: { entity_id: "switch.sw_034_mc_frontleft_new" }
             on_fail: skip
+            verify: true
           - type: ha_service
             domain: "switch"
             service: "turn_on"
             data: { entity_id: "switch.sw_035_mc_frontright" }
             on_fail: skip
+            verify: true
           - type: ha_service
             domain: "switch"
             service: "turn_on"
             data: { entity_id: "switch.sw_036_mc_rearright" }
             on_fail: skip
+            verify: true
           - type: ha_service
             domain: "switch"
             service: "turn_on"
             data: { entity_id: "switch.sw_037_mc_rearleft" }
             on_fail: skip
+            verify: true
+      - type: verify_pending
+        timeout: 8
+        retries: 2
+        message: "Verifying projector outlets turned on"
       # All projector power commands + virtual switches in parallel
       - type: parallel
         message: "Powering on all projectors simultaneously"
@@ -654,21 +711,25 @@ macros:
             service: "turn_on"
             data: { entity_id: "switch.vs_epsonprojector1" }
             on_fail: skip
+            verify: true
           - type: ha_service
             domain: "switch"
             service: "turn_on"
             data: { entity_id: "switch.vs_epsonprojector2" }
             on_fail: skip
+            verify: true
           - type: ha_service
             domain: "switch"
             service: "turn_on"
             data: { entity_id: "switch.vs_epsonprojector3" }
             on_fail: skip
+            verify: true
           - type: ha_service
             domain: "switch"
             service: "turn_on"
             data: { entity_id: "switch.vs_epsonprojector4" }
             on_fail: skip
+            verify: true
       # Retry Projector 3 (known flaky per THR)
       - type: delay
         seconds: 2
@@ -834,12 +895,14 @@ macros:
         data: { entity_id: "switch.wb_008_av_audiorack2_outlet_12" }
         on_fail: skip
         message: "Turning on Main Church wireless mics"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.wb_004_av_audiorack1_outlet_11" }
         on_fail: skip
         message: "Turning on lapel mic"
+        verify: true
       # Amplifiers
       - type: ha_service
         domain: "switch"
@@ -847,12 +910,18 @@ macros:
         data: { entity_id: "switch.wb_004_av_audiorack1_outlet_2" }
         on_fail: skip
         message: "Turning on Main Church Amplifier"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.wb_008_av_audiorack2_outlet_9" }
         on_fail: skip
         message: "Turning on Social Hall Amplifier"
+        verify: true
+      - type: verify_pending
+        timeout: 10
+        retries: 2
+        message: "Verifying Main Church audio switches"
 
   main_audio_off:
     label: "Audio System Off"
@@ -865,20 +934,25 @@ macros:
         data: { entity_id: "switch.wb_004_av_audiorack1_outlet_2" }
         on_fail: skip
         message: "Turning off Main Church Amplifier"
-      - type: delay
-        seconds: 5
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_off"
         data: { entity_id: "switch.wb_008_av_audiorack2_outlet_12" }
         on_fail: skip
         message: "Turning off wireless mics"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_off"
         data: { entity_id: "switch.wb_004_av_audiorack1_outlet_11" }
         on_fail: skip
         message: "Turning off lapel mic"
+        verify: true
+      - type: verify_pending
+        timeout: 8
+        retries: 2
+        message: "Verifying audio off"
 
   main_proj_only_on:
     label: "Projectors Only On"
@@ -1676,14 +1750,20 @@ macros:
         data: { entity_id: "switch.sw_019_av_1moipcontroller" }
         on_fail: skip
         message: "Turning on MoIP controller"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.sw_003_hall_leftspeaker2" }
         on_fail: skip
         message: "Turning on Blackmagic ATEM"
+        verify: true
+      - type: verify_pending
+        timeout: 8
+        retries: 2
+        message: "Verifying MoIP controller and ATEM"
       - type: delay
-        seconds: 5
+        seconds: 3
         message: "Waiting for ATEM to initialize"
       - type: obs_emit
         action: "CallVendorRequest"
@@ -1713,44 +1793,69 @@ macros:
         service: "turn_off"
         data: { entity_id: "media_player.tv_099_hall_videowallp1" }
         on_fail: skip
+        verify:
+          entity_id: "media_player.tv_099_hall_videowallp1"
+          state: "off"
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
         data: { entity_id: "media_player.tv_099_hall_videowallp2" }
         on_fail: skip
+        verify:
+          entity_id: "media_player.tv_099_hall_videowallp2"
+          state: "off"
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
         data: { entity_id: "media_player.tv_099_hall_videowallp3" }
         on_fail: skip
+        verify:
+          entity_id: "media_player.tv_099_hall_videowallp3"
+          state: "off"
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
         data: { entity_id: "media_player.tv_099_hall_videowallp4" }
         on_fail: skip
+        verify:
+          entity_id: "media_player.tv_099_hall_videowallp4"
+          state: "off"
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
         data: { entity_id: "media_player.tv_099_hall_videowallp5" }
         on_fail: skip
+        verify:
+          entity_id: "media_player.tv_099_hall_videowallp5"
+          state: "off"
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
         data: { entity_id: "media_player.tv_099_hall_videowallp6" }
         on_fail: skip
+        verify:
+          entity_id: "media_player.tv_099_hall_videowallp6"
+          state: "off"
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
         data: { entity_id: "media_player.tv_099_hall_videowallp7" }
         on_fail: skip
+        verify:
+          entity_id: "media_player.tv_099_hall_videowallp7"
+          state: "off"
       - type: ha_service
         domain: "media_player"
         service: "turn_off"
         data: { entity_id: "media_player.tv_099_hall_videowallp8" }
         on_fail: skip
-      - type: delay
-        seconds: 3
-        message: "Waiting for Roku API to turn off TVs"
+        verify:
+          entity_id: "media_player.tv_099_hall_videowallp8"
+          state: "off"
+      - type: verify_pending
+        timeout: 8
+        retries: 2
+        message: "Verifying Social Hall TVs turned off"
       # Round 2: Roku API again (for any that were slow to respond)
       - type: ha_service
         domain: "media_player"
@@ -1839,24 +1944,32 @@ macros:
         data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_5" }
         on_fail: skip
         message: "Turning on Social Hall Mics 1"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_6" }
         on_fail: skip
         message: "Turning on Social Hall Mics 2"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.wb_004_av_audiorack1_outlet_10" }
         on_fail: skip
         message: "Turning on Social Hall Wireless Mics"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.wb_008_av_audiorack2_outlet_9" }
         on_fail: skip
         message: "Turning on Social Hall Amplifier"
+        verify: true
+      - type: verify_pending
+        timeout: 10
+        retries: 2
+        message: "Verifying Social Hall audio switches"
 
   social_audio_off:
     label: "Social Hall Audio Off"
@@ -1869,18 +1982,25 @@ macros:
         data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_5" }
         on_fail: skip
         message: "Turning off Social Hall Mics 1"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_off"
         data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_6" }
         on_fail: skip
         message: "Turning off Social Hall Mics 2"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_off"
         data: { entity_id: "switch.wb_004_av_audiorack1_outlet_10" }
         on_fail: skip
         message: "Turning off Social Hall Wireless Mics"
+        verify: true
+      - type: verify_pending
+        timeout: 8
+        retries: 2
+        message: "Verifying Social Hall audio off"
 
   social_ac_on:
     label: "Social Hall A/C On"
@@ -2584,12 +2704,14 @@ macros:
         data: { entity_id: "switch.sw_030_confroom_1owl1" }
         on_fail: skip
         message: "Turning on Owl Camera 1"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_on"
         data: { entity_id: "switch.sw_030_confroom_2owl2" }
         on_fail: skip
         message: "Turning on Owl Camera 2"
+        verify: true
       - type: moip_switch
         tx: 5
         rx: 28
@@ -2621,12 +2743,18 @@ macros:
         data: { entity_id: "switch.sw_030_confroom_1owl1" }
         on_fail: skip
         message: "Turning off Owl Camera 1"
+        verify: true
       - type: ha_service
         domain: "switch"
         service: "turn_off"
         data: { entity_id: "switch.sw_030_confroom_2owl2" }
         on_fail: skip
         message: "Turning off Owl Camera 2"
+        verify: true
+      - type: verify_pending
+        timeout: 8
+        retries: 2
+        message: "Verifying Owl cameras off"
 
   confroom_appletv_restart:
     label: "Restart Conference Room AppleTV"

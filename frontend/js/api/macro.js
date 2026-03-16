@@ -55,6 +55,34 @@ const MacroAPI = {
       }
     });
 
+    // Verification retry events
+    socket.on('macro_step_retry', (data) => {
+      if (!data) return;
+      const entity = (data.entity_id || '').split('.').pop();
+      App.showToast(`Retrying: ${entity} (round ${data.retry_round || '?'})`, 3000, 'warning');
+    });
+
+    // Verification failure events (after all retries exhausted)
+    socket.on('macro_verify_failed', (data) => {
+      if (!data) return;
+      const count = (data.failed || []).length;
+      const names = (data.failed || []).map(f => (f.entity_id || '').split('.').pop()).join(', ');
+      App.showToast(`${count} device${count !== 1 ? 's' : ''} failed verification: ${names}`, 6000, 'warning');
+      if (typeof NotificationCenter !== 'undefined') {
+        NotificationCenter.addMacroWarning(
+          data.message || 'Verification',
+          count,
+          (data.failed || []).map(f => `${f.entity_id}: expected ${f.expected}`).join('\n')
+        );
+      }
+    });
+
+    // wait_until progress events
+    socket.on('macro_step_status', (data) => {
+      if (!data || data.type !== 'wait_until') return;
+      App.showToast(`${data.message || 'Waiting'} (${data.elapsed || 0}s / ${data.timeout || '?'}s)`, 2000);
+    });
+
     // Join the macros room for progress events
     socket.emit('join', { room: 'macros' });
   },

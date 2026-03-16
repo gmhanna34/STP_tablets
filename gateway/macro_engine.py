@@ -8,7 +8,7 @@ import logging
 import os
 import socket
 import time
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 import requests as http_requests
 import yaml
@@ -16,6 +16,102 @@ import yaml
 from auth import get_tablet_id
 
 logger = logging.getLogger("stp-gateway")
+
+
+# ---------------------------------------------------------------------------
+# Verification queue — in-memory, per-macro-execution
+# ---------------------------------------------------------------------------
+
+class _VerificationEntry:
+    """Tracks a pending background verification for an ha_service step."""
+    __slots__ = ("entity_id", "expected_state", "timeout", "retries",
+                 "original_step", "queued_at")
+
+    def __init__(self, entity_id: str, expected_state: str, timeout: float,
+                 retries: int, original_step: dict):
+        self.entity_id = entity_id
+        self.expected_state = expected_state
+        self.timeout = timeout
+        self.retries = retries
+        self.original_step = original_step
+        self.queued_at = time.time()
+
+
+class _VerificationQueue:
+    """Simple in-memory queue of pending verifications for a single macro run."""
+
+    def __init__(self):
+        self._pending: List[_VerificationEntry] = []
+
+    def add(self, entry: _VerificationEntry):
+        self._pending.append(entry)
+
+    def drain(self) -> List[_VerificationEntry]:
+        items = list(self._pending)
+        self._pending.clear()
+        return items
+
+    def clear(self):
+        self._pending.clear()
+
+    def __len__(self):
+        return len(self._pending)
+
+
+def _resolve_verify(step: dict) -> Optional[_VerificationEntry]:
+    """Resolve a verify block (shorthand or explicit) on an ha_service step.
+
+    Returns a _VerificationEntry or None if no verification is requested.
+    """
+    verify = step.get("verify")
+    if not verify:
+        return None
+
+    if verify is True:
+        # Shorthand: infer from the step itself
+        data = step.get("data", {})
+        entity_id = data.get("entity_id", "")
+        service = step.get("service", "")
+        if service in ("turn_on",):
+            expected_state = "on"
+        elif service in ("turn_off",):
+            expected_state = "off"
+        else:
+            # Can't infer state for non-turn_on/turn_off services
+            return None
+        if not entity_id:
+            return None
+        return _VerificationEntry(
+            entity_id=entity_id,
+            expected_state=expected_state,
+            timeout=10,
+            retries=2,
+            original_step=step,
+        )
+
+    if isinstance(verify, dict):
+        data = step.get("data", {})
+        entity_id = verify.get("entity_id", data.get("entity_id", ""))
+        service = step.get("service", "")
+        if "state" in verify:
+            expected_state = str(verify["state"])
+        elif service in ("turn_on",):
+            expected_state = "on"
+        elif service in ("turn_off",):
+            expected_state = "off"
+        else:
+            return None
+        if not entity_id:
+            return None
+        return _VerificationEntry(
+            entity_id=entity_id,
+            expected_state=expected_state,
+            timeout=verify.get("timeout", 10),
+            retries=verify.get("retries", 2),
+            original_step=step,
+        )
+
+    return None
 
 
 # YAML parses bare on:/off:/yes:/no: as boolean True/False keys.
@@ -129,13 +225,19 @@ def fetch_all_ha_entities(ctx):
 # ---------------------------------------------------------------------------
 
 def execute_macro(ctx, macro_key: str, tablet: str, depth: int = 0,
-                  skip_steps: set = None, prefix: str = "") -> dict:
+                  skip_steps: set = None, prefix: str = "",
+                  verify_queue: _VerificationQueue = None) -> dict:
     """Execute a macro by key. Returns {success, steps_completed, steps_total, error}.
     skip_steps: set of dot-notation indices to skip (e.g., {"0", "1.2", "3"}).
     prefix: current nesting path (e.g., "0." for first nested macro).
+    verify_queue: shared verification queue (created at top-level, passed to children).
     """
     if skip_steps is None:
         skip_steps = set()
+    # Top-level invocation creates and owns the verification queue
+    owns_queue = verify_queue is None
+    if owns_queue:
+        verify_queue = _VerificationQueue()
     if depth > 5:
         return {"success": False, "error": "Max nesting depth (5) exceeded"}
 
@@ -196,9 +298,10 @@ def execute_macro(ctx, macro_key: str, tablet: str, depth: int = 0,
             child_key = step.get("macro", "")
             child_prefix = f"{step_path}."
             result = execute_macro(ctx, child_key, tablet, depth + 1,
-                                   skip_steps=skip_steps, prefix=child_prefix)
+                                   skip_steps=skip_steps, prefix=child_prefix,
+                                   verify_queue=verify_queue)
         else:
-            result = _execute_step(ctx, step, tablet, depth)
+            result = _execute_step(ctx, step, tablet, depth, verify_queue=verify_queue)
 
         if verbose.is_set():
             status_str = "OK" if result["success"] else f"FAIL: {result.get('error', '')}"
@@ -251,6 +354,10 @@ def execute_macro(ctx, macro_key: str, tablet: str, depth: int = 0,
                           json.dumps({"label": label, "steps": len(steps)}),
                           f"FAILED at step {i+1}: {error_msg}", overall_ms)
 
+            # Clear verification queue on failure (top-level only)
+            if owns_queue:
+                verify_queue.clear()
+
             # Refresh HA state even on failure
             if ran_ha_service:
                 _refresh_ha_state(ctx)
@@ -264,6 +371,10 @@ def execute_macro(ctx, macro_key: str, tablet: str, depth: int = 0,
                 "error": error_msg,
                 "latency_ms": round(overall_ms, 1),
             }
+
+    # Clear verification queue at macro end (top-level only)
+    if owns_queue:
+        verify_queue.clear()
 
     # All steps completed
     overall_ms = (time.time() - overall_start) * 1000
@@ -324,14 +435,23 @@ def _refresh_ha_state(ctx):
         logger.debug(f"HA state refresh after macro: {e}")
 
 
-def _execute_step(ctx, step: dict, tablet: str, depth: int) -> dict:
+def _execute_step(ctx, step: dict, tablet: str, depth: int,
+                   verify_queue: _VerificationQueue = None) -> dict:
     """Execute a single macro step. Returns {success, error?}."""
     step_type = step.get("type", "")
     try:
         if step_type == "ha_check":
             return _step_ha_check(ctx, step)
         elif step_type == "ha_service":
-            return _step_ha_service(ctx, step, tablet)
+            result = _step_ha_service(ctx, step, tablet)
+            # Queue background verification if step has verify and execution succeeded
+            if result["success"] and verify_queue is not None:
+                entry = _resolve_verify(step)
+                if entry:
+                    verify_queue.add(entry)
+                    logger.debug(f"Queued verification for {entry.entity_id} "
+                                 f"(expect={entry.expected_state})")
+            return result
         elif step_type == "door_timed_unlock":
             return _step_door_timed_unlock(ctx, step, tablet)
         elif step_type == "moip_switch":
@@ -353,22 +473,27 @@ def _execute_step(ctx, step: dict, tablet: str, depth: int) -> dict:
         elif step_type == "ptz_preset":
             return _step_ptz_preset(ctx, step, tablet)
         elif step_type == "parallel":
-            return _step_parallel(ctx, step, tablet, depth)
+            return _step_parallel(ctx, step, tablet, depth, verify_queue=verify_queue)
         elif step_type == "delay":
             secs = step.get("seconds", 1)
             time.sleep(secs)
             return {"success": True}
         elif step_type == "macro":
             child_key = step.get("macro", "")
-            return execute_macro(ctx, child_key, tablet, depth + 1)
+            return execute_macro(ctx, child_key, tablet, depth + 1,
+                                 verify_queue=verify_queue)
         elif step_type == "condition":
-            return _step_condition(ctx, step, tablet, depth)
+            return _step_condition(ctx, step, tablet, depth, verify_queue=verify_queue)
         elif step_type == "tts_announce":
             return _step_tts_announce(ctx, step, tablet)
         elif step_type == "notify":
             msg = step.get("message", "")
             ctx.socketio.emit("notification", {"message": msg})
             return {"success": True}
+        elif step_type == "wait_until":
+            return _step_wait_until(ctx, step, tablet)
+        elif step_type == "verify_pending":
+            return _step_verify_pending(ctx, step, tablet, verify_queue)
         else:
             return {"success": False, "error": f"Unknown step type: {step_type}"}
     except Exception as e:
@@ -738,7 +863,8 @@ def _step_tts_announce(ctx, step: dict, tablet: str) -> dict:
     return {"success": False, "error": result.get("error", "TTS announce failed")}
 
 
-def _step_parallel(ctx, step: dict, tablet: str, depth: int) -> dict:
+def _step_parallel(ctx, step: dict, tablet: str, depth: int,
+                    verify_queue: _VerificationQueue = None) -> dict:
     """Run sub-steps concurrently. Succeeds only if ALL sub-steps succeed."""
     sub_steps = step.get("steps", [])
     if not sub_steps:
@@ -750,8 +876,9 @@ def _step_parallel(ctx, step: dict, tablet: str, depth: int) -> dict:
         sub_type = sub_step.get("type", "")
         if sub_type == "macro":
             child_key = sub_step.get("macro", "")
-            return execute_macro(ctx, child_key, tablet, depth + 1)
-        return _execute_step(ctx, sub_step, tablet, depth)
+            return execute_macro(ctx, child_key, tablet, depth + 1,
+                                 verify_queue=verify_queue)
+        return _execute_step(ctx, sub_step, tablet, depth, verify_queue=verify_queue)
 
     errors = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(sub_steps)) as pool:
@@ -771,18 +898,207 @@ def _step_parallel(ctx, step: dict, tablet: str, depth: int) -> dict:
     return {"success": True}
 
 
-def _step_condition(ctx, step: dict, tablet: str, depth: int) -> dict:
+def _step_condition(ctx, step: dict, tablet: str, depth: int,
+                    verify_queue: _VerificationQueue = None) -> dict:
     check = step.get("if", {})
     then_steps = step.get("then", [])
     else_steps = step.get("else", [])
 
-    check_result = _execute_step(ctx, check, tablet, depth)
+    check_result = _execute_step(ctx, check, tablet, depth, verify_queue=verify_queue)
 
     branch = then_steps if check_result["success"] else else_steps
     for sub_step in branch:
-        result = _execute_step(ctx, sub_step, tablet, depth)
+        result = _execute_step(ctx, sub_step, tablet, depth, verify_queue=verify_queue)
         if not result["success"]:
             return result
+    return {"success": True}
+
+
+# ---------------------------------------------------------------------------
+# wait_until — poll a device module or HA entity until ready
+# ---------------------------------------------------------------------------
+
+def _step_wait_until(ctx, step: dict, tablet: str) -> dict:
+    """Poll a device module or HA entity until it reaches expected state or times out."""
+    timeout = step.get("timeout", 30)
+    poll_interval = step.get("poll_interval", 2)
+    message = step.get("message", "Waiting for device")
+    target = step.get("target", "")        # module name: x32, obs, moip
+    entity_id = step.get("entity_id", "")  # HA entity to poll
+    condition = step.get("condition", "")   # for modules: "connected"
+    expected_state = step.get("state", "")  # for HA entities
+
+    if ctx.mock_mode:
+        return {"success": True}
+
+    start = time.time()
+    attempt = 0
+
+    while True:
+        elapsed = time.time() - start
+        if elapsed >= timeout:
+            return {"success": False,
+                    "error": f"wait_until timed out after {timeout}s: {message}"}
+
+        met = False
+
+        # Module-based check
+        if target and condition == "connected":
+            met = _check_module_connected(ctx, target)
+        # HA entity check
+        elif entity_id and expected_state:
+            met = _check_ha_entity_state(ctx, entity_id, expected_state)
+
+        if met:
+            logger.info(f"wait_until satisfied after {elapsed:.1f}s: {message}")
+            return {"success": True}
+
+        attempt += 1
+        # Emit progress so tablets can show waiting status
+        ctx.socketio.emit("macro_step_status", {
+            "type": "wait_until",
+            "message": message,
+            "elapsed": round(elapsed, 1),
+            "timeout": timeout,
+            "attempt": attempt,
+        })
+
+        time.sleep(poll_interval)
+
+
+def _check_module_connected(ctx, target: str) -> bool:
+    """Check if a device module reports as connected/healthy."""
+    try:
+        if target == "x32" and ctx.x32:
+            status, _code = ctx.x32.get_status()
+            return status.get("healthy", False) if isinstance(status, dict) else False
+        elif target == "obs" and ctx.obs:
+            status, _code = ctx.obs.get_status()
+            return status.get("healthy", False) if isinstance(status, dict) else False
+        elif target == "moip" and ctx.moip:
+            status = ctx.moip.get_status()
+            return status.get("healthy", False) if isinstance(status, dict) else False
+    except Exception as e:
+        logger.debug(f"Module health check failed for {target}: {e}")
+    return False
+
+
+def _check_ha_entity_state(ctx, entity_id: str, expected_state: str) -> bool:
+    """Check a single HA entity against an expected state."""
+    ha_cfg = ctx.cfg.get("home_assistant", {})
+    if not ha_cfg.get("url") or not ha_cfg.get("token"):
+        return False
+    try:
+        resp = http_requests.get(
+            f"{ha_cfg['url']}/api/states/{entity_id}",
+            headers={"Authorization": f"Bearer {ha_cfg['token']}"},
+            timeout=ha_cfg.get("timeout", 10),
+        )
+        if resp.status_code != 200:
+            return False
+        actual = resp.json().get("state", "")
+        return str(actual) == str(expected_state)
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# verify_pending — batch-check all queued verifications
+# ---------------------------------------------------------------------------
+
+def _step_verify_pending(ctx, step: dict, tablet: str,
+                         verify_queue: _VerificationQueue) -> dict:
+    """Check all pending verifications, retry failures, emit results."""
+    if verify_queue is None or len(verify_queue) == 0:
+        return {"success": True}
+
+    timeout = step.get("timeout", 10)
+    max_retries = step.get("retries", 2)
+    poll_interval = step.get("poll_interval", 2)
+    message = step.get("message", "Verifying pending steps")
+
+    if ctx.mock_mode:
+        verify_queue.clear()
+        return {"success": True}
+
+    entries = verify_queue.drain()
+    ha_cfg = ctx.cfg.get("home_assistant", {})
+
+    start = time.time()
+
+    for retry_round in range(max_retries + 1):
+        if not entries:
+            break
+
+        elapsed = time.time() - start
+        if elapsed >= timeout:
+            break
+
+        # Fetch all HA states in one bulk call
+        entity_states = {}
+        try:
+            all_entities, err = fetch_all_ha_entities(ctx)
+            if not err and all_entities:
+                for e in all_entities:
+                    entity_states[e.get("entity_id", "")] = e.get("state", "")
+        except Exception:
+            pass
+
+        still_pending = []
+        for entry in entries:
+            actual = entity_states.get(entry.entity_id, "unknown")
+            if str(actual) == str(entry.expected_state):
+                logger.debug(f"Verified {entry.entity_id} = {actual}")
+            else:
+                still_pending.append(entry)
+                logger.debug(f"Verify failed: {entry.entity_id} is '{actual}', "
+                             f"expected '{entry.expected_state}' (round {retry_round + 1})")
+
+        if not still_pending:
+            logger.info(f"All {len(entries)} verifications passed "
+                        f"(round {retry_round + 1}, {time.time() - start:.1f}s)")
+            return {"success": True}
+
+        entries = still_pending
+
+        # If not last round, retry the original ha_service calls and then wait
+        if retry_round < max_retries:
+            for entry in entries:
+                logger.info(f"Retrying ha_service for {entry.entity_id} "
+                            f"(round {retry_round + 2})")
+                ctx.socketio.emit("macro_step_retry", {
+                    "entity_id": entry.entity_id,
+                    "expected_state": entry.expected_state,
+                    "retry_round": retry_round + 2,
+                })
+                # Re-execute the original ha_service step
+                try:
+                    _step_ha_service(ctx, entry.original_step, tablet)
+                except Exception as e:
+                    logger.warning(f"Retry ha_service failed for {entry.entity_id}: {e}")
+
+            # Wait before next check
+            remaining = timeout - (time.time() - start)
+            wait_time = min(poll_interval, remaining) if remaining > 0 else 0
+            if wait_time > 0:
+                time.sleep(wait_time)
+
+    # Some verifications failed after all retries
+    failed_entities = [
+        {"entity_id": e.entity_id, "expected": e.expected_state}
+        for e in entries
+    ]
+    logger.warning(f"verify_pending: {len(failed_entities)} entities failed "
+                   f"after {max_retries} retries: "
+                   f"{[e['entity_id'] for e in failed_entities]}")
+
+    ctx.socketio.emit("macro_verify_failed", {
+        "message": message,
+        "failed": failed_entities,
+        "retries_exhausted": max_retries,
+    })
+
+    # Continue the macro (don't abort — these were on_fail: skip steps)
     return {"success": True}
 
 
@@ -833,4 +1149,9 @@ def step_summary(step: dict, macro_defs: dict) -> str:
         nested = step.get("macro", "")
         nested_label = macro_defs.get(nested, {}).get("label", nested)
         return f"Run macro: {nested_label}"
+    elif t == "wait_until":
+        target = step.get("target", step.get("entity_id", ""))
+        return f"Wait for {target} ({step.get('timeout', 30)}s max)"
+    elif t == "verify_pending":
+        return f"Verify pending ({step.get('message', 'check all')})"
     return f"{t}"

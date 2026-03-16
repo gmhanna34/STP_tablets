@@ -12,6 +12,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from macro_engine import (
     _normalize_yaml_keys,
+    _resolve_verify,
+    _VerificationEntry,
+    _VerificationQueue,
     execute_macro,
     load_macros,
     step_summary,
@@ -301,3 +304,204 @@ class TestStepSummary:
             {"chapel_tv_on": {"label": "Chapel TV On"}},
         )
         assert "chapel_tv_on" in result or "Chapel TV On" in result
+
+    def test_wait_until_summary(self):
+        result = step_summary(
+            {"type": "wait_until", "target": "x32", "timeout": 45}, {}
+        )
+        assert "x32" in result
+        assert "45" in result
+
+    def test_verify_pending_summary(self):
+        result = step_summary(
+            {"type": "verify_pending", "message": "check switches"}, {}
+        )
+        assert "check switches" in result
+
+
+# ---------------------------------------------------------------------------
+# Verification queue
+# ---------------------------------------------------------------------------
+
+class TestVerificationQueue:
+    def test_add_and_drain(self):
+        q = _VerificationQueue()
+        entry = _VerificationEntry("switch.test", "on", 10, 2, {})
+        q.add(entry)
+        assert len(q) == 1
+        items = q.drain()
+        assert len(items) == 1
+        assert len(q) == 0
+
+    def test_clear(self):
+        q = _VerificationQueue()
+        q.add(_VerificationEntry("switch.a", "on", 10, 2, {}))
+        q.add(_VerificationEntry("switch.b", "off", 10, 2, {}))
+        assert len(q) == 2
+        q.clear()
+        assert len(q) == 0
+
+    def test_drain_returns_empty_on_empty(self):
+        q = _VerificationQueue()
+        assert q.drain() == []
+
+
+class TestResolveVerify:
+    def test_verify_true_shorthand_turn_on(self):
+        step = {
+            "type": "ha_service", "domain": "switch", "service": "turn_on",
+            "data": {"entity_id": "switch.test_outlet"},
+            "verify": True,
+        }
+        entry = _resolve_verify(step)
+        assert entry is not None
+        assert entry.entity_id == "switch.test_outlet"
+        assert entry.expected_state == "on"
+        assert entry.timeout == 10
+        assert entry.retries == 2
+
+    def test_verify_true_shorthand_turn_off(self):
+        step = {
+            "type": "ha_service", "domain": "switch", "service": "turn_off",
+            "data": {"entity_id": "switch.test_outlet"},
+            "verify": True,
+        }
+        entry = _resolve_verify(step)
+        assert entry is not None
+        assert entry.expected_state == "off"
+
+    def test_verify_true_non_turn_service_returns_none(self):
+        step = {
+            "type": "ha_service", "domain": "climate", "service": "set_temperature",
+            "data": {"entity_id": "climate.test"},
+            "verify": True,
+        }
+        entry = _resolve_verify(step)
+        assert entry is None
+
+    def test_verify_explicit_dict(self):
+        step = {
+            "type": "ha_service", "domain": "switch", "service": "turn_on",
+            "data": {"entity_id": "switch.test_outlet"},
+            "verify": {"entity_id": "switch.test_outlet", "state": "on",
+                       "timeout": 15, "retries": 3},
+        }
+        entry = _resolve_verify(step)
+        assert entry is not None
+        assert entry.timeout == 15
+        assert entry.retries == 3
+
+    def test_verify_dict_infers_entity_from_data(self):
+        step = {
+            "type": "ha_service", "domain": "switch", "service": "turn_on",
+            "data": {"entity_id": "switch.abc"},
+            "verify": {"state": "on"},
+        }
+        entry = _resolve_verify(step)
+        assert entry is not None
+        assert entry.entity_id == "switch.abc"
+
+    def test_no_verify_returns_none(self):
+        step = {"type": "ha_service", "domain": "switch", "service": "turn_on",
+                "data": {"entity_id": "switch.x"}}
+        assert _resolve_verify(step) is None
+
+    def test_verify_false_returns_none(self):
+        step = {"type": "ha_service", "domain": "switch", "service": "turn_on",
+                "data": {"entity_id": "switch.x"}, "verify": False}
+        assert _resolve_verify(step) is None
+
+
+# ---------------------------------------------------------------------------
+# wait_until step type
+# ---------------------------------------------------------------------------
+
+class TestWaitUntilStep:
+    def test_wait_until_mock_mode_succeeds(self):
+        ctx = _make_ctx({
+            "wait_test": {
+                "label": "Wait Test",
+                "steps": [{
+                    "type": "wait_until",
+                    "target": "x32",
+                    "condition": "connected",
+                    "timeout": 5,
+                    "message": "Waiting for X32",
+                }],
+            }
+        })
+        result = execute_macro(ctx, "wait_test", "test-tablet")
+        assert result["success"] is True
+
+
+# ---------------------------------------------------------------------------
+# verify + verify_pending integration
+# ---------------------------------------------------------------------------
+
+class TestVerifyPending:
+    def test_verify_pending_with_empty_queue_succeeds(self):
+        ctx = _make_ctx({
+            "vp_empty": {
+                "label": "VP Empty",
+                "steps": [{
+                    "type": "verify_pending",
+                    "timeout": 5,
+                    "message": "Nothing to verify",
+                }],
+            }
+        })
+        result = execute_macro(ctx, "vp_empty", "test-tablet")
+        assert result["success"] is True
+
+    def test_verify_pending_in_mock_mode_clears_queue(self):
+        ctx = _make_ctx({
+            "vp_mock": {
+                "label": "VP Mock",
+                "steps": [
+                    {"type": "ha_service", "domain": "switch", "service": "turn_on",
+                     "data": {"entity_id": "switch.test"}, "on_fail": "skip",
+                     "verify": True},
+                    {"type": "verify_pending", "timeout": 5,
+                     "message": "Verify in mock"},
+                ],
+            }
+        })
+        result = execute_macro(ctx, "vp_mock", "test-tablet")
+        assert result["success"] is True
+        assert result["steps_completed"] == 2
+
+    def test_ha_service_with_verify_queues_entry(self):
+        """Verify that ha_service with verify: true still succeeds and queues."""
+        ctx = _make_ctx({
+            "verify_queue_test": {
+                "label": "Queue Test",
+                "steps": [
+                    {"type": "ha_service", "domain": "switch", "service": "turn_on",
+                     "data": {"entity_id": "switch.test_1"}, "on_fail": "skip",
+                     "verify": True},
+                    {"type": "ha_service", "domain": "switch", "service": "turn_on",
+                     "data": {"entity_id": "switch.test_2"}, "on_fail": "skip",
+                     "verify": True},
+                    {"type": "delay", "seconds": 0.01},
+                ],
+            }
+        })
+        result = execute_macro(ctx, "verify_queue_test", "test-tablet")
+        assert result["success"] is True
+        assert result["steps_completed"] == 3
+
+    def test_backward_compat_no_verify(self):
+        """Steps without verify behave exactly as before."""
+        ctx = _make_ctx({
+            "compat_test": {
+                "label": "Compat",
+                "steps": [
+                    {"type": "ha_service", "domain": "switch", "service": "turn_on",
+                     "data": {"entity_id": "switch.test"}, "on_fail": "skip"},
+                    {"type": "delay", "seconds": 0.01},
+                ],
+            }
+        })
+        result = execute_macro(ctx, "compat_test", "test-tablet")
+        assert result["success"] is True
+        assert result["steps_completed"] == 2
