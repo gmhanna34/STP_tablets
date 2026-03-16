@@ -182,19 +182,6 @@ const SettingsPage = {
             </div>
           </div>
 
-          <!-- Event Detail Modal -->
-          <div id="ea-modal-overlay" class="overlay hidden">
-            <div class="modal schedule-modal">
-              <div class="modal-header-bar">
-                <h2 id="ea-modal-title">Event Details</h2>
-                <button class="modal-close" id="ea-modal-close">
-                  <span class="material-icons">close</span>
-                </button>
-              </div>
-              <div class="modal-body" id="ea-modal-body"></div>
-            </div>
-          </div>
-
           <!-- Cron-style schedules -->
           <div class="control-section" style="margin-top:16px;">
             <div class="section-title">Scheduled Automations</div>
@@ -1850,6 +1837,7 @@ const SettingsPage = {
   _eaProfiles: {},
   _eaEvents: [],
   _eaStatus: {},
+  _eaExpandedKey: null,
 
   async _initEventAutomation() {
     // Load profiles and status, then events
@@ -1881,13 +1869,6 @@ const SettingsPage = {
       if (btn) btn.disabled = false;
     });
 
-    // Modal close
-    document.getElementById('ea-modal-close')?.addEventListener('click', () => {
-      document.getElementById('ea-modal-overlay')?.classList.add('hidden');
-    });
-    document.getElementById('ea-modal-overlay')?.addEventListener('click', (e) => {
-      if (e.target.id === 'ea-modal-overlay') e.target.classList.add('hidden');
-    });
   },
 
   _renderEAStatusBar() {
@@ -1910,7 +1891,7 @@ const SettingsPage = {
     const container = document.getElementById('ea-events-container');
     if (!container) return;
     try {
-      const resp = await fetch('/api/event-automation/events?hours=72');
+      const resp = await fetch('/api/event-automation/events?hours=168');
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       this._eaEvents = await resp.json();
       this._renderEAEvents(container);
@@ -1965,22 +1946,29 @@ const SettingsPage = {
           ? '<span style="font-size:10px;padding:1px 5px;border-radius:6px;background:#e3f2fd;color:#1565c0;">Teardown</span>'
           : '';
 
-        html += `<div class="health-item" style="margin-bottom:4px;cursor:pointer;" data-ea-key="${this._escAttr(ev.key)}">
-          <div style="min-width:0;flex:1;">
-            <div class="health-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._esc(ev.title)}</div>
-            <div style="font-size:11px;color:var(--text-secondary);">
-              ${startTime} – ${endTime} &middot;
-              <span class="material-icons" style="font-size:12px;vertical-align:text-bottom;">smart_toy</span>
-              ${this._esc(ev.profile_label)}
+        const isExpanded = this._eaExpandedKey === ev.key;
+        const chevron = isExpanded ? 'expand_less' : 'expand_more';
+
+        html += `<div style="margin-bottom:4px;">
+          <div class="health-item" style="cursor:pointer;" data-ea-key="${this._escAttr(ev.key)}">
+            <div style="min-width:0;flex:1;">
+              <div class="health-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${this._esc(ev.title)}</div>
+              <div style="font-size:11px;color:var(--text-secondary);">
+                ${startTime} – ${endTime} &middot;
+                <span class="material-icons" style="font-size:12px;vertical-align:text-bottom;">smart_toy</span>
+                ${this._esc(ev.profile_label)}
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              ${teardownBadge}
+              ${preflightBadge}
+              <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${statusInfo.bg};color:${statusInfo.color};">
+                ${statusInfo.label}
+              </span>
+              <span class="material-icons" style="font-size:18px;color:var(--text-secondary);">${chevron}</span>
             </div>
           </div>
-          <div style="display:flex;align-items:center;gap:6px;">
-            ${teardownBadge}
-            ${preflightBadge}
-            <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${statusInfo.bg};color:${statusInfo.color};">
-              ${statusInfo.label}
-            </span>
-          </div>
+          ${isExpanded ? this._renderEADetail(ev) : ''}
         </div>`;
       }
       html += '</div>';
@@ -2002,14 +1990,19 @@ const SettingsPage = {
       this._renderEAEvents(container);
     });
 
-    // Bind click handlers to open event detail
+    // Bind click handlers for expand/collapse
     container.querySelectorAll('[data-ea-key]').forEach(el => {
       el.addEventListener('click', () => {
         const key = el.dataset.eaKey;
-        const ev = this._eaEvents.find(e => e.key === key);
-        if (ev) this._openEAModal(ev);
+        this._eaExpandedKey = this._eaExpandedKey === key ? null : key;
+        this._renderEAEvents(container);
       });
     });
+
+    // Bind action buttons inside expanded detail
+    if (this._eaExpandedKey) {
+      this._bindEADetailActions(container, this._eaExpandedKey);
+    }
   },
 
   _eaStatusInfo(status) {
@@ -2024,20 +2017,11 @@ const SettingsPage = {
     return map[status] || map.upcoming;
   },
 
-  _openEAModal(ev) {
-    const overlay = document.getElementById('ea-modal-overlay');
-    const title = document.getElementById('ea-modal-title');
-    const body = document.getElementById('ea-modal-body');
-    if (!overlay || !title || !body) return;
-
-    title.textContent = ev.title;
-
+  _renderEADetail(ev) {
     const profileOptions = Object.entries(this._eaProfiles)
       .map(([id, p]) => `<option value="${id}" ${id === ev.profile_id ? 'selected' : ''}>${this._esc(p.label)}</option>`)
       .join('');
 
-    const startTime = new Date(ev.start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    const endTime = new Date(ev.end).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     const setupTime = new Date(ev.setup_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     const teardownTime = new Date(ev.teardown_time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     const dateLabel = new Date(ev.start).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
@@ -2062,9 +2046,8 @@ const SettingsPage = {
       </div>`;
     }
 
-    body.innerHTML = `
+    return `<div class="ea-detail-panel" style="padding:10px 12px;margin-top:2px;background:var(--surface);border:1px solid var(--border);border-radius:0 0 8px 8px;animation:fadeIn 0.15s ease-out;">
       <div class="schedule-detail-grid">
-        <div class="schedule-detail-row"><span class="schedule-detail-label">Time</span><span class="schedule-detail-value">${startTime} – ${endTime}</span></div>
         <div class="schedule-detail-row"><span class="schedule-detail-label">Date</span><span class="schedule-detail-value">${dateLabel}</span></div>
         <div class="schedule-detail-row"><span class="schedule-detail-label">Status</span><span class="schedule-detail-value"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${statusInfo.bg};color:${statusInfo.color};">${statusInfo.label}</span></span></div>
         <div class="schedule-detail-row"><span class="schedule-detail-label">Setup at</span><span class="schedule-detail-value">${setupTime}</span></div>
@@ -2074,7 +2057,7 @@ const SettingsPage = {
         <div class="schedule-detail-row">
           <span class="schedule-detail-label">Auto Teardown</span>
           <span class="schedule-detail-value">
-            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;" onclick="event.stopPropagation();">
               <input type="checkbox" id="ea-teardown-toggle" ${ev.teardown_enabled ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;">
               <span style="font-size:12px;color:var(--text-secondary);">${ev.teardown_enabled ? 'Will auto-teardown after service' : 'Manual teardown only'}</span>
             </label>
@@ -2082,13 +2065,13 @@ const SettingsPage = {
         </div>
         <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);">
           <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Profile Override</div>
-          <select class="schedule-profile-select" id="ea-profile-select" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;">
+          <select class="schedule-profile-select" id="ea-profile-select" onclick="event.stopPropagation();" style="width:100%;padding:6px;border-radius:4px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;">
             <option value="">Auto-detect</option>
             ${profileOptions}
           </select>
         </div>
         ${preflightHtml}
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);" onclick="event.stopPropagation();">
           ${ev.status !== 'skipped'
             ? `<button class="btn" id="ea-btn-skip" style="min-height:auto;padding:6px 12px;font-size:12px;color:var(--down);">
                  <span class="material-icons" style="font-size:16px;">block</span> Skip
@@ -2108,68 +2091,61 @@ const SettingsPage = {
           </button>
         </div>
       </div>
-    `;
+    </div>`;
+  },
 
-    // Bind modal actions
-    const key = ev.key;
+  _bindEADetailActions(container, key) {
+    const enc = encodeURIComponent(key);
     document.getElementById('ea-btn-skip')?.addEventListener('click', async () => {
-      await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/skip`, { method: 'POST' });
+      await fetch(`/api/event-automation/events/${enc}/skip`, { method: 'POST' });
       App.showToast('Event skipped', 2000);
-      overlay.classList.add('hidden');
+      this._eaExpandedKey = null;
       this._loadEAEvents();
     });
     document.getElementById('ea-btn-unskip')?.addEventListener('click', async () => {
-      await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/unskip`, { method: 'POST' });
+      await fetch(`/api/event-automation/events/${enc}/unskip`, { method: 'POST' });
       App.showToast('Automation resumed', 2000);
-      overlay.classList.add('hidden');
+      this._eaExpandedKey = null;
       this._loadEAEvents();
     });
     document.getElementById('ea-btn-setup')?.addEventListener('click', async () => {
-      const resp = await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/trigger`, {
+      const resp = await fetch(`/api/event-automation/events/${enc}/trigger`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'setup' }),
       });
       const data = await resp.json();
       App.showToast(data.success ? 'Setup triggered' : (data.error || 'Failed'), 2000, data.success ? '' : 'error');
-      overlay.classList.add('hidden');
       this._loadEAEvents();
     });
     document.getElementById('ea-btn-teardown')?.addEventListener('click', async () => {
-      const resp = await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/trigger`, {
+      const resp = await fetch(`/api/event-automation/events/${enc}/trigger`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'teardown' }),
       });
       const data = await resp.json();
       App.showToast(data.success ? 'Teardown triggered' : (data.error || 'Failed'), 2000, data.success ? '' : 'error');
-      overlay.classList.add('hidden');
       this._loadEAEvents();
     });
     document.getElementById('ea-btn-preflight')?.addEventListener('click', async () => {
       App.showToast('Running preflight...', 2000);
-      await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/preflight`, { method: 'POST' });
+      await fetch(`/api/event-automation/events/${enc}/preflight`, { method: 'POST' });
       await this._loadEAEvents();
-      const updated = this._eaEvents.find(e => e.key === key);
-      overlay.classList.add('hidden');
-      if (updated) this._openEAModal(updated);
     });
     document.getElementById('ea-teardown-toggle')?.addEventListener('change', async (e) => {
       const enabled = e.target.checked;
-      await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/teardown`, {
+      await fetch(`/api/event-automation/events/${enc}/teardown`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled }),
       });
       App.showToast(enabled ? 'Auto-teardown enabled' : 'Auto-teardown disabled', 2000);
       this._loadEAEvents();
-      // Update label next to checkbox
       const label = e.target.nextElementSibling;
       if (label) label.textContent = enabled ? 'Will auto-teardown after service' : 'Manual teardown only';
     });
     document.getElementById('ea-profile-select')?.addEventListener('change', async (e) => {
-      await fetch(`/api/event-automation/events/${encodeURIComponent(key)}/override-profile`, {
+      await fetch(`/api/event-automation/events/${enc}/override-profile`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profile: e.target.value }),
       });
       App.showToast(e.target.value ? 'Profile overridden' : 'Profile reset to auto', 2000);
       this._loadEAEvents();
     });
-
-    overlay.classList.remove('hidden');
   },
 
   _esc(str) {
