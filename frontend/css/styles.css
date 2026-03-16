@@ -746,6 +746,11 @@ body {
   line-height: 1.3;
 }
 
+.scene-pill-offline {
+  color: #cc4444;
+  background: rgba(204, 68, 68, 0.15);
+}
+
 /* ── Disabled State (disabled_when) ──────────────────────── */
 
 .btn.btn-disabled-state {

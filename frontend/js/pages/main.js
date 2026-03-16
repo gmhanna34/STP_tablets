@@ -54,11 +54,15 @@ const MainPage = {
     }
     // Fetch latest from lightweight health endpoint
     const info = await X32API.fetchScene();
-    if (info?.name) this._renderScenePill(info.name);
+    if (info?.name) {
+      this._renderScenePill(info.name);
+    } else if (!X32API.state.currentSceneName) {
+      this._renderScenePill('X32 Offline', true);
+    }
   },
 
-  _renderScenePill(sceneName) {
-    if (!sceneName) return;
+  _renderScenePill(text, offline) {
+    if (!text) return;
     const container = document.getElementById('main-macro-buttons');
     if (!container) return;
     const titles = container.querySelectorAll('.section-title');
@@ -72,7 +76,8 @@ const MainPage = {
           pill.className = 'scene-pill';
           title.appendChild(pill);
         }
-        pill.textContent = sceneName;
+        pill.textContent = text;
+        pill.classList.toggle('scene-pill-offline', !!offline);
         return;
       }
     }
@@ -81,6 +86,8 @@ const MainPage = {
   updateStatus() {
     if (X32API.state.currentSceneName) {
       this._renderScenePill(X32API.state.currentSceneName);
+    } else if (!X32API.state.online) {
+      this._renderScenePill('X32 Offline', true);
     }
   },
 
