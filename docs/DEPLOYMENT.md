@@ -14,7 +14,8 @@
 10. [Frontend Pages & Permissions](#10-frontend-pages--permissions)
 11. [Health Monitoring (HealthDash)](#11-health-monitoring-healthdash)
 12. [Production Deployment](#12-production-deployment)
-13. [Troubleshooting](#13-troubleshooting)
+13. [Disaster Recovery (DR)](#13-disaster-recovery-dr)
+14. [Troubleshooting](#14-troubleshooting)
 
 ---
 
@@ -38,7 +39,8 @@ The system runs as a **single consolidated gateway** from one repository (`STP_t
 ## 2. Architecture
 
 ```
-Tablets / Browsers ──► STP Gateway (:20858)
+Tablets / Browsers ──► Router port forward :20858 ──► Mac Mini (primary)
+                                                       or Windows PC (DR standby)
                           │
               ┌───────────┼───────────┬──────────┬───────────┐
               ▼           ▼           ▼          ▼           ▼
@@ -47,7 +49,9 @@ Tablets / Browsers ──► STP Gateway (:20858)
               │           │           │          │           │
               ▼           ▼           ▼          ▼           ▼
          X32 Mixer   MoIP Ctrl   OBS Studio  10 Cameras  4 Projectors
-        .60.231     10.100.20.11   :4455     .60.201-210 .60.233-236
+        .60.231     10.100.20.11  .60.185     .60.201-210 .60.233-236
+                                  :4455
+                                  (auto-discovered: local or remote)
 
 Gateway also talks directly to:
   • Home Assistant (10.100.60.245:8123) — power, WattBox, EcoFlow
@@ -68,8 +72,9 @@ Built-in services:
 |-----------|----------|------|------|
 | **STP Gateway** | `STP_tablets/gateway/` | 20858 | Unified API + static file server + WebSocket hub + all protocol modules |
 | **Frontend** | `STP_tablets/frontend/` | (served by gateway) | Tablet web UI |
+| **OBS Studio** | Windows PC (.60.185) | 4455 | Streaming/recording (stays on Windows for GPU/display) |
 
-> **Note:** All middleware (X32, MoIP, OBS) and HealthDash have been absorbed into the gateway. The standalone scripts in `STP_scripts/` and `STP_healthdash/` are archived as rollback options only.
+> **Note:** All middleware (X32, MoIP, OBS) and HealthDash have been absorbed into the gateway. The standalone scripts in `STP_scripts/` and `STP_healthdash/` are archived as rollback options only. The Windows PC is kept as a disaster recovery standby (see [DR section](#13-disaster-recovery-dr)).
 
 ---
 
@@ -579,12 +584,13 @@ CAMERAS (RTSP via Camlytics)
   10.100.40.100    UniFi NVR (RTSPS streams)
 ```
 
-### Port Map (localhost services)
+### Port Map
 
 ```
- 4455   OBS WebSocket (OBS Studio native — may be on remote Windows PC)
- 8123   Home Assistant (if local)
+ 4455   OBS WebSocket (on Windows PC .60.185 — auto-discovered by gateway)
+ 8123   Home Assistant (10.100.60.245)
 20858   STP Gateway (HTTP + Socket.IO + all built-in modules)
+         — port-forwarded at router to Mac Mini (primary) or Windows PC (DR)
 ```
 
 > **Note:** Ports 3400 (X32 middleware), 4456 (OBS middleware), 5002 (MoIP middleware), and 20855 (HealthDash) are no longer used. All functionality is built into the gateway on port 20858.
@@ -767,7 +773,79 @@ VACUUM;
 
 ---
 
-## 13. Troubleshooting
+## 13. Disaster Recovery (DR)
+
+The Windows PC (.60.185) serves as a **cold standby** for the gateway. Both machines run identical code, config, and secrets — there are no per-machine configuration differences.
+
+### Why Zero Config Differences
+
+All AV devices (X32, MoIP, cameras, projectors, Home Assistant) are on the LAN and reachable from either the Mac Mini or the Windows PC. The only potential difference — the OBS WebSocket URL — is handled automatically:
+
+**OBS Auto-Discovery:** At startup, the OBS module probes two URLs configured in `config.yaml`:
+
+```yaml
+obs:
+  ws_url_local: ws://127.0.0.1:4455       # Tried first (OBS on same machine)
+  ws_url_remote: ws://10.100.60.185:4455   # Fallback (OBS on Windows PC)
+```
+
+- **On the Windows PC:** Local probe succeeds (OBS runs locally) → uses `ws://127.0.0.1:4455`
+- **On the Mac Mini:** Local probe fails (no OBS) → falls back to `ws://10.100.60.185:4455`
+
+This is a one-time TCP connect check at startup (~1 second). The selected URL is logged at boot:
+```
+OBS: Local probe succeeded (127.0.0.1:4455) — using ws://127.0.0.1:4455
+# or
+OBS: Local probe failed — using remote ws://10.100.60.185:4455
+```
+
+### Tablet Routing via Port Forwarding
+
+Tablets connect to a single URL/port (e.g., `http://stp-gateway:20858/`) — they never reference a specific server IP directly. The router controls which machine they reach:
+
+| Rule | Destination | State (Normal) | State (Failover) |
+|------|-------------|-----------------|-------------------|
+| Port forward :20858 → Mac Mini | Mac Mini IP | **Enabled** | Disabled |
+| Port forward :20858 → Windows PC | 10.100.60.185 | Disabled | **Enabled** |
+
+**No tablet changes are needed during failover.** The tablets always use the same URL and port. Socket.IO's built-in reconnection (exponential backoff, unlimited retries) handles the brief interruption automatically.
+
+### Keeping the Standby Ready
+
+On the Windows PC, maintain the standby with minimal effort:
+
+1. **Keep the repo up to date** — periodic `git pull` (or a weekly Windows Scheduled Task)
+2. **Keep the venv intact** — run `pip install -r requirements.txt` after pulling if dependencies changed
+3. **`.env` is identical** — same file on both machines, no edits needed
+4. **`config.yaml` is identical** — same file on both machines, OBS auto-discovery handles the rest
+
+### Failover Procedure
+
+1. **At the router:** Disable the Mac Mini port forward rule, enable the Windows PC rule
+2. **On the Windows PC:**
+   ```cmd
+   cd C:\path\to\STP_tablets\gateway
+   .venv\Scripts\activate
+   python gateway.py
+   ```
+3. **Verify:** Open `http://10.100.60.185:20858/api/health` and confirm `{"healthy": true}`
+4. **Tablets reconnect automatically** — Socket.IO retries with exponential backoff (1s → 30s max)
+
+### Failback Procedure
+
+1. Resolve the issue on the Mac Mini
+2. Stop the gateway on the Windows PC (Ctrl+C or stop the service)
+3. At the router: disable the Windows PC port forward rule, re-enable the Mac Mini rule
+4. Tablets reconnect automatically
+
+### What You Lose on Failover
+
+- **Recent audit log entries** — SQLite is local to each machine. Historical logs on the Mac Mini won't be on the PC. This is non-critical; the system is fully functional without them.
+- **Cached state** — The gateway rebuilds all device state within seconds of starting (polling loops).
+
+---
+
+## 14. Troubleshooting
 
 ### Gateway won't start
 
@@ -798,10 +876,12 @@ tail -f logs/stp-gateway.log
 
 ### OBS not connecting
 
-1. Verify OBS Studio is running with WebSocket Server enabled
+1. Verify OBS Studio is running on the Windows PC (.60.185) with WebSocket Server enabled
 2. Check OBS settings: Tools > WebSocket Server Settings
 3. Default OBS WebSocket port is 4455
 4. If password-protected, set `OBS_WS_PASSWORD` in the gateway's `.env` file
+5. Check the gateway startup log for which URL was selected: `OBS: Local probe succeeded...` or `OBS: Local probe failed — using remote...`
+6. Verify the Windows PC firewall allows inbound TCP on port 4455
 
 ### Home Assistant integration failing
 
@@ -848,4 +928,9 @@ CONFIG FILES:
   Frontend:    STP_tablets/frontend/config/{settings,devices,permissions}.json
 
 TESTS:         cd STP_tablets/gateway && pytest tests/
+
+DR FAILOVER:
+  1. Router: disable Mac Mini port forward, enable Windows PC port forward
+  2. Windows PC: cd STP_tablets\gateway && .venv\Scripts\activate && python gateway.py
+  3. Tablets reconnect automatically
 ```

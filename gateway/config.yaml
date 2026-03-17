@@ -6,7 +6,7 @@ gateway:
 middleware: null
 obs:
   ws_url_local: ws://127.0.0.1:4455       # Tried first (OBS on same machine)
-  ws_url_remote: ws://10.100.60.230:4455   # Fallback (OBS on Windows PC)
+  ws_url_remote: ws://10.100.60.185:4455   # Fallback (OBS on Windows PC)
   ws_password: ''                          # Set OBS_WS_PASSWORD in .env
   ping_seconds: 3.0
   snapshot_seconds: 6.0
