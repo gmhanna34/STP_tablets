@@ -21,10 +21,12 @@ import copy
 import hashlib
 import json
 import logging
+import socket
 import threading
 import time
 import uuid
 from typing import Any, Dict, Optional, Tuple
+from urllib.parse import urlparse
 
 import websocket
 
@@ -73,11 +75,49 @@ class OBSModule:
     green-thread-safe patched sockets. No real OS threads or asyncio needed.
     """
 
+    @staticmethod
+    def _resolve_ws_url(cfg: dict, logger: logging.Logger,
+                        probe_timeout: float = 1.5) -> str:
+        """Pick OBS WebSocket URL by probing local first, then remote.
+
+        If config has ws_url_local and ws_url_remote, does a quick TCP connect
+        to the local address. If it responds, use it; otherwise fall back to
+        remote. This runs once at startup so both machines can share identical
+        config. If neither key exists, falls back to legacy ws_url.
+        """
+        local = cfg.get("ws_url_local", "")
+        remote = cfg.get("ws_url_remote", "")
+
+        # Legacy single-URL config — no probing needed
+        if not local and not remote:
+            return cfg.get("ws_url", "ws://127.0.0.1:4455")
+
+        # If only one is configured, use it directly
+        if local and not remote:
+            return local
+        if remote and not local:
+            return remote
+
+        # Both configured — probe local
+        try:
+            parsed = urlparse(local)
+            host = parsed.hostname or "127.0.0.1"
+            port = parsed.port or 4455
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(probe_timeout)
+            sock.connect((host, port))
+            sock.close()
+            logger.info(f"OBS: Local probe succeeded ({host}:{port}) — using {local}")
+            return local
+        except (OSError, socket.timeout):
+            logger.info(f"OBS: Local probe failed — using remote {remote}")
+            return remote
+
     def __init__(self, cfg: dict, logger: logging.Logger) -> None:
         self._cfg = cfg
         self._logger = logger
 
-        self._ws_url = cfg.get("ws_url", "ws://127.0.0.1:4455")
+        self._ws_url = self._resolve_ws_url(cfg, logger)
         self._ws_password = cfg.get("ws_password", "") or ""
 
         # Poll tuning

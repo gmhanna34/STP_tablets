@@ -281,8 +281,9 @@ The gateway has been modularized into 17 Python modules (~11,000 lines total):
 
 - **Each phase is one session.** Absorb one service at a time, test, verify, commit before moving on.
 - **Consolidation happens on Windows first.** Everything gets tested on the current machine before migrating.
-- **OBS Studio + Camlytics stay on Windows.** They need GPU/display access. The gateway's OBS proxy will point to the Windows machine's IP instead of localhost after migration.
+- **OBS Studio + Camlytics stay on Windows.** They need GPU/display access. The OBS module auto-discovers whether OBS is local or remote at startup (see DR section below).
 - **THR is being sunset.** The web frontend replaces it. No new THR development.
+- **Windows PC kept as DR standby.** Both machines run identical code and config. Port forwarding at the router controls which machine tablets reach (see DR section below).
 - **Target end state:** One Python process (gateway) serving everything — REST API, WebSocket hub, static frontend, health monitoring, all protocol translation (OSC, Telnet, OBS WebSocket), occupancy data.
 
 ### What Changes Per Phase
@@ -301,19 +302,21 @@ The gateway has been modularized into 17 Python modules (~11,000 lines total):
 
 **Phase 7 (THR Sunset) — COMPLETE:** The Home Remote (THR) app has been fully sunset. The web-based tablet frontend replaces all THR functionality. `STP_THRFiles_Current` and `STP_scripts` repos archived with deprecation READMEs documenting what was absorbed and rollback procedures. No `obs_rpc` (THR bridge) health checks were active in the gateway config. THR-referencing comments in `macros.yaml` retained as design-decision documentation (explaining retry patterns). The Chrome crash recovery and network adapter fix scripts in `STP_scripts` remain useful as standalone Windows Scheduled Tasks.
 
-**Phase 8 (Mac Migration):** Clone repo to Mac Mini, create venv, copy `.env`, update OBS WebSocket URL to point to Windows machine, configure launchd, test. Note: the git pre-commit hook (runs gateway tests before each commit) is tracked at `hooks/pre-commit` — copy it to `.git/hooks/pre-commit` after cloning (see `MIGRATION_GUIDE_MAC.md`).
+**Phase 8 (Mac Migration):** Clone repo to Mac Mini, create venv, copy `.env` (identical to Windows — no edits needed), configure launchd, test. The OBS module auto-discovers local vs. remote OBS at startup, so both machines share the same config. The git pre-commit hook (runs gateway tests before each commit) is tracked at `hooks/pre-commit` — copy it to `.git/hooks/pre-commit` after cloning (see `MIGRATION_GUIDE_MAC.md`).
 
 ### Post-Consolidation Architecture
 
 ```
-MAC MINI (new)                         WINDOWS PC (existing)
-─────────────────────────              ─────────────────────
-STP Gateway :20858                     OBS Studio :4455
- ├─ REST API + Socket.IO               Camlytics (analytics)
- ├─ Static frontend
+Tablets ──► Router port forward :20858 ──► MAC MINI (primary) or WINDOWS PC (DR)
+
+MAC MINI (.60.TBD) — primary           WINDOWS PC (.60.185) — DR standby
+─────────────────────────               ──────────────────────────────────
+STP Gateway :20858                      STP Gateway :20858 (cold standby)
+ ├─ REST API + Socket.IO                OBS Studio :4455
+ ├─ Static frontend                     Camlytics (analytics)
  ├─ X32 module ──── OSC/UDP ──────►  Behringer X32 (.60.231)
  ├─ MoIP module ─── Telnet ──────►   Binary MoIP (10.100.20.11)
- ├─ OBS module ──── WebSocket ───►   OBS Studio (Windows IP:4455)
+ ├─ OBS module ──── WebSocket ───►   OBS Studio (.60.185:4455)  ← auto-discovered
  ├─ PTZ module ──── HTTP/CGI ────►   10 cameras (.60.201-.210)
  ├─ Epson module ── HTTP ────────►   4 projectors (.60.233-.236)
  ├─ HA module ───── REST ────────►   Home Assistant (.60.245)
@@ -322,6 +325,33 @@ STP Gateway :20858                     OBS Studio :4455
  ├─ Macro engine
  └─ Audit log (SQLite)
 ```
+
+### Disaster Recovery (DR)
+
+The Windows PC serves as a cold standby for the gateway. Both machines run identical code and configuration — no per-machine config differences.
+
+**Why it works with zero config differences:**
+- All device IPs (X32, MoIP, cameras, projectors, HA) are on the LAN, reachable from either machine
+- The OBS module auto-discovers OBS at startup: probes `ws_url_local` (localhost:4455) first, falls back to `ws_url_remote` (.60.185:4455). On the Windows PC, local probe succeeds (OBS runs there); on the Mac Mini, it fails and uses the remote address. One-time check, ~1 second.
+- `.env` and `config.yaml` are identical on both machines
+- SQLite audit log is local and non-critical (recent logs lost on failover, not functionality)
+
+**Tablet routing via port forwarding:**
+- Tablets connect to a single URL/port (e.g., `http://stp-gateway:20858/`) — they never reference a specific server IP
+- The router has **two port forwarding rules** for port 20858:
+  - Rule 1: Forward to Mac Mini IP → **Enabled** (normal operation)
+  - Rule 2: Forward to Windows PC IP (.60.185) → **Disabled** (DR standby)
+- Failover: disable Rule 1, enable Rule 2. No tablet changes needed.
+
+**Keeping the standby ready:**
+1. Keep the repo cloned and up to date (`git pull` periodically or via scheduled task)
+2. Keep the Python venv intact with dependencies installed
+3. `.env` is already identical — no edits needed
+
+**Failover procedure:**
+1. On the router: disable Mac Mini port forward, enable Windows PC port forward
+2. On the Windows PC: `cd STP_tablets/gateway && .venv\Scripts\activate && python gateway.py`
+3. Tablets reconnect automatically (Socket.IO has built-in retry with exponential backoff)
 
 ### Post-Consolidation Repos
 

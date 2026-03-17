@@ -491,7 +491,8 @@ def main():
     x32_cfg = cfg.get("x32", {})
     moip_cfg = cfg.get("moip", {})
     obs_cfg = cfg.get("obs") or {}
-    logger.info(f"  OBS (direct): {obs_cfg.get('ws_url', 'N/A')}")
+    obs_url = obs._ws_url if obs else obs_cfg.get("ws_url_local", obs_cfg.get("ws_url", "N/A"))
+    logger.info(f"  OBS (direct): {obs_url}")
     logger.info(f"  MoIP (direct): {moip_cfg.get('host_internal', 'N/A')}:{moip_cfg.get('port_internal', 23)}")
     logger.info(f"  X32 (direct): {x32_cfg.get('mixer_type', 'X32')} @ {x32_cfg.get('mixer_ip', 'N/A')}")
     logger.info(f"  PTZ cameras: {len(cfg.get('ptz_cameras', {}))}")

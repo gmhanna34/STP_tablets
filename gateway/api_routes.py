@@ -406,7 +406,7 @@ def register_api_routes(ctx):
 
     _EDITABLE_SCHEMA = {
         "gateway": ["host", "port", "debug"],
-        "obs": ["ws_url", "ping_seconds", "snapshot_seconds",
+        "obs": ["ws_url_local", "ws_url_remote", "ping_seconds", "snapshot_seconds",
                 "offline_after_seconds", "ping_fails_to_offline", "max_scenes"],
         "moip": ["host_internal", "port_internal", "host_external", "port_external"],
         "x32": ["mixer_ip", "mixer_type", "ping_seconds", "snapshot_seconds",
