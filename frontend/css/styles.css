@@ -2730,7 +2730,7 @@ body {
   border-bottom: 1px solid var(--border);
 }
 .audit-ts     { color: var(--text-secondary); min-width: 90px; }
-.audit-tablet { color: var(--accent); min-width: 80px; }
+.audit-tablet { color: #b36800; min-width: 80px; }
 .audit-action { color: var(--text); min-width: 140px; }
 .audit-target { color: var(--text-secondary); min-width: 80px; }
 .audit-latency { color: var(--ok); }
@@ -2750,7 +2750,20 @@ body {
 .audit-details {
   padding: 4px 8px 8px 26px;
   border-bottom: 1px solid var(--border);
-  background: rgba(0,0,0,0.15);
+  background: rgba(0,0,0,0.06);
+}
+.audit-detail-label {
+  color: #b36800;
+  font-weight: 600;
+  font-size: 12px;
+}
+.audit-detail-pre {
+  margin: 2px 0 4px 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text);
+  font-size: 11px;
+  opacity: 0.85;
 }
 
 /* ── Switch Panel (SmartThings / WattBox) ────────────────── */

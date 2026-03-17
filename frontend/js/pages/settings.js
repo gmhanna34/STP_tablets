@@ -1557,8 +1557,8 @@ const SettingsPage = {
           } catch { reqDisplay = log.request_data; }
         }
         detailsHtml = `<div class="audit-details" id="audit-detail-${idx}" style="display:none;">
-          ${reqDisplay ? `<div><span style="color:#ff8c00;">Request:</span><pre style="margin:2px 0 4px 0;white-space:pre-wrap;word-break:break-all;color:#aaa;font-size:11px;">${this._escHtml(reqDisplay)}</pre></div>` : ''}
-          ${resultFull.length > 60 ? `<div><span style="color:#ff8c00;">Full Result:</span><pre style="margin:2px 0 0 0;white-space:pre-wrap;word-break:break-all;color:#aaa;font-size:11px;">${this._escHtml(resultFull)}</pre></div>` : ''}
+          ${reqDisplay ? `<div><span class="audit-detail-label">Request:</span><pre class="audit-detail-pre">${this._escHtml(reqDisplay)}</pre></div>` : ''}
+          ${resultFull.length > 60 ? `<div><span class="audit-detail-label">Full Result:</span><pre class="audit-detail-pre">${this._escHtml(resultFull)}</pre></div>` : ''}
         </div>`;
       }
 
