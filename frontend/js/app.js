@@ -17,55 +17,66 @@ const App = {
     // Apply saved theme before anything renders
     this.initTheme();
 
-    // Load configuration from gateway
-    let config = null;
+    // Wrap init in try/catch so Router.navigate and initSocketIO always run.
+    // Without this, a failure in config/auth/API init leaves the page blank with
+    // no content rendered and no Socket.IO recovery mechanism active.
     try {
-      const configResp = await fetch('/api/config');
-      console.log('[CONFIG] /api/config status:', configResp.status);
-      if (!configResp.ok) throw new Error(`Config response ${configResp.status}`);
-      config = await configResp.json();
-      console.log('[CONFIG] Response keys:', Object.keys(config));
-      console.log('[CONFIG] devices keys:', config.devices ? Object.keys(config.devices) : 'MISSING');
-      console.log('[CONFIG] has moip:', !!(config.devices && config.devices.moip));
-      if (!config.devices) throw new Error('Config missing devices');
-      this.settings = config.settings || {};
-      this.devicesConfig = config.devices || {};
-    } catch (e) {
-      console.warn('[CONFIG] Gateway config failed, falling back to static files:', e.message);
+      // Load configuration from gateway
+      let config = null;
       try {
-        const [settingsResp, devicesResp] = await Promise.all([
-          fetch('config/settings.json'),
-          fetch('config/devices.json')
-        ]);
-        console.log('[CONFIG] Static fallback status:', settingsResp.status, devicesResp.status);
-        this.settings = await settingsResp.json();
-        this.devicesConfig = await devicesResp.json();
-        console.log('[CONFIG] Static fallback devices keys:', Object.keys(this.devicesConfig));
-      } catch (e2) {
-        console.error('[CONFIG] Static fallback also failed:', e2);
-        this.settings = {};
-        this.devicesConfig = {};
+        const configResp = await fetch('/api/config');
+        console.log('[CONFIG] /api/config status:', configResp.status);
+        if (!configResp.ok) throw new Error(`Config response ${configResp.status}`);
+        config = await configResp.json();
+        console.log('[CONFIG] Response keys:', Object.keys(config));
+        console.log('[CONFIG] devices keys:', config.devices ? Object.keys(config.devices) : 'MISSING');
+        console.log('[CONFIG] has moip:', !!(config.devices && config.devices.moip));
+        if (!config.devices) throw new Error('Config missing devices');
+        this.settings = config.settings || {};
+        this.devicesConfig = config.devices || {};
+      } catch (e) {
+        console.warn('[CONFIG] Gateway config failed, falling back to static files:', e.message);
+        try {
+          const [settingsResp, devicesResp] = await Promise.all([
+            fetch('config/settings.json'),
+            fetch('config/devices.json')
+          ]);
+          console.log('[CONFIG] Static fallback status:', settingsResp.status, devicesResp.status);
+          this.settings = await settingsResp.json();
+          this.devicesConfig = await devicesResp.json();
+          console.log('[CONFIG] Static fallback devices keys:', Object.keys(this.devicesConfig));
+        } catch (e2) {
+          console.error('[CONFIG] Static fallback also failed:', e2);
+          this.settings = {};
+          this.devicesConfig = {};
+        }
       }
+      console.log('[CONFIG] Final devicesConfig has moip:', !!this.devicesConfig?.moip,
+                  'receivers:', this.devicesConfig?.moip?.receivers?.length || 0);
+
+      // Initialize auth/permissions (pass config to avoid duplicate /api/config fetch)
+      await Auth.init(config);
+
+      // Show error banner if permissions failed to load (fail-closed — all pages denied)
+      if (Auth.permissionsLoadFailed) {
+        this.showPermissionsError();
+      }
+
+      // Initialize API services (no config params needed — they use gateway-relative URLs)
+      ObsAPI.init(this.settings);
+      X32API.init();
+      MoIPAPI.init();
+      // WattBoxAPI removed — WattBox controls are now macros with ha_service actions
+      PtzAPI.init();
+      EpsonAPI.init();
+      HealthAPI.init(this.settings);
+    } catch (e) {
+      console.error('[INIT] Critical init error — proceeding with defaults:', e);
+      this.settings = this.settings || {};
+      this.devicesConfig = this.devicesConfig || {};
     }
-    console.log('[CONFIG] Final devicesConfig has moip:', !!this.devicesConfig?.moip,
-                'receivers:', this.devicesConfig?.moip?.receivers?.length || 0);
 
-    // Initialize auth/permissions (pass config to avoid duplicate /api/config fetch)
-    await Auth.init(config);
-
-    // Show error banner if permissions failed to load (fail-closed — all pages denied)
-    if (Auth.permissionsLoadFailed) {
-      this.showPermissionsError();
-    }
-
-    // Initialize API services (no config params needed — they use gateway-relative URLs)
-    ObsAPI.init(this.settings);
-    X32API.init();
-    MoIPAPI.init();
-    // WattBoxAPI removed — WattBox controls are now macros with ha_service actions
-    PtzAPI.init();
-    EpsonAPI.init();
-    HealthAPI.init(this.settings);
+    // --- Everything below MUST run even if config/auth/API init failed ---
 
     // Initialize router
     Router.init();
@@ -115,6 +126,21 @@ const App = {
 
     this._sessionCount = 0;  // track how many times this page has connected
 
+    // Treat page load as "disconnected" so connect_error and reconnect_attempt
+    // handlers show UI feedback during the initial connection attempt (not just
+    // after a successful connection drops).
+    this._disconnectedAt = Date.now();
+
+    // Watchdog: if we never connect within 60s, auto-reload the page.
+    // This handles edge cases like stale cached pages, CDN script failures,
+    // or gateway restarts that leave the tablet stuck on "Connecting...".
+    this._connectWatchdog = setTimeout(() => {
+      if (!this.socket || !this.socket.connected) {
+        console.warn('[WATCHDOG] No connection after 60s — reloading page');
+        location.reload();
+      }
+    }, 60000);
+
     const socketQuery = { tablet: tabletId };
     if (Auth.isUserSession()) {
       socketQuery.user = Auth.userSession.username;
@@ -134,6 +160,7 @@ const App = {
       this._sessionCount++;
       console.log(`Socket.IO connected (session #${this._sessionCount})`);
       this._reconnectAttempt = 0;
+      clearTimeout(this._connectWatchdog);
       clearTimeout(this._disconnectBannerTimer);
       this._hideDisconnectBanner();
       document.getElementById('gateway-reload-overlay')?.remove();
@@ -191,16 +218,18 @@ const App = {
     });
 
     this.socket.on('connect_error', () => {
-      // Only show error after the grace period
-      if (this._disconnectedAt && Date.now() - this._disconnectedAt > 3000) {
+      // Show error after 3s grace period (covers both initial and post-disconnect)
+      const elapsed = this._disconnectedAt ? Date.now() - this._disconnectedAt : Infinity;
+      if (elapsed > 3000) {
         this.setConnectionStatus('Connection Error', false);
       }
     });
 
     this.socket.io.on('reconnect_attempt', (attempt) => {
       this._reconnectAttempt = attempt;
-      // Only show reconnecting UI after the grace period
-      if (this._disconnectedAt && Date.now() - this._disconnectedAt > 3000) {
+      // Show reconnecting UI after 3s grace period
+      const elapsed = this._disconnectedAt ? Date.now() - this._disconnectedAt : Infinity;
+      if (elapsed > 3000) {
         this.setConnectionStatus(`Reconnecting (${attempt})...`, false);
       }
       // After 30 failed attempts (~5 min), show reload overlay
