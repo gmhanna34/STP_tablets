@@ -3869,6 +3869,53 @@ body {
 .health-banner-danger  { background: #f8d7da; color: #842029; border: 1px solid #f5c2c7; }
 .health-banner-info    { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
 
+/* --- Gateway Pollers Section --- */
+
+.health-pollers-section {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.health-pollers-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.health-pollers-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+}
+
+.health-poller-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.health-poller-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.health-poller-detail {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.health-poller-empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 .health-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));

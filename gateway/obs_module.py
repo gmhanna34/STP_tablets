@@ -139,6 +139,10 @@ class OBSModule:
         self._snapshot: Optional[Dict[str, Any]] = None
         self._snapshot_ts: float = 0.0
 
+        # Reconnect backoff (exponential when OBS is offline)
+        self._reconnect_delay = self._ping_seconds
+        self._reconnect_delay_max = float(cfg.get("reconnect_delay_max", 60.0))
+
         # Thread control (eventlet green thread via patched threading)
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -428,6 +432,7 @@ class OBSModule:
                     self._online = True
                     self._last_ok_ts = time.time()
                     self._last_error = ""
+                    self._reconnect_delay = self._ping_seconds  # reset backoff
                 except Exception as e:
                     self._ping_fail_streak += 1
                     self._last_error = (
@@ -441,6 +446,11 @@ class OBSModule:
                     if self._ping_fail_streak >= self._ping_fails_to_offline:
                         self._online = False
                         self._disconnect()
+                        # Exponential backoff on reconnect attempts
+                        self._reconnect_delay = min(
+                            self._reconnect_delay * 2,
+                            self._reconnect_delay_max,
+                        )
 
             # Belt-and-suspenders offline threshold
             if (self._last_ok_ts
@@ -467,7 +477,8 @@ class OBSModule:
                                     f"OBS: {self._last_error}"
                                 )
 
-            # Sleep until next ping cadence
+            # Sleep until next ping cadence (uses backoff delay when offline)
             elapsed = time.time() - start
-            sleep_for = max(0.2, self._ping_seconds - elapsed)
+            cadence = self._reconnect_delay if not self._online else self._ping_seconds
+            sleep_for = max(0.2, cadence - elapsed)
             self._stop.wait(timeout=sleep_for)

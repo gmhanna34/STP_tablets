@@ -39,6 +39,11 @@ const HealthPage = {
 
         <div id="health-banner" class="health-banner hidden"></div>
 
+        <div class="health-pollers-section" id="health-pollers-section">
+          <div class="health-pollers-title">Gateway Pollers</div>
+          <div class="health-pollers-grid" id="health-pollers-grid"></div>
+        </div>
+
         <div class="health-grid" id="health-grid">
           <div class="health-loading">Loading services...</div>
         </div>
@@ -207,6 +212,7 @@ const HealthPage = {
       if (timeEl) timeEl.textContent = this._fmtTime(data.generated_at);
 
       this._updateSeverity(data);
+      this._updatePollers(data.gateway_pollers || {});
 
       const results = data.results || {};
       for (const [id, result] of Object.entries(results)) {
@@ -586,6 +592,50 @@ const HealthPage = {
 
     // Re-append in sorted order (moves existing DOM nodes)
     cards.forEach(card => grid.appendChild(card));
+  },
+
+  // --- Gateway Pollers ---
+
+  _updatePollers(pollers) {
+    const grid = document.getElementById('health-pollers-grid');
+    if (!grid) return;
+
+    const names = Object.keys(pollers);
+    if (names.length === 0) {
+      grid.innerHTML = '<span class="health-poller-empty">No pollers registered</span>';
+      return;
+    }
+
+    const friendlyNames = {
+      x32: 'X32 Mixer', moip: 'MoIP Video', obs: 'OBS Studio',
+      projectors: 'Projectors', ha_states: 'HA States', camlytics: 'Camlytics',
+    };
+
+    grid.innerHTML = names.map(name => {
+      const p = pollers[name];
+      const circuit = p.circuit || {};
+      const state = circuit.state || 'closed';
+      const stale = p.stale;
+      const age = p.last_heartbeat_age_s;
+
+      let dotClass = 'health-dot-healthy';
+      let label = 'OK';
+      if (state === 'open') { dotClass = 'health-dot-down'; label = 'Open'; }
+      else if (state === 'half-open') { dotClass = 'health-dot-warning'; label = 'Half-open'; }
+      else if (stale) { dotClass = 'health-dot-warning'; label = 'Stale'; }
+
+      const ageStr = age != null ? `${Math.round(age)}s ago` : '—';
+      const failStr = circuit.fail_count > 0 ? ` (${circuit.fail_count}/${circuit.threshold} fails)` : '';
+      const friendly = friendlyNames[name] || name;
+
+      return `
+        <div class="health-poller-row">
+          <span class="health-dot ${dotClass}"></span>
+          <span class="health-poller-name">${this._esc(friendly)}</span>
+          <span class="health-poller-detail">${this._esc(label)}${this._esc(failStr)} &mdash; ${this._esc(ageStr)}</span>
+        </div>
+      `;
+    }).join('');
   },
 
   // --- Helpers ---

@@ -235,6 +235,7 @@ class GatewayContext:
         self.watchdog = None
         self.mock_mode = False
         self.config_path = ""
+        self.start_time = 0.0
 
         # Module instances
         self.x32 = None
@@ -367,6 +368,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
 
     # Build the shared context
     ctx = GatewayContext()
+    ctx.start_time = time.time()
     ctx.app = app
     ctx.socketio = socketio
     ctx.cfg = cfg

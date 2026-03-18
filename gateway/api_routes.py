@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import os
+import resource
 import shutil
 import threading
 import time
@@ -161,6 +162,29 @@ def register_api_routes(ctx):
             logger.warning(f"DB connectivity check failed: {e}")
             db_ok = False
 
+        # Module online/offline status
+        modules_status = {}
+        for name, mod in [("x32", ctx.x32), ("moip", ctx.moip), ("obs", ctx.obs)]:
+            if mod is None:
+                modules_status[name] = "mock" if mock_mode else "disabled"
+            elif hasattr(mod, "_online"):
+                modules_status[name] = "online" if mod._online else "offline"
+            else:
+                modules_status[name] = "unknown"
+
+        # Memory usage (RSS in MB)
+        try:
+            rss_bytes = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            # macOS returns bytes; Linux returns KB
+            import sys as _sys
+            memory_mb = round(rss_bytes / (1024 * 1024) if _sys.platform == "darwin" else rss_bytes / 1024, 1)
+        except Exception:
+            memory_mb = None
+
+        # Active Socket.IO connections
+        with ctx.sid_lock:
+            connections = len(ctx.sid_to_tablet)
+
         healthy = db_ok and not any_open
         status_code = 200 if healthy else 503
         return jsonify({
@@ -169,6 +193,10 @@ def register_api_routes(ctx):
             "service": "stp-gateway",
             "version": settings_data.get("app", {}).get("version", "1.0.0"),
             "mock_mode": mock_mode,
+            "uptime_s": round(time.time() - ctx.start_time, 1),
+            "memory_mb": memory_mb,
+            "connections": connections,
+            "modules": modules_status,
             "db_ok": db_ok,
             "pollers": poller_status,
         }), status_code
@@ -242,6 +270,7 @@ def register_api_routes(ctx):
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "results": health.get_all_results(),
             "heartbeat": health.get_heartbeats(),
+            "gateway_pollers": watchdog.status(),
         }), 200
 
     @app.route("/api/healthdash/services")
