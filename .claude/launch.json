@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "STP Gateway",
+      "runtimeExecutable": "/usr/bin/python3",
+      "runtimeArgs": ["/Users/stpaul/Documents/GitHub/STP/STP_tablets/gateway/gateway.py"],
+      "port": 20858
+    },
+    {
+      "name": "STP Gateway (mock mode)",
+      "runtimeExecutable": "/usr/bin/python3",
+      "runtimeArgs": ["/Users/stpaul/Documents/GitHub/STP/STP_tablets/gateway/gateway.py", "--mock"],
+      "port": 20858
+    }
+  ]
+}
