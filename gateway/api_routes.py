@@ -7,7 +7,6 @@ import hashlib
 import json
 import logging
 import os
-import resource
 import shutil
 import threading
 import time
@@ -174,10 +173,18 @@ def register_api_routes(ctx):
 
         # Memory usage (RSS in MB)
         try:
+            import resource
             rss_bytes = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
             # macOS returns bytes; Linux returns KB
             import sys as _sys
             memory_mb = round(rss_bytes / (1024 * 1024) if _sys.platform == "darwin" else rss_bytes / 1024, 1)
+        except ImportError:
+            # Windows: resource module not available, use psutil or skip
+            try:
+                import psutil
+                memory_mb = round(psutil.Process().memory_info().rss / (1024 * 1024), 1)
+            except ImportError:
+                memory_mb = None
         except Exception:
             memory_mb = None
 
