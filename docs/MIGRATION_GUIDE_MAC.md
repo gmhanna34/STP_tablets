@@ -484,6 +484,11 @@ macOS uses `launchd` (not systemd) for service management. Only one plist file i
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/YOUR_USERNAME/STP/STP_tablets/gateway</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/YOUR_USERNAME/STP/STP_tablets/gateway/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
@@ -498,7 +503,9 @@ macOS uses `launchd` (not systemd) for service management. Only one plist file i
 </plist>
 ```
 
-> **IMPORTANT:** Replace `YOUR_USERNAME` with your actual macOS username. Find it with: `whoami`
+> **IMPORTANT:** Replace `YOUR_USERNAME` with your actual macOS username (appears 6 times). Find it with: `whoami`
+>
+> **Why `EnvironmentVariables`?** launchd starts services with a minimal PATH (`/usr/bin:/bin:/usr/sbin:/sbin`). Without this block, the gateway can't find `ffprobe` (Homebrew) for RTSP camera health checks or `edge-tts` (venv) for TTS announcements. Both degrade gracefully (ffprobe falls back to TCP, edge-tts returns an error) but won't function fully.
 
 ### Setup Script
 
