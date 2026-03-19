@@ -137,6 +137,7 @@ macros:
       - type: moip_switch
         tx: 13
         rx: 24
+        on_fail: skip
         message: "Setting audio routing (TX 13 → RX 24)"
 
   # ---------------------------------------------------------------------------
@@ -152,10 +153,12 @@ macros:
       - type: moip_ir
         receiver: 09
         code: "IRPowerOnVizio"
+        on_fail: skip
         message: "Quick power-on to Chapel Vizio TV"
       - type: moip_ir
         receiver: 09
         code: "IRPowerOnRCA"
+        on_fail: skip
         message: "Quick power-on to Chapel Floating TV"
       # Enable HDMI transmitter, IR, and battery power — all independent
       - type: parallel
@@ -205,10 +208,12 @@ macros:
       - type: moip_ir
         receiver: 09
         code: "IRPowerOnVizio"
+        on_fail: skip
         message: "Sending power-on to Chapel Vizio TV"
       - type: moip_ir
         receiver: 09
         code: "IRPowerOnRCA"
+        on_fail: skip
         message: "Sending power-on to Chapel Floating TV"
       - type: delay
         seconds: 3
@@ -217,10 +222,12 @@ macros:
       - type: moip_ir
         receiver: 09
         code: "IRPowerOnVizio"
+        on_fail: skip
         message: "Repeat power-on to Chapel Vizio TV"
       - type: moip_ir
         receiver: 09
         code: "IRPowerOnRCA"
+        on_fail: skip
         message: "Repeat power-on to Chapel Floating TV"
       - type: delay
         seconds: 5
@@ -229,12 +236,14 @@ macros:
       - type: moip_ir
         receiver: 09
         code: "IRSourceHDMI1Vizio"
+        on_fail: skip
         message: "Setting Chapel Vizio TV to HDMI 1"
       - type: delay
         seconds: 3
       - type: moip_ir
         receiver: 09
         code: "IRSourceHDMI1Vizio"
+        on_fail: skip
         message: "Repeat HDMI 1 for Chapel Vizio TV"
 
   chapel_tv_off:
@@ -283,6 +292,7 @@ macros:
     steps:
       - type: macro
         macro: "shared_audio_on"
+        on_fail: skip
         message: "Starting shared audio components"
       # Chapel microphones
       - type: ha_service
@@ -400,37 +410,48 @@ macros:
       - type: moip_switch
         tx: 14
         rx: 47
+        on_fail: skip
       - type: moip_switch
         tx: 14
         rx: 9
+        on_fail: skip
       - type: moip_switch
         tx: 14
         rx: 22
+        on_fail: skip
       - type: moip_switch
         tx: 14
         rx: 10
+        on_fail: skip
       - type: moip_switch
         tx: 14
         rx: 47
+        on_fail: skip
       - type: moip_switch
         tx: 14
         rx: 09
+        on_fail: skip
       - type: moip_switch
         tx: 14
         rx: 22
+        on_fail: skip
       - type: moip_switch
         tx: 14
         rx: 10
+        on_fail: skip
       - type: moip_switch
         tx: 14
         rx: 19
+        on_fail: skip
       - type: moip_switch
         tx: 14
         rx: 32
+        on_fail: skip
       - type: ha_service
         domain: "switch"
         service: "turn_on"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_3" }      
+        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_3" }
+        on_fail: skip      
         
   chapel_source_windows_display:
     label: "Social Windows Display"
@@ -832,14 +853,19 @@ macros:
         steps:
           - type: macro
             macro: "main_screens_shelf_down"
+            on_fail: skip
           - type: macro
             macro: "main_projectors_on"
+            on_fail: skip
           - type: macro
             macro: "main_cryroom_on"
+            on_fail: skip
           - type: macro
             macro: "shared_video_on"
+            on_fail: skip
       - type: macro
         macro: "main_source_appletv_no_pages"
+        on_fail: skip
         message: "Setting video source to Apple TV (No Page #s)"
         conditional: "Set video source to AppleTV (no pages)?"
       - type: notify
@@ -857,6 +883,7 @@ macros:
         steps:
           - type: macro
             macro: "main_screens_shelf_up"
+            on_fail: skip
           - type: epson_all
             state: "off"
             on_fail: skip
@@ -894,6 +921,7 @@ macros:
     steps:
       - type: macro
         macro: "shared_audio_on"
+        on_fail: skip
         message: "Starting shared audio components"
       # Wireless mics and lapel mic
       - type: ha_service
@@ -1949,6 +1977,7 @@ macros:
     steps:
       - type: macro
         macro: "shared_audio_on"
+        on_fail: skip
         message: "Starting shared audio components"
       # Social Hall specific audio
       - type: ha_service
