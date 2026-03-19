@@ -331,41 +331,46 @@ macros:
     icon: "mic"
     description: "Turn on shared audio components, chapel mics, amp, and routing"
     steps:
-      - type: macro
-        macro: "shared_audio_on"
-        on_fail: skip
-        message: "Starting shared audio components"
-      # Chapel microphones
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_12" }
-        on_fail: skip
-        message: "Turning on Chapel microphones"
-        verify: true
-      # Chapel amplifier
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_8" }
-        on_fail: skip
-        message: "Turning on Chapel Amplifier"
-        verify: true
-      # WattBox IR outlets
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_2" }
-        on_fail: skip
-        message: "Turning on Chapel Screens IR"
-        verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_4" }
-        on_fail: skip
-        message: "Turning on Chapel IR Transmitter"
-        verify: true
+      # Shared audio (includes X32 boot wait on cold boot) and chapel-specific
+      # components are independent — run in parallel so chapel gear doesn't wait
+      # up to 120s for the X32 to boot
+      - type: parallel
+        message: "Starting shared audio and chapel components simultaneously"
+        steps:
+          - type: macro
+            macro: "shared_audio_on"
+            on_fail: skip
+          # Chapel microphones
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_004_av_audiorack1_outlet_12" }
+            on_fail: skip
+            message: "Turning on Chapel microphones"
+            verify: true
+          # Chapel amplifier
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_008_av_audiorack2_outlet_8" }
+            on_fail: skip
+            message: "Turning on Chapel Amplifier"
+            verify: true
+          # WattBox IR outlets
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_2" }
+            on_fail: skip
+            message: "Turning on Chapel Screens IR"
+            verify: true
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_4" }
+            on_fail: skip
+            message: "Turning on Chapel IR Transmitter"
+            verify: true
       - type: verify_pending
         timeout: 15
         retries: 3
@@ -960,40 +965,45 @@ macros:
     icon: "mic"
     description: "Turn on shared audio, mics, amps, and routing"
     steps:
-      - type: macro
-        macro: "shared_audio_on"
-        on_fail: skip
-        message: "Starting shared audio components"
-      # Wireless mics and lapel mic
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_12" }
-        on_fail: skip
-        message: "Turning on Main Church wireless mics"
-        verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_11" }
-        on_fail: skip
-        message: "Turning on lapel mic"
-        verify: true
-      # Amplifiers
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_2" }
-        on_fail: skip
-        message: "Turning on Main Church Amplifier"
-        verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_9" }
-        on_fail: skip
-        message: "Turning on Social Hall Amplifier"
-        verify: true
+      # Shared audio (includes X32 boot wait on cold boot) and main-specific
+      # components are independent — run in parallel so room gear doesn't wait
+      # up to 120s for the X32 to boot
+      - type: parallel
+        message: "Starting shared audio and main church components simultaneously"
+        steps:
+          - type: macro
+            macro: "shared_audio_on"
+            on_fail: skip
+          # Wireless mics and lapel mic
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_008_av_audiorack2_outlet_12" }
+            on_fail: skip
+            message: "Turning on Main Church wireless mics"
+            verify: true
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_004_av_audiorack1_outlet_11" }
+            on_fail: skip
+            message: "Turning on lapel mic"
+            verify: true
+          # Amplifiers
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_004_av_audiorack1_outlet_2" }
+            on_fail: skip
+            message: "Turning on Main Church Amplifier"
+            verify: true
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_008_av_audiorack2_outlet_9" }
+            on_fail: skip
+            message: "Turning on Social Hall Amplifier"
+            verify: true
       - type: verify_pending
         timeout: 15
         retries: 3
@@ -2016,39 +2026,44 @@ macros:
     icon: "mic"
     description: "Turn on shared audio, mics, amps, and audio routing"
     steps:
-      - type: macro
-        macro: "shared_audio_on"
-        on_fail: skip
-        message: "Starting shared audio components"
-      # Social Hall specific audio
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_5" }
-        on_fail: skip
-        message: "Turning on Social Hall Mics 1"
-        verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_6" }
-        on_fail: skip
-        message: "Turning on Social Hall Mics 2"
-        verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_10" }
-        on_fail: skip
-        message: "Turning on Social Hall Wireless Mics"
-        verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_9" }
-        on_fail: skip
-        message: "Turning on Social Hall Amplifier"
-        verify: true
+      # Shared audio (includes X32 boot wait on cold boot) and social-specific
+      # components are independent — run in parallel so room gear doesn't wait
+      # up to 120s for the X32 to boot
+      - type: parallel
+        message: "Starting shared audio and social hall components simultaneously"
+        steps:
+          - type: macro
+            macro: "shared_audio_on"
+            on_fail: skip
+          # Social Hall specific audio
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_5" }
+            on_fail: skip
+            message: "Turning on Social Hall Mics 1"
+            verify: true
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_6" }
+            on_fail: skip
+            message: "Turning on Social Hall Mics 2"
+            verify: true
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_004_av_audiorack1_outlet_10" }
+            on_fail: skip
+            message: "Turning on Social Hall Wireless Mics"
+            verify: true
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_008_av_audiorack2_outlet_9" }
+            on_fail: skip
+            message: "Turning on Social Hall Amplifier"
+            verify: true
       - type: verify_pending
         timeout: 15
         retries: 3
