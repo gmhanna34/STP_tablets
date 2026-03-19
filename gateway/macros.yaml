@@ -185,7 +185,7 @@ macros:
           - type: ha_service
             domain: "switch"
             service: "turn_on"
-            data: { entity_id: "switch.bat_chapeltv_1_dc12v_enabled" }
+            data: { entity_id: "switch.bat_chapeltv_1_dc_12v_enabled" }
             on_fail: skip
             verify: true
           - type: ha_service
@@ -197,7 +197,7 @@ macros:
           - type: ha_service
             domain: "switch"
             service: "turn_on"
-            data: { entity_id: "switch.bat_chapeltv_2_dc12v_enabled" }
+            data: { entity_id: "switch.bat_chapeltv_2_dc_12v_enabled" }
             on_fail: skip
             verify: true
       - type: verify_pending
