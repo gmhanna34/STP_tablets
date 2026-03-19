@@ -70,75 +70,64 @@ macros:
     icon: "mic"
     description: "Turn on X32 mixer, shared amps, antennas, sub, and audio routing"
     steps:
-      # If X32 mixer is off, load default scene after boot
-      - type: condition
-        if:
-          type: ha_check
-          entity: "switch.wb_004_av_audiorack1_outlet_3"
-          expect: "off"
-        then:
+      # Turn on X32 mixer outlet first (it has the longest boot time)
+      - type: ha_service
+        domain: "switch"
+        service: "turn_on"
+        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_3" }
+        on_fail: skip
+        message: "Turning on X32 Mixer"
+        verify: true
+      # Turn on all other shared audio components immediately (don't wait for X32)
+      - type: parallel
+        message: "Turning on shared amps, antennas, and sub"
+        steps:
           - type: ha_service
             domain: "switch"
             service: "turn_on"
-            data: { entity_id: "switch.wb_004_av_audiorack1_outlet_3" }
+            data: { entity_id: "switch.wb_008_av_audiorack2_outlet_10" }
             on_fail: skip
-            message: "Turning on X32 Mixer (was off)"
             verify: true
-          - type: wait_until
-            target: x32
-            condition: connected
-            timeout: 90
-            poll_interval: 3
-            message: "Waiting for X32 mixer to come online"
-          - type: x32_scene
-            scene: 0
-            message: "Loading X32 default scene"
-        else:
           - type: ha_service
             domain: "switch"
             service: "turn_on"
-            data: { entity_id: "switch.wb_004_av_audiorack1_outlet_3" }
+            data: { entity_id: "switch.wb_004_av_audiorack1_outlet_7" }
             on_fail: skip
-            message: "Turning on X32 Mixer"
             verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_10" }
-        on_fail: skip
-        message: "Turning on Antennas (W_020_AV_1Antennas)"
-        verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_7" }
-        on_fail: skip
-        message: "Turning on Social Hall & PA Amp (Kasa)"
-        verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_6" }
-        on_fail: skip
-        message: "Turning on PA Amp"
-        verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_5" }
-        on_fail: skip
-        message: "Turning on Main Audio Sub"
-        verify: true
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_008_av_audiorack2_outlet_6" }
+            on_fail: skip
+            verify: true
+          - type: ha_service
+            domain: "switch"
+            service: "turn_on"
+            data: { entity_id: "switch.wb_008_av_audiorack2_outlet_5" }
+            on_fail: skip
+            verify: true
       - type: verify_pending
         timeout: 15
         retries: 3
         message: "Verifying shared audio switches turned on"
-      # Audio routing
+      # Audio routing (independent of X32)
       - type: moip_switch
         tx: 13
         rx: 24
         on_fail: skip
         message: "Setting audio routing (TX 13 → RX 24)"
+      # Now wait for X32 to come online and load default scene (only if it was off)
+      - type: wait_until
+        target: x32
+        condition: connected
+        timeout: 120
+        poll_interval: 3
+        on_fail: skip
+        message: "Waiting for X32 mixer to come online"
+      - type: x32_scene
+        scene: 0
+        on_fail: skip
+        message: "Loading X32 default scene (if mixer is online)"
 
   # ---------------------------------------------------------------------------
   # CHAPEL
