@@ -70,64 +70,116 @@ macros:
     icon: "mic"
     description: "Turn on X32 mixer, shared amps, antennas, sub, and audio routing"
     steps:
-      # Turn on X32 mixer outlet first (it has the longest boot time)
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_3" }
-        on_fail: skip
-        message: "Turning on X32 Mixer"
-        verify: true
-      # Turn on all other shared audio components immediately (don't wait for X32)
-      - type: parallel
-        message: "Turning on shared amps, antennas, and sub"
-        steps:
+      # Check if X32 was off (cold boot) — remember for scene load later
+      # If off: turn on outlet and flag for scene load after boot
+      # If already on: just ensure outlet is on, skip scene load (another room may be streaming)
+      - type: condition
+        if:
+          type: ha_check
+          entity: "switch.wb_004_av_audiorack1_outlet_3"
+          expect: "off"
+        then:
           - type: ha_service
             domain: "switch"
             service: "turn_on"
-            data: { entity_id: "switch.wb_008_av_audiorack2_outlet_10" }
+            data: { entity_id: "switch.wb_004_av_audiorack1_outlet_3" }
             on_fail: skip
+            message: "Turning on X32 Mixer (cold boot)"
             verify: true
+          # Turn on other shared components in parallel while X32 boots
+          - type: parallel
+            message: "Turning on shared amps, antennas, and sub"
+            steps:
+              - type: ha_service
+                domain: "switch"
+                service: "turn_on"
+                data: { entity_id: "switch.wb_008_av_audiorack2_outlet_10" }
+                on_fail: skip
+                verify: true
+              - type: ha_service
+                domain: "switch"
+                service: "turn_on"
+                data: { entity_id: "switch.wb_004_av_audiorack1_outlet_7" }
+                on_fail: skip
+                verify: true
+              - type: ha_service
+                domain: "switch"
+                service: "turn_on"
+                data: { entity_id: "switch.wb_008_av_audiorack2_outlet_6" }
+                on_fail: skip
+                verify: true
+              - type: ha_service
+                domain: "switch"
+                service: "turn_on"
+                data: { entity_id: "switch.wb_008_av_audiorack2_outlet_5" }
+                on_fail: skip
+                verify: true
+          - type: verify_pending
+            timeout: 15
+            retries: 3
+            message: "Verifying shared audio switches turned on"
+          - type: moip_switch
+            tx: 13
+            rx: 24
+            on_fail: skip
+            message: "Setting audio routing (TX 13 → RX 24)"
+          # Wait for X32 to boot, then load default scene (safe — it was off)
+          - type: wait_until
+            target: x32
+            condition: connected
+            timeout: 120
+            poll_interval: 3
+            on_fail: skip
+            message: "Waiting for X32 mixer to come online"
+          - type: x32_scene
+            scene: 0
+            on_fail: skip
+            message: "Loading X32 default scene"
+        else:
           - type: ha_service
             domain: "switch"
             service: "turn_on"
-            data: { entity_id: "switch.wb_004_av_audiorack1_outlet_7" }
+            data: { entity_id: "switch.wb_004_av_audiorack1_outlet_3" }
             on_fail: skip
+            message: "Turning on X32 Mixer (already on — preserving scene)"
             verify: true
-          - type: ha_service
-            domain: "switch"
-            service: "turn_on"
-            data: { entity_id: "switch.wb_008_av_audiorack2_outlet_6" }
+          # Turn on other shared components in parallel
+          - type: parallel
+            message: "Turning on shared amps, antennas, and sub"
+            steps:
+              - type: ha_service
+                domain: "switch"
+                service: "turn_on"
+                data: { entity_id: "switch.wb_008_av_audiorack2_outlet_10" }
+                on_fail: skip
+                verify: true
+              - type: ha_service
+                domain: "switch"
+                service: "turn_on"
+                data: { entity_id: "switch.wb_004_av_audiorack1_outlet_7" }
+                on_fail: skip
+                verify: true
+              - type: ha_service
+                domain: "switch"
+                service: "turn_on"
+                data: { entity_id: "switch.wb_008_av_audiorack2_outlet_6" }
+                on_fail: skip
+                verify: true
+              - type: ha_service
+                domain: "switch"
+                service: "turn_on"
+                data: { entity_id: "switch.wb_008_av_audiorack2_outlet_5" }
+                on_fail: skip
+                verify: true
+          - type: verify_pending
+            timeout: 15
+            retries: 3
+            message: "Verifying shared audio switches turned on"
+          - type: moip_switch
+            tx: 13
+            rx: 24
             on_fail: skip
-            verify: true
-          - type: ha_service
-            domain: "switch"
-            service: "turn_on"
-            data: { entity_id: "switch.wb_008_av_audiorack2_outlet_5" }
-            on_fail: skip
-            verify: true
-      - type: verify_pending
-        timeout: 15
-        retries: 3
-        message: "Verifying shared audio switches turned on"
-      # Audio routing (independent of X32)
-      - type: moip_switch
-        tx: 13
-        rx: 24
-        on_fail: skip
-        message: "Setting audio routing (TX 13 → RX 24)"
-      # Now wait for X32 to come online and load default scene (only if it was off)
-      - type: wait_until
-        target: x32
-        condition: connected
-        timeout: 120
-        poll_interval: 3
-        on_fail: skip
-        message: "Waiting for X32 mixer to come online"
-      - type: x32_scene
-        scene: 0
-        on_fail: skip
-        message: "Loading X32 default scene (if mixer is online)"
+            message: "Setting audio routing (TX 13 → RX 24)"
 
   # ---------------------------------------------------------------------------
   # CHAPEL
