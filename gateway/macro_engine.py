@@ -599,35 +599,65 @@ def _step_ha_service(ctx, step: dict, tablet: str) -> dict:
         logger.debug(f"[VERBOSE] ha_service: {domain}/{service}, data={json.dumps(data)[:200]}")
     if ctx.mock_mode:
         return {"success": True}
-    try:
-        resp = http_requests.post(
-            f"{ha_cfg['url']}/api/services/{domain}/{service}",
-            headers={
-                "Authorization": f"Bearer {ha_cfg['token']}",
-                "Content-Type": "application/json",
-            },
-            json=data,
-            timeout=ha_cfg.get("timeout", 10),
-        )
-        ok = resp.status_code < 400
-        if verbose.is_set():
-            logger.debug(f"[VERBOSE] ha_service result: {domain}/{service} status={resp.status_code}")
-        if ok:
-            ctx.db.log_action(tablet, f"macro:ha:{domain}/{service}", "home_assistant",
-                              json.dumps(data)[:500], f"status={resp.status_code}", 0)
-        else:
-            resp_body = ""
+
+    max_attempts = 2  # Retry once on server errors (e.g. WattBox telnet concurrency)
+    last_status = 0
+    last_body = ""
+
+    for attempt in range(max_attempts):
+        try:
+            resp = http_requests.post(
+                f"{ha_cfg['url']}/api/services/{domain}/{service}",
+                headers={
+                    "Authorization": f"Bearer {ha_cfg['token']}",
+                    "Content-Type": "application/json",
+                },
+                json=data,
+                timeout=ha_cfg.get("timeout", 10),
+            )
+            last_status = resp.status_code
+            ok = resp.status_code < 400
+            if verbose.is_set():
+                logger.debug(f"[VERBOSE] ha_service result: {domain}/{service} "
+                             f"status={resp.status_code} attempt={attempt+1}")
+            if ok:
+                ctx.db.log_action(tablet, f"macro:ha:{domain}/{service}", "home_assistant",
+                                  json.dumps(data)[:500], f"status={resp.status_code}", 0)
+                return {"success": True}
+
+            # Capture response body for logging
             try:
-                resp_body = resp.text[:300]
+                last_body = resp.text[:300]
             except Exception as e:
                 logger.debug(f"Could not read HA response body: {e}")
+
+            # Retry on server errors (500+) — often transient (e.g. WattBox telnet conflicts)
+            if resp.status_code >= 500 and attempt < max_attempts - 1:
+                logger.info(f"ha_service {domain}/{service} got {resp.status_code}, "
+                            f"retrying in 2s (attempt {attempt+1}/{max_attempts})")
+                time.sleep(2)
+                continue
+
+            # Client error (4xx) or final attempt — report failure
             logger.warning(f"ha_service FAILED: {domain}/{service} status={resp.status_code} "
-                           f"data={json.dumps(data)[:200]} response={resp_body}")
+                           f"data={json.dumps(data)[:200]} response={last_body}")
             ctx.db.log_action(tablet, f"macro:ha:{domain}/{service}", "home_assistant",
-                              json.dumps(data)[:500], f"FAILED status={resp.status_code}: {resp_body[:200]}", 0)
-        return {"success": ok, "error": "" if ok else f"HA {domain}/{service} returned {resp.status_code}"}
-    except Exception as e:
-        return {"success": False, "error": f"HA service failed: {e}"}
+                              json.dumps(data)[:500],
+                              f"FAILED status={resp.status_code}: {last_body[:200]}", 0)
+            return {"success": False,
+                    "error": f"HA {domain}/{service} returned {resp.status_code}"}
+
+        except Exception as e:
+            if attempt < max_attempts - 1:
+                logger.info(f"ha_service {domain}/{service} exception: {e}, "
+                            f"retrying in 2s (attempt {attempt+1}/{max_attempts})")
+                time.sleep(2)
+                continue
+            return {"success": False, "error": f"HA service failed: {e}"}
+
+    # Should not reach here, but just in case
+    return {"success": False,
+            "error": f"HA {domain}/{service} returned {last_status}"}
 
 
 def _step_door_timed_unlock(ctx, step: dict, tablet: str) -> dict:

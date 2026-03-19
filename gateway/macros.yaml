@@ -87,8 +87,8 @@ macros:
           - type: wait_until
             target: x32
             condition: connected
-            timeout: 45
-            poll_interval: 2
+            timeout: 90
+            poll_interval: 3
             message: "Waiting for X32 mixer to come online"
           - type: x32_scene
             scene: 0
@@ -528,13 +528,17 @@ macros:
     description: "Full AV startup: TVs, audio, Apple TV source, live stream scene, camera preset, and unlock exterior doors for 3 hours"
     steps:
       # TVs and audio are independent — run simultaneously
+      # on_fail: skip so a failure in one doesn't abort the entire setup
+      # (source, stream scene, doors, HVAC still need to run)
       - type: parallel
         message: "Starting TVs and audio simultaneously"
         steps:
           - type: macro
             macro: "chapel_tv_on"
+            on_fail: skip
           - type: macro
             macro: "chapel_audio_on"
+            on_fail: skip
       - type: macro
         macro: "chapel_source_appletv"
         message: "Setting Chapel source to Apple TV"
@@ -598,10 +602,13 @@ macros:
         steps:
           - type: macro
             macro: "chapel_tv_off"
+            on_fail: skip
           - type: macro
             macro: "chapel_audio_off"
+            on_fail: skip
           - type: macro
             macro: "chapel_ac_off"
+            on_fail: skip
 
   # ---------------------------------------------------------------------------
   # MAIN CHURCH (examples — expand as needed)
@@ -2931,13 +2938,16 @@ macros:
     description: "Full AV startup: video, audio, Apple TV source, live stream scene, camera preset, and unlock exterior doors for 5 hours"
     steps:
       # Video and audio are independent — run simultaneously
+      # on_fail: skip so a failure in one doesn't abort the entire setup
       - type: parallel
         message: "Starting video and audio systems simultaneously"
         steps:
           - type: macro
             macro: "main_video_on"
+            on_fail: skip
           - type: macro
             macro: "main_audio_on"
+            on_fail: skip
       - type: macro
         macro: "main_source_appletv_no_pages"
         message: "Setting video source to Apple TV (No Page #s)"
@@ -2994,10 +3004,13 @@ macros:
         steps:
           - type: macro
             macro: "main_video_off"
+            on_fail: skip
           - type: macro
             macro: "main_audio_off"
+            on_fail: skip
           - type: macro
             macro: "main_ac_off"
+            on_fail: skip
       - type: notify
         message: "Main church fully shut down"
 
@@ -3011,13 +3024,16 @@ macros:
     description: "Full AV startup: video, audio, live stream scene, and camera preset"
     steps:
       # Video and audio are independent — run simultaneously
+      # on_fail: skip so a failure in one doesn't abort the entire setup
       - type: parallel
         message: "Starting video and audio systems simultaneously"
         steps:
           - type: macro
             macro: "social_video_on"
+            on_fail: skip
           - type: macro
             macro: "social_audio_on"
+            on_fail: skip
       # OBS scene and camera preset are independent
       - type: parallel
         message: "Setting stream scene and camera preset"
@@ -3059,10 +3075,13 @@ macros:
         steps:
           - type: macro
             macro: "social_video_off"
+            on_fail: skip
           - type: macro
             macro: "social_audio_off"
+            on_fail: skip
           - type: macro
             macro: "social_ac_off"
+            on_fail: skip
 
 
 # =============================================================================
