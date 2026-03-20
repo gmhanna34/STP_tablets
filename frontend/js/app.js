@@ -324,6 +324,19 @@ const App = {
       }
     });
 
+    // HA direct call failures — show toast + add to notification panel
+    this.socket.on('ha:call_failed', (data) => {
+      if (!data || !data.message) return;
+      this.showToast(data.message, 5000, 'error');
+      if (typeof NotificationCenter !== 'undefined') {
+        NotificationCenter.add(
+          data.entity || 'Home Assistant',
+          'error',
+          data.message
+        );
+      }
+    });
+
     // Gateway restart notification — show full-screen overlay until reconnected
     this.socket.on('gateway:restarting', (data) => {
       this._showRestartOverlay(data?.message || 'Gateway is restarting...');

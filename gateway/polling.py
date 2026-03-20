@@ -386,6 +386,8 @@ def start_pollers(ctx):
     # Tracks the *device* healthy state (not the poll function).
     # Emits service:status events on transitions so tablets can show toasts.
     _service_health: Dict[str, Optional[bool]] = {}  # None = unknown (startup)
+    _ha_fail_streak = 0  # consecutive HA poll failures before marking offline
+    _HA_FAILS_TO_OFFLINE = 3
     _SERVICE_LABELS = {
         "x32": "Audio Mixer (X32)",
         "obs": "OBS Studio",
@@ -483,15 +485,24 @@ def start_pollers(ctx):
         return statuses
 
     def poll_ha_states():
+        nonlocal _ha_fail_streak
         result = fetch_ha_button_states(ctx)
-        # Detect HA health: if all entities are "unavailable", HA itself is likely down
+        # Detect HA health with fail-streak gating to avoid false "offline" on transient errors
         if result:
             all_unavailable = all(
                 v.get("state") == "unavailable" for v in result.values()
             )
-            _report_service_health("ha", not all_unavailable)
+            if all_unavailable:
+                _ha_fail_streak += 1
+                if _ha_fail_streak >= _HA_FAILS_TO_OFFLINE:
+                    _report_service_health("ha", False)
+            else:
+                _ha_fail_streak = 0
+                _report_service_health("ha", True)
         else:
-            _report_service_health("ha", False)
+            _ha_fail_streak += 1
+            if _ha_fail_streak >= _HA_FAILS_TO_OFFLINE:
+                _report_service_health("ha", False)
         return result
 
     def _get_camlytics_raw(url):

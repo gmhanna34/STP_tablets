@@ -1516,20 +1516,65 @@ def register_api_routes(ctx):
         url = f"{ha_cfg['url']}/api/services/{domain}/{service}"
         headers = {"Authorization": f"Bearer {ha_cfg['token']}", "Content-Type": "application/json"}
         tablet = get_tablet_id()
+        entity_hint = data.get("entity_id", f"{domain}.{service}")
+
+        # Retry up to 3 times on server errors (500+)
+        max_attempts = 3
+        backoff_secs = [1, 2]
+        last_resp = None
         start = time.time()
-        try:
-            resp = http_requests.post(url, headers=headers, json=data,
-                                      timeout=ha_cfg.get("timeout", 10))
-            latency = (time.time() - start) * 1000
-            db.log_action(tablet, f"ha:{domain}/{service}", "home_assistant",
-                          json.dumps(data)[:500], f"status={resp.status_code}", latency)
+
+        for attempt in range(max_attempts):
             try:
-                body = resp.json() if resp.content else {"success": True}
-            except ValueError:
-                body = {"success": resp.ok}
-            return jsonify(body), resp.status_code
-        except Exception as e:
-            return jsonify({"error": str(e)}), 503
+                resp = http_requests.post(url, headers=headers, json=data,
+                                          timeout=ha_cfg.get("timeout", 10))
+                last_resp = resp
+                latency = (time.time() - start) * 1000
+                if resp.status_code < 400:
+                    db.log_action(tablet, f"ha:{domain}/{service}", "home_assistant",
+                                  json.dumps(data)[:500], f"status={resp.status_code}", latency)
+                    try:
+                        body = resp.json() if resp.content else {"success": True}
+                    except ValueError:
+                        body = {"success": True}
+                    return jsonify(body), resp.status_code
+
+                # Server error — retry if attempts remain
+                if resp.status_code >= 500 and attempt < max_attempts - 1:
+                    time.sleep(backoff_secs[min(attempt, len(backoff_secs) - 1)])
+                    continue
+
+                # Final failure — log and notify
+                db.log_action(tablet, f"ha:{domain}/{service}", "home_assistant",
+                              json.dumps(data)[:500], f"FAILED status={resp.status_code}", latency)
+                socketio.emit("ha:call_failed", {
+                    "entity": entity_hint,
+                    "domain": domain,
+                    "service": service,
+                    "status": resp.status_code,
+                    "message": f"{entity_hint}: HA returned {resp.status_code}",
+                })
+                try:
+                    body = resp.json() if resp.content else {"success": False}
+                except ValueError:
+                    body = {"success": False}
+                return jsonify(body), resp.status_code
+
+            except Exception as e:
+                if attempt < max_attempts - 1:
+                    time.sleep(backoff_secs[min(attempt, len(backoff_secs) - 1)])
+                    continue
+                latency = (time.time() - start) * 1000
+                db.log_action(tablet, f"ha:{domain}/{service}", "home_assistant",
+                              json.dumps(data)[:500], f"FAILED: {e}", latency)
+                socketio.emit("ha:call_failed", {
+                    "entity": entity_hint,
+                    "domain": domain,
+                    "service": service,
+                    "status": 503,
+                    "message": f"{entity_hint}: {e}",
+                })
+                return jsonify({"error": str(e)}), 503
 
     # ---- Home Assistant Automations ----
 
