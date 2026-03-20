@@ -93,6 +93,10 @@ class WattBoxConnection:
 
     Uses raw sockets (not telnetlib — removed in Python 3.13).
     The WattBox speaks ASCII over TCP on port 23.
+
+    Thread safety: the socket is shared between the command path (send_command)
+    and the push listener (read_push_data). Callers must use an external lock
+    (WattBoxDevice._connection_lock) to prevent concurrent access.
     """
 
     def __init__(self, ip: str, port: int, username: str, password: str,
@@ -112,13 +116,19 @@ class WattBoxConnection:
         return self._ip
 
     def connect(self) -> bool:
-        """Open TCP socket to WattBox and authenticate."""
+        """Open TCP socket to WattBox and authenticate.
+
+        Socket is kept in blocking mode with a timeout for reliable sendall().
+        select() is used for non-blocking reads where needed.
+        """
         self._close_socket()
 
         try:
             self._logger.info(f"WattBox [{self._ip}]: Connecting on port {self._port}")
             self._sock = socket.create_connection((self._ip, self._port), timeout=10)
-            self._sock.setblocking(False)
+            # Keep socket in blocking mode with a timeout — sendall() is reliable,
+            # and we use select() for non-blocking reads where needed.
+            self._sock.settimeout(5.0)
 
             # Wait for login prompt, then authenticate
             time.sleep(0.3)
@@ -188,6 +198,9 @@ class WattBoxConnection:
     def send_command(self, command: str) -> Optional[str]:
         """Send command and return response. Single attempt — no internal retry.
 
+        IMPORTANT: Caller must hold WattBoxDevice._connection_lock to prevent
+        the push listener from reading data meant for this command's response.
+
         Reconnection/retry logic lives in WattBoxDevice._send() so the failure
         streak counter stays accurate (one call = one attempt = one count).
         """
@@ -201,20 +214,24 @@ class WattBoxConnection:
                 else:
                     command += "\r\n"
 
+            cmd_stripped = command.strip()
+            self._logger.debug(f"WattBox [{self._ip}]: Sending: {cmd_stripped}")
             self._sock.sendall(command.encode("ascii"))
             time.sleep(0.05)
 
             # Read response for query commands
-            if command.strip().startswith("?"):
+            if cmd_stripped.startswith("?"):
                 return self._read_response()
 
             # For set commands (! prefix), do a brief read to check for errors.
-            # WattBox may respond with an error string; absence of error = success.
-            if command.strip().startswith("!"):
+            # WattBox may respond with an error or echo; absence of error = success.
+            if cmd_stripped.startswith("!"):
                 try:
                     ready, _, _ = select.select([self._sock], [], [], 0.3)
                     if ready:
                         resp = self._sock.recv(4096).decode("ascii", errors="ignore").strip()
+                        self._logger.debug(
+                            f"WattBox [{self._ip}]: Set response: {resp!r}")
                         if resp and ("error" in resp.lower() or "denied" in resp.lower()):
                             self._logger.warning(
                                 f"WattBox [{self._ip}]: Set command rejected: {resp}")
@@ -834,6 +851,10 @@ class WattBoxModule:
 
         WattBox v2.2 sends unsolicited '~OutletStatus=1,0,1,...' when any
         outlet changes state (from any source — UI, API, schedule, auto-reboot).
+
+        IMPORTANT: Acquires the device's _connection_lock before reading, so
+        command threads (send_command) have exclusive socket access during
+        their send-then-read sequences.
         """
         self._logger.info(f"WattBox [{device.pdu_id}]: Push listener started")
         while not self._stop.is_set():
@@ -842,7 +863,16 @@ class WattBoxModule:
                 continue
 
             try:
-                data = device._conn.read_push_data(timeout=2.0)
+                # Acquire lock so we don't read data meant for a command response.
+                # Use a short timeout so we don't starve command threads.
+                acquired = device._connection_lock.acquire(timeout=0.5)
+                if not acquired:
+                    continue  # Command in progress — skip this cycle
+                try:
+                    data = device._conn.read_push_data(timeout=1.0)
+                finally:
+                    device._connection_lock.release()
+
                 if data:
                     changed = device.update_from_push(data)
                     if changed:
