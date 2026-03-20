@@ -12,6 +12,7 @@
         "stream": true,
         "source": true,
         "security": true,
+        "wattbox": true,
         "settings": true
       }
     },

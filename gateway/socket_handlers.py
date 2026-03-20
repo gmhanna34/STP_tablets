@@ -177,7 +177,7 @@ def register_socket_handlers(ctx):
     @socketio.on("join")
     def on_join(data):
         room = data.get("room", "")
-        if room in ("moip", "x32", "obs", "projectors", "ha", "macros", "camlytics", "health"):
+        if room in ("moip", "x32", "obs", "projectors", "ha", "macros", "camlytics", "health", "wattbox"):
             join_room(room)
             logger.debug(f"sid={request.sid} joined room={room}")
             # Push cached state immediately so reconnecting tablets

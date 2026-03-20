@@ -195,6 +195,7 @@ const App = {
       this.socket.emit('join', { room: 'camlytics' });
       this.socket.emit('join', { room: 'ha' });
       this.socket.emit('join', { room: 'health' });
+      this.socket.emit('join', { room: 'wattbox' });
     });
 
     this.socket.on('disconnect', (reason) => {
@@ -281,6 +282,12 @@ const App = {
 
     this.socket.on('state:camlytics', (data) => {
       this.refreshCurrentPage('camlytics');
+    });
+
+    this.socket.on('state:wattbox', (data) => {
+      if (typeof WattBoxPage !== 'undefined' && WattBoxPage.onStateUpdate) {
+        WattBoxPage.onStateUpdate(data);
+      }
     });
 
     this.socket.on('state:health', (data) => {
