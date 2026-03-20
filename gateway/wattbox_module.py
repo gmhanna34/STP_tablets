@@ -713,39 +713,50 @@ class WattBoxModule:
 
     def outlet_on(self, stable_id: str) -> Tuple[dict, int]:
         """Turn outlet on by stable ID. Verifies state change before returning."""
+        self._logger.info(f"WattBox module: outlet_on({stable_id})")
         resolved = self._resolve_device(stable_id)
         if not resolved:
+            self._logger.warning(f"WattBox module: _resolve_device returned None for {stable_id}")
             return {"error": f"Unknown device: {stable_id}"}, 404
         device, outlet = resolved
-        if device.outlet_on(outlet):
-            self._broadcast_state(device)
-            return {"success": True, "device": stable_id, "action": "on", "verified": True}, 200
-        # Broadcast current (unchanged) state so UI doesn't show stale optimistic data
+        self._logger.info(f"WattBox module: Resolved {stable_id} -> PDU={device.pdu_id} outlet={outlet} connected={device.connected}")
+        success = device.outlet_on(outlet)
+        self._logger.info(f"WattBox module: device.outlet_on({outlet}) returned {success}")
         self._broadcast_state(device)
+        if success:
+            return {"success": True, "device": stable_id, "action": "on", "verified": True}, 200
         return {"error": f"Command sent but outlet did not change: {stable_id}"}, 503
 
     def outlet_off(self, stable_id: str) -> Tuple[dict, int]:
         """Turn outlet off by stable ID. Verifies state change before returning."""
+        self._logger.info(f"WattBox module: outlet_off({stable_id})")
         resolved = self._resolve_device(stable_id)
         if not resolved:
+            self._logger.warning(f"WattBox module: _resolve_device returned None for {stable_id}")
             return {"error": f"Unknown device: {stable_id}"}, 404
         device, outlet = resolved
-        if device.outlet_off(outlet):
-            self._broadcast_state(device)
-            return {"success": True, "device": stable_id, "action": "off", "verified": True}, 200
+        self._logger.info(f"WattBox module: Resolved {stable_id} -> PDU={device.pdu_id} outlet={outlet} connected={device.connected}")
+        success = device.outlet_off(outlet)
+        self._logger.info(f"WattBox module: device.outlet_off({outlet}) returned {success}")
         self._broadcast_state(device)
+        if success:
+            return {"success": True, "device": stable_id, "action": "off", "verified": True}, 200
         return {"error": f"Command sent but outlet did not change: {stable_id}"}, 503
 
     def outlet_cycle(self, stable_id: str) -> Tuple[dict, int]:
         """Power cycle outlet by stable ID."""
+        self._logger.info(f"WattBox module: outlet_cycle({stable_id})")
         resolved = self._resolve_device(stable_id)
         if not resolved:
+            self._logger.warning(f"WattBox module: _resolve_device returned None for {stable_id}")
             return {"error": f"Unknown device: {stable_id}"}, 404
         device, outlet = resolved
-        if device.outlet_cycle(outlet):
-            self._broadcast_state(device)
-            return {"success": True, "device": stable_id, "action": "cycle", "verified": True}, 200
+        self._logger.info(f"WattBox module: Resolved {stable_id} -> PDU={device.pdu_id} outlet={outlet} connected={device.connected}")
+        success = device.outlet_cycle(outlet)
+        self._logger.info(f"WattBox module: device.outlet_cycle({outlet}) returned {success}")
         self._broadcast_state(device)
+        if success:
+            return {"success": True, "device": stable_id, "action": "cycle", "verified": True}, 200
         return {"error": f"Command sent but state unclear: {stable_id}"}, 503
 
     def get_outlet_state(self, stable_id: str) -> Tuple[dict, int]:

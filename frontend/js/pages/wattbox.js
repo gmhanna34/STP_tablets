@@ -4,7 +4,7 @@ const WattBoxPage = {
   _pollTimer: null,
   _expanded: new Set(),
 
-  _version: '26-087',  // page version for cache debugging
+  _version: '26-088',  // page version for cache debugging
 
   render(container) {
     console.log(`[WattBox] render() — page version ${this._version}`);
@@ -204,16 +204,18 @@ const WattBoxPage = {
         signal: AbortSignal.timeout(15000),
       });
       const data = await resp.json();
-      console.log(`WattBox: Response for ${outletId}:`, resp.status, data);
+      console.log(`WattBox: Response for ${outletId}: HTTP ${resp.status}`, data);
       if (!resp.ok || data.error) {
-        App.showToast(data.error || `Failed to ${action} outlet`, 3000, 'error');
+        App.showToast(`[${resp.status}] ${data.error || 'Failed'}`, 5000, 'error');
       } else {
-        App.showToast(`${outletId}: ${action.toUpperCase()}`, 2000);
+        const verified = data.verified ? ' (verified)' : '';
+        const ms = data.latency_ms ? ` ${data.latency_ms}ms` : '';
+        App.showToast(`${action.toUpperCase()}${verified}${ms}`, 2000);
         setTimeout(() => this._refresh(), 1000);
       }
     } catch (err) {
       console.error(`WattBox: Network error toggling ${outletId}:`, err);
-      App.showToast(`Network error: ${err.message}`, 3000, 'error');
+      App.showToast(`Network error: ${err.name}: ${err.message}`, 5000, 'error');
     } finally {
       if (btn) {
         btn.disabled = false;
