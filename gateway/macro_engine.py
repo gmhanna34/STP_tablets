@@ -23,18 +23,19 @@ logger = logging.getLogger("stp-gateway")
 # ---------------------------------------------------------------------------
 
 class _VerificationEntry:
-    """Tracks a pending background verification for an ha_service step."""
+    """Tracks a pending background verification for an ha_service or wattbox_power step."""
     __slots__ = ("entity_id", "expected_state", "timeout", "retries",
-                 "original_step", "queued_at")
+                 "original_step", "queued_at", "source")
 
     def __init__(self, entity_id: str, expected_state: str, timeout: float,
-                 retries: int, original_step: dict):
+                 retries: int, original_step: dict, source: str = "ha"):
         self.entity_id = entity_id
         self.expected_state = expected_state
         self.timeout = timeout
         self.retries = retries
         self.original_step = original_step
         self.queued_at = time.time()
+        self.source = source  # "ha" or "wattbox"
 
 
 class _VerificationQueue:
@@ -68,7 +69,7 @@ class _VerificationQueue:
 
 
 def _resolve_verify(step: dict) -> Optional[_VerificationEntry]:
-    """Resolve a verify block (shorthand or explicit) on an ha_service step.
+    """Resolve a verify block (shorthand or explicit) on an ha_service or wattbox_power step.
 
     Returns a _VerificationEntry or None if no verification is requested.
     """
@@ -76,6 +77,35 @@ def _resolve_verify(step: dict) -> Optional[_VerificationEntry]:
     if not verify:
         return None
 
+    step_type = step.get("type", "")
+
+    # --- wattbox_power steps ---
+    if step_type == "wattbox_power":
+        device_id = step.get("device", "")
+        action = step.get("action", "on")
+        if action == "cycle":
+            # Can't verify state after a power cycle (it toggles)
+            return None
+        if not device_id:
+            return None
+        expected_state = "on" if action == "on" else "off"
+        timeout = 10
+        retries = 2
+        if isinstance(verify, dict):
+            timeout = verify.get("timeout", 10)
+            retries = verify.get("retries", 2)
+            if "state" in verify:
+                expected_state = str(verify["state"])
+        return _VerificationEntry(
+            entity_id=device_id,
+            expected_state=expected_state,
+            timeout=timeout,
+            retries=retries,
+            original_step=step,
+            source="wattbox",
+        )
+
+    # --- ha_service steps ---
     if verify is True:
         # Shorthand: infer from the step itself
         data = step.get("data", {})
@@ -499,6 +529,8 @@ def _execute_step(ctx, step: dict, tablet: str, depth: int,
     try:
         if step_type == "ha_check":
             return _step_ha_check(ctx, step)
+        elif step_type == "wattbox_check":
+            return _step_wattbox_check(ctx, step)
         elif step_type == "ha_service":
             result = _step_ha_service(ctx, step, tablet)
             # Queue background verification whether the call succeeded or failed.
@@ -532,6 +564,21 @@ def _execute_step(ctx, step: dict, tablet: str, depth: int,
             return _step_x32_mute(ctx, step, tablet)
         elif step_type == "x32_aux_mute":
             return _step_x32_aux_mute(ctx, step, tablet)
+        elif step_type == "wattbox_power":
+            result = _step_wattbox_power(ctx, step, tablet)
+            # Queue verification same as ha_service — verify_pending will
+            # check outlet state via the WattBox module and retry on failure.
+            if verify_queue is not None:
+                on_fail = step.get("on_fail", "abort")
+                should_queue = result["success"] or on_fail == "skip"
+                if should_queue:
+                    entry = _resolve_verify(step)
+                    if entry:
+                        verify_queue.add(entry)
+                        status = "ok" if result["success"] else "failed"
+                        logger.debug(f"Queued WattBox verification for {entry.entity_id} "
+                                     f"(expect={entry.expected_state}, call={status})")
+            return result
         elif step_type == "obs_emit":
             return _step_obs_emit(ctx, step, tablet)
         elif step_type == "ptz_preset":
@@ -587,6 +634,27 @@ def _step_ha_check(ctx, step: dict) -> dict:
         return {"success": False, "error": f"{entity} is '{actual}', expected '{expect}'"}
     except Exception as e:
         return {"success": False, "error": f"HA check failed: {e}"}
+
+
+def _step_wattbox_check(ctx, step: dict) -> dict:
+    """Check a WattBox outlet state via the direct Telnet module."""
+    device = step.get("device", "")
+    expect = step.get("expect", "")
+    if ctx.mock_mode:
+        return {"success": True}
+    if not ctx.wattbox:
+        return {"success": False, "error": "WattBox module not available"}
+    try:
+        result, status = ctx.wattbox.get_outlet_state(device)
+        if status >= 400:
+            error_msg = result.get("error", "") if isinstance(result, dict) else str(result)
+            return {"success": False, "error": f"WattBox check failed: {error_msg}"}
+        actual = result.get("state", "unknown")
+        if str(actual) == str(expect):
+            return {"success": True}
+        return {"success": False, "error": f"{device} is '{actual}', expected '{expect}'"}
+    except Exception as e:
+        return {"success": False, "error": f"WattBox check failed: {e}"}
 
 
 def _step_ha_service(ctx, step: dict, tablet: str) -> dict:
@@ -842,6 +910,42 @@ def _step_epson_all(ctx, step: dict, tablet: str) -> dict:
                     logger.debug(f"Projector {key} power command failed after retry: {e}")
     ctx.socketio.emit("state:projectors", {"event": "all_power", "state": state}, room="projectors")
     return {"success": True}
+
+
+def _step_wattbox_power(ctx, step: dict, tablet: str) -> dict:
+    """Control a WattBox outlet via the direct Telnet module."""
+    device_id = step.get("device", "")
+    action = step.get("action", "on")
+    if action not in ("on", "off", "cycle"):
+        return {"success": False, "error": f"Invalid action: {action}"}
+    verbose = ctx.verbose_logging
+    if verbose.is_set():
+        logger.debug(f"[VERBOSE] wattbox_power: device={device_id}, action={action}")
+    if ctx.mock_mode:
+        return {"success": True}
+    if not ctx.wattbox:
+        return {"success": False, "error": "WattBox module not available"}
+
+    start = time.time()
+    if action == "on":
+        result, status = ctx.wattbox.outlet_on(device_id)
+    elif action == "off":
+        result, status = ctx.wattbox.outlet_off(device_id)
+    else:
+        result, status = ctx.wattbox.outlet_cycle(device_id)
+    latency = (time.time() - start) * 1000
+
+    ok = status < 400
+    if verbose.is_set():
+        logger.debug(f"[VERBOSE] wattbox_power result: device={device_id} "
+                     f"action={action} status={status}")
+    ctx.db.log_action(tablet, f"macro:wattbox_power:{action}", device_id,
+                      json.dumps({"device": device_id, "action": action}),
+                      "OK" if ok else f"FAILED status={status}", latency)
+    if ok:
+        return {"success": True}
+    error_msg = result.get("error", "") if isinstance(result, dict) else str(result)
+    return {"success": False, "error": error_msg or f"WattBox {action} failed for {device_id}"}
 
 
 def _step_x32_scene(ctx, step: dict, tablet: str) -> dict:
@@ -1103,6 +1207,9 @@ def _check_module_connected(ctx, target: str) -> bool:
         elif target == "moip" and ctx.moip:
             status = ctx.moip.get_status()
             return status.get("healthy", False) if isinstance(status, dict) else False
+        elif target == "wattbox" and ctx.wattbox:
+            status = ctx.wattbox.get_health()
+            return status.get("healthy", False) if isinstance(status, dict) else False
     except Exception as e:
         logger.debug(f"Module health check failed for {target}: {e}")
     return False
@@ -1155,6 +1262,30 @@ def _resolve_deferred_issues(verify_queue: _VerificationQueue,
 # verify_pending — batch-check all queued verifications
 # ---------------------------------------------------------------------------
 
+def _check_wattbox_entry(ctx, entry: _VerificationEntry) -> str:
+    """Check a WattBox outlet state. Returns actual state string."""
+    if not ctx.wattbox:
+        return "unknown"
+    try:
+        result, status = ctx.wattbox.get_outlet_state(entry.entity_id)
+        if status >= 400:
+            return "unknown"
+        return result.get("state", "unknown")
+    except Exception:
+        return "unknown"
+
+
+def _retry_entry(ctx, entry: _VerificationEntry, tablet: str):
+    """Retry the original command for a verification entry (HA or WattBox)."""
+    try:
+        if entry.source == "wattbox":
+            _step_wattbox_power(ctx, entry.original_step, tablet)
+        else:
+            _step_ha_service(ctx, entry.original_step, tablet)
+    except Exception as e:
+        logger.warning(f"Retry failed for {entry.entity_id}: {e}")
+
+
 def _step_verify_pending(ctx, step: dict, tablet: str,
                          verify_queue: _VerificationQueue) -> dict:
     """Check all pending verifications, retry failures, emit results."""
@@ -1171,7 +1302,6 @@ def _step_verify_pending(ctx, step: dict, tablet: str,
         return {"success": True}
 
     entries = verify_queue.drain()
-    ha_cfg = ctx.cfg.get("home_assistant", {})
 
     start = time.time()
 
@@ -1183,25 +1313,34 @@ def _step_verify_pending(ctx, step: dict, tablet: str,
         if elapsed >= timeout:
             break
 
-        # Force HA to refresh pending entities before checking state.
+        # Split entries by source for appropriate state checking
+        ha_entries = [e for e in entries if e.source == "ha"]
+        wb_entries = [e for e in entries if e.source == "wattbox"]
+
+        # Force HA to refresh pending HA entities before checking state.
         # Without this, integrations with long poll intervals (e.g. WattBox
         # at 30s+) may still show stale state after the command succeeded.
-        if retry_round > 0:
-            _force_ha_entity_refresh(ctx, [e.entity_id for e in entries])
+        if retry_round > 0 and ha_entries:
+            _force_ha_entity_refresh(ctx, [e.entity_id for e in ha_entries])
 
-        # Fetch all HA states in one bulk call
+        # Fetch all HA states in one bulk call (only if there are HA entries)
         entity_states = {}
-        try:
-            all_entities, err = fetch_all_ha_entities(ctx)
-            if not err and all_entities:
-                for e in all_entities:
-                    entity_states[e.get("entity_id", "")] = e.get("state", "")
-        except Exception:
-            pass
+        if ha_entries:
+            try:
+                all_entities, err = fetch_all_ha_entities(ctx)
+                if not err and all_entities:
+                    for e in all_entities:
+                        entity_states[e.get("entity_id", "")] = e.get("state", "")
+            except Exception:
+                pass
 
         still_pending = []
         for entry in entries:
-            actual = entity_states.get(entry.entity_id, "unknown")
+            if entry.source == "wattbox":
+                actual = _check_wattbox_entry(ctx, entry)
+            else:
+                actual = entity_states.get(entry.entity_id, "unknown")
+
             if str(actual) == str(entry.expected_state):
                 logger.debug(f"Verified {entry.entity_id} = {actual}")
             else:
@@ -1213,28 +1352,25 @@ def _step_verify_pending(ctx, step: dict, tablet: str,
             resolved_count = _resolve_deferred_issues(verify_queue, entries, [])
             if resolved_count:
                 logger.info(f"Cleared {resolved_count} deferred issue(s) — "
-                            f"device(s) confirmed in expected state despite HA error")
+                            f"device(s) confirmed in expected state despite error")
             logger.info(f"All {len(entries)} verifications passed "
                         f"(round {retry_round + 1}, {time.time() - start:.1f}s)")
             return {"success": True}
 
         entries = still_pending
 
-        # If not last round, retry the original ha_service calls and then wait
+        # If not last round, retry the original commands and then wait
         if retry_round < max_retries:
             for entry in entries:
-                logger.info(f"Retrying ha_service for {entry.entity_id} "
+                source_label = "wattbox_power" if entry.source == "wattbox" else "ha_service"
+                logger.info(f"Retrying {source_label} for {entry.entity_id} "
                             f"(round {retry_round + 2})")
                 ctx.socketio.emit("macro_step_retry", {
                     "entity_id": entry.entity_id,
                     "expected_state": entry.expected_state,
                     "retry_round": retry_round + 2,
                 })
-                # Re-execute the original ha_service step
-                try:
-                    _step_ha_service(ctx, entry.original_step, tablet)
-                except Exception as e:
-                    logger.warning(f"Retry ha_service failed for {entry.entity_id}: {e}")
+                _retry_entry(ctx, entry, tablet)
 
             # Wait before next check
             remaining = timeout - (time.time() - start)
@@ -1283,6 +1419,8 @@ def step_summary(step: dict, macro_defs: dict) -> str:
     t = step.get("type", "")
     if t == "ha_check":
         return f"Check {step.get('entity', '')} == {step.get('expect', '')}"
+    elif t == "wattbox_check":
+        return f"Check WattBox {step.get('device', '')} == {step.get('expect', '')}"
     elif t == "ha_service":
         return f"HA {step.get('domain', '')}.{step.get('service', '')} ({step.get('data', {}).get('entity_id', '')})"
     elif t == "door_timed_unlock":
@@ -1301,6 +1439,8 @@ def step_summary(step: dict, macro_defs: dict) -> str:
         return f"X32 mute ch{step.get('channel', '')} {step.get('state', '')}"
     elif t == "x32_aux_mute":
         return f"X32 aux{step.get('channel', '')} mute {step.get('state', '')}"
+    elif t == "wattbox_power":
+        return f"WattBox {step.get('action', '')} {step.get('device', '')}"
     elif t == "obs_emit":
         return f"OBS {step.get('request_type', '')}"
     elif t == "ptz_preset":

@@ -16,6 +16,7 @@ from macro_engine import (
     _resolve_verify,
     _VerificationEntry,
     _VerificationQueue,
+    _execute_step,
     execute_macro,
     load_macros,
     step_summary,
@@ -628,3 +629,150 @@ class TestDeferredIssues:
         # Issue should NOT be in the result — it was deferred, and without a
         # verify_pending step the deferred issues are just dropped (macro ends)
         assert result.get("issue_count", 0) == 0
+
+
+# ---------------------------------------------------------------------------
+# WattBox step types
+# ---------------------------------------------------------------------------
+
+class TestWattboxCheck:
+    def test_wattbox_check_mock_mode(self):
+        """wattbox_check in mock mode always succeeds."""
+        ctx = _make_ctx({
+            "wb_check_test": {
+                "label": "WB Check Test",
+                "steps": [
+                    {"type": "wattbox_check", "device": "wb_004_av_audiorack1.outlet_3",
+                     "expect": "off"},
+                ],
+            }
+        })
+        result = execute_macro(ctx, "wb_check_test", "test-tablet")
+        assert result["success"] is True
+
+    def test_wattbox_check_summary(self):
+        step = {"type": "wattbox_check", "device": "wb_004_av_audiorack1.outlet_3",
+                "expect": "off"}
+        result = step_summary(step, {})
+        assert "wb_004_av_audiorack1.outlet_3" in result
+        assert "off" in result
+
+
+class TestWattboxVerify:
+    def test_resolve_verify_wattbox_power_on(self):
+        """verify: true on a wattbox_power on step creates a wattbox entry."""
+        step = {
+            "type": "wattbox_power",
+            "device": "wb_008_av_audiorack2.outlet_10",
+            "action": "on",
+            "verify": True,
+        }
+        entry = _resolve_verify(step)
+        assert entry is not None
+        assert entry.entity_id == "wb_008_av_audiorack2.outlet_10"
+        assert entry.expected_state == "on"
+        assert entry.source == "wattbox"
+        assert entry.timeout == 10
+        assert entry.retries == 2
+
+    def test_resolve_verify_wattbox_power_off(self):
+        step = {
+            "type": "wattbox_power",
+            "device": "wb_004_av_audiorack1.outlet_12",
+            "action": "off",
+            "verify": True,
+        }
+        entry = _resolve_verify(step)
+        assert entry is not None
+        assert entry.expected_state == "off"
+        assert entry.source == "wattbox"
+
+    def test_resolve_verify_wattbox_power_cycle_returns_none(self):
+        """Power cycle can't be verified (state toggles)."""
+        step = {
+            "type": "wattbox_power",
+            "device": "wb_003_av_floorswitch2.outlet_10",
+            "action": "cycle",
+            "verify": True,
+        }
+        entry = _resolve_verify(step)
+        assert entry is None
+
+    def test_resolve_verify_wattbox_dict_overrides(self):
+        """verify dict on wattbox_power allows custom timeout/retries."""
+        step = {
+            "type": "wattbox_power",
+            "device": "wb_005_chapel_ceilingrack.outlet_1",
+            "action": "on",
+            "verify": {"timeout": 20, "retries": 5},
+        }
+        entry = _resolve_verify(step)
+        assert entry is not None
+        assert entry.timeout == 20
+        assert entry.retries == 5
+        assert entry.source == "wattbox"
+
+    def test_resolve_verify_wattbox_no_verify(self):
+        """wattbox_power without verify returns None."""
+        step = {
+            "type": "wattbox_power",
+            "device": "wb_005_chapel_ceilingrack.outlet_1",
+            "action": "on",
+        }
+        entry = _resolve_verify(step)
+        assert entry is None
+
+    def test_wattbox_power_with_verify_queues_entry(self):
+        """wattbox_power with verify: true queues a wattbox verification entry."""
+        from macro_engine import _execute_step, _VerificationQueue
+
+        ctx = _make_ctx({
+            "wb_verify_test": {
+                "label": "WB Verify Test",
+                "steps": [
+                    {"type": "wattbox_power", "device": "wb_008_av_audiorack2.outlet_10",
+                     "action": "on", "on_fail": "skip", "verify": True},
+                    {"type": "delay", "seconds": 0.01},
+                ],
+            }
+        })
+        # In mock_mode, wattbox_power succeeds and the entry gets queued
+        vq = _VerificationQueue()
+        step = {"type": "wattbox_power", "device": "wb_008_av_audiorack2.outlet_10",
+                "action": "on", "on_fail": "skip", "verify": True}
+        result = _execute_step(ctx, step, "test-tablet", 0, verify_queue=vq)
+        assert result["success"] is True
+        assert len(vq) == 1
+        entry = vq.drain()[0]
+        assert entry.entity_id == "wb_008_av_audiorack2.outlet_10"
+        assert entry.expected_state == "on"
+        assert entry.source == "wattbox"
+
+    def test_ha_service_verify_still_has_ha_source(self):
+        """Existing ha_service verify entries keep source='ha' (default)."""
+        step = {
+            "type": "ha_service", "domain": "switch", "service": "turn_on",
+            "data": {"entity_id": "switch.test_outlet"},
+            "verify": True,
+        }
+        entry = _resolve_verify(step)
+        assert entry is not None
+        assert entry.source == "ha"
+
+    def test_verify_pending_mock_mode_clears_mixed_queue(self):
+        """verify_pending in mock mode clears a queue with both HA and WattBox entries."""
+        from macro_engine import _execute_step, _VerificationQueue
+
+        ctx = _make_ctx()
+        vq = _VerificationQueue()
+        # Add both types
+        vq.add(_VerificationEntry("switch.test_outlet", "on", 10, 2,
+                                  {"type": "ha_service"}, source="ha"))
+        vq.add(_VerificationEntry("wb_004_av_audiorack1.outlet_3", "on", 10, 2,
+                                  {"type": "wattbox_power"}, source="wattbox"))
+        assert len(vq) == 2
+
+        step = {"type": "verify_pending", "timeout": 5, "retries": 1}
+        result = _execute_step(ctx, step, "test-tablet", 0, verify_queue=vq)
+        assert result["success"] is True
+        assert len(vq) == 0

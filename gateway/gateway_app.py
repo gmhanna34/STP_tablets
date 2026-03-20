@@ -241,6 +241,7 @@ class GatewayContext:
         self.x32 = None
         self.moip = None
         self.obs = None
+        self.wattbox = None
         self.health = None
         self.occupancy = None
         self.announcements = None
@@ -345,6 +346,11 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     from obs_module import OBSModule
     obs = None if mock_mode else OBSModule(cfg.get("obs", {}), logger)
 
+    from wattbox_module import WattBoxModule
+    wattbox = None if mock_mode else WattBoxModule(
+        cfg.get("wattbox", {}), logger, socketio=socketio
+    )
+
     from health_module import HealthModule
     health = None if mock_mode else HealthModule(cfg, logger)
     if health:
@@ -382,6 +388,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     ctx.x32 = x32
     ctx.moip = moip
     ctx.obs = obs
+    ctx.wattbox = wattbox
     ctx.health = health
     ctx.occupancy = occupancy
     ctx.announcements = announcements
@@ -456,7 +463,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
     register_socket_handlers(ctx)
 
     # Store references for use in main and shutdown
-    app._modules = {"x32": x32, "moip": moip, "obs": obs, "health": health, "occupancy": occupancy, "announcements": announcements, "event_automation": event_automation}
+    app._modules = {"x32": x32, "moip": moip, "obs": obs, "wattbox": wattbox, "health": health, "occupancy": occupancy, "announcements": announcements, "event_automation": event_automation}
     app._db = db
     app._ctx = ctx
 
@@ -497,6 +504,8 @@ def main():
     logger.info(f"  OBS (direct): {obs_url}")
     logger.info(f"  MoIP (direct): {moip_cfg.get('host_internal', 'N/A')}:{moip_cfg.get('port_internal', 23)}")
     logger.info(f"  X32 (direct): {x32_cfg.get('mixer_type', 'X32')} @ {x32_cfg.get('mixer_ip', 'N/A')}")
+    wb_pdus = cfg.get("wattbox", {}).get("pdus", {})
+    logger.info(f"  WattBox (direct Telnet): {len(wb_pdus)} PDUs")
     logger.info(f"  PTZ cameras: {len(cfg.get('ptz_cameras', {}))}")
     logger.info(f"  Projectors: {len(cfg.get('projectors', {}))}")
     logger.info(f"  Health services: {len(cfg.get('healthdash', {}).get('services', []))}")
@@ -583,6 +592,10 @@ def main():
 
     start_pollers(ctx)
     start_scheduler(ctx)
+
+    # Start WattBox direct Telnet module (connects to all PDUs)
+    if ctx.wattbox:
+        ctx.wattbox.start()
 
     # Start event automation (calendar-driven setup/teardown)
     if ctx.event_automation:

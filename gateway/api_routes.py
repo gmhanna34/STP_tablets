@@ -1425,10 +1425,17 @@ def register_api_routes(ctx):
             logger.warning(f"Fully Kiosk unreachable [{tablet}]")
             return jsonify({"error": "Fully Kiosk unreachable"}), 503
 
-    # ---- WattBox ----
+    # ---- WattBox (direct Telnet module) ----
 
     @app.route("/api/wattbox/devices")
     def wattbox_devices():
+        """Get all WattBox PDU states — uses Telnet module (cached), falls back to HTTP."""
+        wattbox = ctx.wattbox
+        if wattbox and not mock_mode:
+            result, status = wattbox.get_all_devices()
+            return jsonify(result), status
+
+        # Fallback: legacy HTTP polling (mock mode or module unavailable)
         wb_cfg = cfg.get("wattbox", {})
         devices = wb_cfg.get("devices", {})
         if not devices:
@@ -1455,20 +1462,43 @@ def register_api_routes(ctx):
 
     @app.route("/api/wattbox/<device_key>/power", methods=["POST"])
     def wattbox_power(device_key: str):
-        wb_cfg = cfg.get("wattbox", {})
-        devices = wb_cfg.get("devices", {})
-        dev = devices.get(device_key)
-        if not dev:
-            return jsonify({"error": f"Unknown device: {device_key}"}), 404
+        """Control WattBox outlet — uses Telnet module, falls back to HTTP."""
         data = request.get_json(silent=True) or {}
         action = data.get("action", "cycle")
         if action not in ("on", "off", "cycle"):
             return jsonify({"error": f"Invalid action: {action}"}), 400
         tablet = get_tablet_id()
-        cmd_map = {"on": 3, "off": 4, "cycle": 1}
-        command = cmd_map[action]
+
         if mock_mode:
             return jsonify({"success": True, "device": device_key, "action": action, "mock": True}), 200
+
+        # Primary: Telnet module
+        wattbox = ctx.wattbox
+        if wattbox:
+            start = time.time()
+            if action == "on":
+                result, status = wattbox.outlet_on(device_key)
+            elif action == "off":
+                result, status = wattbox.outlet_off(device_key)
+            else:
+                result, status = wattbox.outlet_cycle(device_key)
+            latency = (time.time() - start) * 1000
+            db.log_action(tablet, f"wattbox:{action}", device_key,
+                          json.dumps({"device": device_key, "action": action}),
+                          f"status={status}", latency)
+            logger.info(f"WattBox {action} -> {device_key} (Telnet) [{tablet}]")
+            if isinstance(result, dict):
+                result["latency_ms"] = round(latency, 1)
+            return jsonify(result), status
+
+        # Fallback: legacy HTTP (module unavailable)
+        wb_cfg = cfg.get("wattbox", {})
+        devices = wb_cfg.get("devices", {})
+        dev = devices.get(device_key)
+        if not dev:
+            return jsonify({"error": f"Unknown device: {device_key}"}), 404
+        cmd_map = {"on": 3, "off": 4, "cycle": 1}
+        command = cmd_map[action]
         start = time.time()
         try:
             resp = http_requests.get(
@@ -1480,7 +1510,7 @@ def register_api_routes(ctx):
             db.log_action(tablet, f"wattbox:{action}", dev["ip"],
                           f"outlet={dev['outlet']} ({dev['label']})",
                           f"status={resp.status_code}", latency)
-            logger.info(f"WattBox {action} -> {dev['label']} (outlet {dev['outlet']} @ {dev['ip']}) [{tablet}]")
+            logger.info(f"WattBox {action} -> {dev['label']} (HTTP fallback) [{tablet}]")
             return jsonify({
                 "success": resp.status_code == 200, "device": device_key,
                 "action": action, "latency_ms": round(latency, 1),
@@ -1491,6 +1521,34 @@ def register_api_routes(ctx):
         except http_requests.ConnectionError:
             logger.warning(f"WattBox unreachable: {dev['ip']} [{tablet}]")
             return jsonify({"error": f"WattBox at {dev['ip']} unreachable"}), 503
+
+    @app.route("/api/wattbox/health")
+    def wattbox_health():
+        """WattBox module health status for the health dashboard."""
+        wattbox = ctx.wattbox
+        if not wattbox:
+            return jsonify({"healthy": False, "error": "Module not loaded"}), 503
+        return jsonify(wattbox.get_health()), 200
+
+    @app.route("/api/wattbox/pdu/<pdu_id>/reboot", methods=["POST"])
+    def wattbox_pdu_reboot(pdu_id: str):
+        """Reboot a WattBox PDU's firmware (network restart, outlets keep power)."""
+        wattbox = ctx.wattbox
+        if not wattbox:
+            return jsonify({"error": "WattBox module not loaded"}), 503
+        tablet = get_tablet_id()
+        result, status = wattbox.reboot_pdu(pdu_id)
+        db.log_action(tablet, "wattbox:reboot", pdu_id, "", f"status={status}", 0)
+        return jsonify(result), status
+
+    @app.route("/api/wattbox/pdu/<pdu_id>/reset-watchdog", methods=["POST"])
+    def wattbox_reset_watchdog(pdu_id: str):
+        """Manually reset failure streak for a WattBox PDU."""
+        wattbox = ctx.wattbox
+        if not wattbox:
+            return jsonify({"error": "WattBox module not loaded"}), 503
+        result, status = wattbox.reset_watchdog(pdu_id)
+        return jsonify(result), status
 
     # ---- Home Assistant ----
 

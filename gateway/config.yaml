@@ -227,8 +227,48 @@ home_assistant:
   timeout: 15
 wattbox:
   username: admin
-  password: ''
-  timeout: 5
+  password: ''                         # Set WATTBOX_PASSWORD in .env
+  port: 23                             # Telnet API v2.2
+  timeout: 5                           # HTTP timeout (for reboot/fallback)
+  keepalive_interval_normal: 60        # Seconds between keepalive polls
+  keepalive_interval_max: 300          # Backoff cap (5 min)
+  failure_threshold: 5                 # Consecutive failures before watchdog reboot
+  reboot_cooldown_minutes: 15          # Min time between watchdog reboots
+
+  # PDU definitions — one entry per physical WattBox (Telnet connection per PDU)
+  # Stable outlet IDs are auto-derived: {pdu_key}.outlet_{N}
+  # Friendly names are pulled from the WattBox UI via Telnet at connect time
+  pdus:
+    wb_001_audiowallrack:
+      ip: 10.100.60.61
+      label: "WB-1 Audio Wall Rack"
+    wb_002_av_videowall:
+      ip: 10.100.60.62
+      label: "WB-2 Video Wall"
+    wb_003_av_floorswitch2:
+      ip: 10.100.60.63
+      label: "WB-3 AV Floor Switch 2"
+    wb_004_av_audiorack1:
+      ip: 10.100.60.64
+      label: "WB-4 AV Audio Rack 1"
+    wb_005_chapel_ceilingrack:
+      ip: 10.100.60.65
+      label: "WB-5 Chapel Ceiling Rack"
+    wb_006:
+      ip: 10.100.60.66
+      label: "WB-6"
+    wb_007:
+      ip: 10.100.60.67
+      label: "WB-7"
+    wb_008_av_audiorack2:
+      ip: 10.100.60.68
+      label: "WB-8 AV Audio Rack 2"
+    wb_009_av_floorswitch1:
+      ip: 10.100.60.69
+      label: "WB-9 AV Floor Switch 1"
+
+  # Legacy device aliases (backward compat for break-glass endpoints)
+  # These resolve to pdu_id + outlet via IP matching
   devices:
     ha_server:
       label: Home Assistant Server
