@@ -6,34 +6,36 @@
 #   2. buttons  — Page-specific button layouts (the UI)
 #
 # STEP TYPES:
-#   ha_check      Check a Home Assistant entity state
-#   ha_service    Call a Home Assistant service
-#   moip_switch   Switch a single video TX → RX
-#   moip_ir       Send an IR code via MoIP receiver
-#   moip_scene    Execute a pre-defined MoIP scene (DEPRECATED — use moip_switch)
-#   epson_power   Control a single projector (on/off)
-#   epson_all     Control all projectors (on/off)
-#   x32_scene     Load an X32 mixer scene
-#   x32_mute      Mute/unmute an X32 channel
-#   obs_emit      Trigger an OBS action (StartStream, StopStream, etc.)
-#   ptz_preset    Recall a PTZ camera preset
-#   tts_announce  Play a TTS announcement via WiiM (preset, sequence, or inline text)
-#   delay         Wait N seconds (with optional progress message)
-#   macro         Call another macro (nesting, max depth 5)
-#   parallel      Run sub-steps concurrently (all must succeed unless on_fail: skip)
-#   condition     If/then/else branching based on a check
-#   notify        Broadcast a message to all tablets
-#   wait_until    Poll a device/entity until it reaches expected state or times out
+#   ha_check        Check a Home Assistant entity state
+#   ha_service      Call a Home Assistant service
+#   wattbox_check   Check a WattBox outlet state (direct Telnet, no HA)
+#   wattbox_power   Control a WattBox outlet on/off/cycle (direct Telnet, no HA)
+#   moip_switch     Switch a single video TX → RX
+#   moip_ir         Send an IR code via MoIP receiver
+#   moip_scene      Execute a pre-defined MoIP scene (DEPRECATED — use moip_switch)
+#   epson_power     Control a single projector (on/off)
+#   epson_all       Control all projectors (on/off)
+#   x32_scene       Load an X32 mixer scene
+#   x32_mute        Mute/unmute an X32 channel
+#   obs_emit        Trigger an OBS action (StartStream, StopStream, etc.)
+#   ptz_preset      Recall a PTZ camera preset
+#   tts_announce    Play a TTS announcement via WiiM (preset, sequence, or inline text)
+#   delay           Wait N seconds (with optional progress message)
+#   macro           Call another macro (nesting, max depth 5)
+#   parallel        Run sub-steps concurrently (all must succeed unless on_fail: skip)
+#   condition       If/then/else branching based on a check
+#   notify          Broadcast a message to all tablets
+#   wait_until      Poll a device/entity until it reaches expected state or times out
 #   verify_pending  Batch-check all queued verifications from prior verify: steps
 #
-# VERIFY (on ha_service steps):
-#   verify: true               Shorthand: infer entity_id from data, state from service
+# VERIFY (on ha_service and wattbox_power steps):
+#   verify: true               Shorthand: infer expected state from service/action
 #   verify:                    Explicit form:
-#     entity_id: "switch.x"
 #     state: "on"
 #     timeout: 10
 #     retries: 2
 #   The verification is queued (non-blocking) and checked at verify_pending steps.
+#   For wattbox_power, state is checked via direct Telnet (no HA roundtrip).
 #
 # TTS_ANNOUNCE USAGE:
 #   Play a preset (defined in announcements.yaml):
@@ -75,14 +77,13 @@ macros:
       # If already on: just ensure outlet is on, skip scene load (another room may be streaming)
       - type: condition
         if:
-          type: ha_check
-          entity: "switch.wb_004_av_audiorack1_outlet_3"
+          type: wattbox_check
+          device: "wb_004_av_audiorack1.outlet_3"
           expect: "off"
         then:
-          - type: ha_service
-            domain: "switch"
-            service: "turn_on"
-            data: { entity_id: "switch.wb_004_av_audiorack1_outlet_3" }
+          - type: wattbox_power
+            device: "wb_004_av_audiorack1.outlet_3"
+            action: "on"
             on_fail: skip
             message: "Turning on X32 Mixer (cold boot)"
             verify: true
@@ -90,28 +91,24 @@ macros:
           - type: parallel
             message: "Turning on shared amps, antennas, and sub"
             steps:
-              - type: ha_service
-                domain: "switch"
-                service: "turn_on"
-                data: { entity_id: "switch.wb_008_av_audiorack2_outlet_10" }
+              - type: wattbox_power
+                device: "wb_008_av_audiorack2.outlet_10"
+                action: "on"
                 on_fail: skip
                 verify: true
-              - type: ha_service
-                domain: "switch"
-                service: "turn_on"
-                data: { entity_id: "switch.wb_004_av_audiorack1_outlet_7" }
+              - type: wattbox_power
+                device: "wb_004_av_audiorack1.outlet_7"
+                action: "on"
                 on_fail: skip
                 verify: true
-              - type: ha_service
-                domain: "switch"
-                service: "turn_on"
-                data: { entity_id: "switch.wb_008_av_audiorack2_outlet_6" }
+              - type: wattbox_power
+                device: "wb_008_av_audiorack2.outlet_6"
+                action: "on"
                 on_fail: skip
                 verify: true
-              - type: ha_service
-                domain: "switch"
-                service: "turn_on"
-                data: { entity_id: "switch.wb_008_av_audiorack2_outlet_5" }
+              - type: wattbox_power
+                device: "wb_008_av_audiorack2.outlet_5"
+                action: "on"
                 on_fail: skip
                 verify: true
           - type: verify_pending
@@ -136,10 +133,9 @@ macros:
             on_fail: skip
             message: "Loading X32 default scene"
         else:
-          - type: ha_service
-            domain: "switch"
-            service: "turn_on"
-            data: { entity_id: "switch.wb_004_av_audiorack1_outlet_3" }
+          - type: wattbox_power
+            device: "wb_004_av_audiorack1.outlet_3"
+            action: "on"
             on_fail: skip
             message: "Turning on X32 Mixer (already on — preserving scene)"
             verify: true
@@ -147,28 +143,24 @@ macros:
           - type: parallel
             message: "Turning on shared amps, antennas, and sub"
             steps:
-              - type: ha_service
-                domain: "switch"
-                service: "turn_on"
-                data: { entity_id: "switch.wb_008_av_audiorack2_outlet_10" }
+              - type: wattbox_power
+                device: "wb_008_av_audiorack2.outlet_10"
+                action: "on"
                 on_fail: skip
                 verify: true
-              - type: ha_service
-                domain: "switch"
-                service: "turn_on"
-                data: { entity_id: "switch.wb_004_av_audiorack1_outlet_7" }
+              - type: wattbox_power
+                device: "wb_004_av_audiorack1.outlet_7"
+                action: "on"
                 on_fail: skip
                 verify: true
-              - type: ha_service
-                domain: "switch"
-                service: "turn_on"
-                data: { entity_id: "switch.wb_008_av_audiorack2_outlet_6" }
+              - type: wattbox_power
+                device: "wb_008_av_audiorack2.outlet_6"
+                action: "on"
                 on_fail: skip
                 verify: true
-              - type: ha_service
-                domain: "switch"
-                service: "turn_on"
-                data: { entity_id: "switch.wb_008_av_audiorack2_outlet_5" }
+              - type: wattbox_power
+                device: "wb_008_av_audiorack2.outlet_5"
+                action: "on"
                 on_fail: skip
                 verify: true
           - type: verify_pending
@@ -205,16 +197,14 @@ macros:
       - type: parallel
         message: "Enabling Chapel HDMI, IR, and TV battery power"
         steps:
-          - type: ha_service
-            domain: "switch"
-            service: "turn_on"
-            data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_1" }
+          - type: wattbox_power
+            device: "wb_005_chapel_ceilingrack.outlet_1"
+            action: "on"
             on_fail: skip
             verify: true
-          - type: ha_service
-            domain: "switch"
-            service: "turn_on"
-            data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_2" }
+          - type: wattbox_power
+            device: "wb_005_chapel_ceilingrack.outlet_2"
+            action: "on"
             on_fail: skip
             verify: true
           - type: ha_service
@@ -336,33 +326,29 @@ macros:
         on_fail: skip
         message: "Starting shared audio components"
       # Chapel microphones
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_12" }
+      - type: wattbox_power
+        device: "wb_004_av_audiorack1.outlet_12"
+        action: "on"
         on_fail: skip
         message: "Turning on Chapel microphones"
         verify: true
       # Chapel amplifier
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_8" }
+      - type: wattbox_power
+        device: "wb_008_av_audiorack2.outlet_8"
+        action: "on"
         on_fail: skip
         message: "Turning on Chapel Amplifier"
         verify: true
       # WattBox IR outlets
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_2" }
+      - type: wattbox_power
+        device: "wb_005_chapel_ceilingrack.outlet_2"
+        action: "on"
         on_fail: skip
         message: "Turning on Chapel Screens IR"
         verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_4" }
+      - type: wattbox_power
+        device: "wb_005_chapel_ceilingrack.outlet_4"
+        action: "on"
         on_fail: skip
         message: "Turning on Chapel IR Transmitter"
         verify: true
@@ -376,17 +362,15 @@ macros:
     icon: "mic_off"
     confirm: "Turn off Chapel audio?"
     steps:
-      - type: ha_service
-        domain: "switch"
-        service: "turn_off"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_8" }
+      - type: wattbox_power
+        device: "wb_008_av_audiorack2.outlet_8"
+        action: "off"
         on_fail: skip
         message: "Turning off Chapel Amplifier"
         verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_off"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_12" }
+      - type: wattbox_power
+        device: "wb_004_av_audiorack1.outlet_12"
+        action: "off"
         on_fail: skip
         message: "Turning off Chapel microphones"
         verify: true
@@ -442,10 +426,9 @@ macros:
     label: "Chapel Apple TV"
     icon: "cast"
     steps:
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_3" }
+      - type: wattbox_power
+        device: "wb_005_chapel_ceilingrack.outlet_3"
+        action: "on"
         on_fail: skip
         message: "Turning on Chapel Apple TV power"
       - type: moip_switch
@@ -488,11 +471,10 @@ macros:
         tx: 14
         rx: 32
         on_fail: skip
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_3" }
-        on_fail: skip      
+      - type: wattbox_power
+        device: "wb_005_chapel_ceilingrack.outlet_3"
+        action: "on"
+        on_fail: skip
         
   chapel_source_windows_display:
     label: "Social Windows Display"
@@ -682,10 +664,9 @@ macros:
     icon: "settings_input_hdmi"
     description: "MoIP controller, Blackmagic ATEM, OBS BMATEM webcam re-enable"
     steps:
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_003_av_floorswitch2_outlet_10" }
+      - type: wattbox_power
+        device: "wb_003_av_floorswitch2.outlet_10"
+        action: "on"
         on_fail: skip
         message: "Turning on MoIP controller"
         verify: true
@@ -965,32 +946,28 @@ macros:
         on_fail: skip
         message: "Starting shared audio components"
       # Wireless mics and lapel mic
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_12" }
+      - type: wattbox_power
+        device: "wb_008_av_audiorack2.outlet_12"
+        action: "on"
         on_fail: skip
         message: "Turning on Main Church wireless mics"
         verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_11" }
+      - type: wattbox_power
+        device: "wb_004_av_audiorack1.outlet_11"
+        action: "on"
         on_fail: skip
         message: "Turning on lapel mic"
         verify: true
       # Amplifiers
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_2" }
+      - type: wattbox_power
+        device: "wb_004_av_audiorack1.outlet_2"
+        action: "on"
         on_fail: skip
         message: "Turning on Main Church Amplifier"
         verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_9" }
+      - type: wattbox_power
+        device: "wb_008_av_audiorack2.outlet_9"
+        action: "on"
         on_fail: skip
         message: "Turning on Social Hall Amplifier"
         verify: true
@@ -1004,24 +981,21 @@ macros:
     icon: "mic_off"
     confirm: "Turn OFF the audio system?"
     steps:
-      - type: ha_service
-        domain: "switch"
-        service: "turn_off"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_2" }
+      - type: wattbox_power
+        device: "wb_004_av_audiorack1.outlet_2"
+        action: "off"
         on_fail: skip
         message: "Turning off Main Church Amplifier"
         verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_off"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_12" }
+      - type: wattbox_power
+        device: "wb_008_av_audiorack2.outlet_12"
+        action: "off"
         on_fail: skip
         message: "Turning off wireless mics"
         verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_off"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_11" }
+      - type: wattbox_power
+        device: "wb_004_av_audiorack1.outlet_11"
+        action: "off"
         on_fail: skip
         message: "Turning off lapel mic"
         verify: true
@@ -1097,17 +1071,15 @@ macros:
     icon: "restart_alt"
     confirm: "Restart the Main Church AppleTV?"
     steps:
-      - type: ha_service
-        domain: "switch"
-        service: "turn_off"
-        data: { entity_id: "switch.wb_003_av_floorswitch2_outlet_11" }
+      - type: wattbox_power
+        device: "wb_003_av_floorswitch2.outlet_11"
+        action: "off"
       - type: delay
         seconds: 5
         message: "Waiting for power cycle"
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_003_av_floorswitch2_outlet_11" }
+      - type: wattbox_power
+        device: "wb_003_av_floorswitch2.outlet_11"
+        action: "on"
         on_fail: skip
 
   # --- Main Church video source macros (inline MoIP switches) ---
@@ -1318,10 +1290,9 @@ macros:
     icon: "cast"
     description: "Route Apple TV (TX 24) directly to all Main Church displays (no page number overlay)"
     steps:
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_003_av_floorswitch2_outlet_11" }
+      - type: wattbox_power
+        device: "wb_003_av_floorswitch2.outlet_11"
+        action: "on"
       - type: moip_switch
         tx: 24
         rx: 34
@@ -1368,10 +1339,9 @@ macros:
     icon: "cast"
     description: "Route Apple TV via ATEM (TX 27) to displays for page number overlay"
     steps:
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_003_av_floorswitch2_outlet_11" }
+      - type: wattbox_power
+        device: "wb_003_av_floorswitch2.outlet_11"
+        action: "on"
       - type: moip_switch
         tx: 27
         rx: 46
@@ -1820,10 +1790,9 @@ macros:
         on_fail: skip
         message: "Sending AppleTV Home to Social Hall"
       # Turn on shared video infrastructure
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_003_av_floorswitch2_outlet_10" }
+      - type: wattbox_power
+        device: "wb_003_av_floorswitch2.outlet_10"
+        action: "on"
         on_fail: skip
         message: "Turning on MoIP controller"
         verify: true
@@ -2021,31 +1990,27 @@ macros:
         on_fail: skip
         message: "Starting shared audio components"
       # Social Hall specific audio
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_5" }
+      - type: wattbox_power
+        device: "wb_005_chapel_ceilingrack.outlet_5"
+        action: "on"
         on_fail: skip
         message: "Turning on Social Hall Mics 1"
         verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_6" }
+      - type: wattbox_power
+        device: "wb_005_chapel_ceilingrack.outlet_6"
+        action: "on"
         on_fail: skip
         message: "Turning on Social Hall Mics 2"
         verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_10" }
+      - type: wattbox_power
+        device: "wb_004_av_audiorack1.outlet_10"
+        action: "on"
         on_fail: skip
         message: "Turning on Social Hall Wireless Mics"
         verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_on"
-        data: { entity_id: "switch.wb_008_av_audiorack2_outlet_9" }
+      - type: wattbox_power
+        device: "wb_008_av_audiorack2.outlet_9"
+        action: "on"
         on_fail: skip
         message: "Turning on Social Hall Amplifier"
         verify: true
@@ -2059,24 +2024,21 @@ macros:
     icon: "mic_off"
     confirm: "Turn off Social Hall audio?"
     steps:
-      - type: ha_service
-        domain: "switch"
-        service: "turn_off"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_5" }
+      - type: wattbox_power
+        device: "wb_005_chapel_ceilingrack.outlet_5"
+        action: "off"
         on_fail: skip
         message: "Turning off Social Hall Mics 1"
         verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_off"
-        data: { entity_id: "switch.wb_005_chapel_ceilingrack_outlet_6" }
+      - type: wattbox_power
+        device: "wb_005_chapel_ceilingrack.outlet_6"
+        action: "off"
         on_fail: skip
         message: "Turning off Social Hall Mics 2"
         verify: true
-      - type: ha_service
-        domain: "switch"
-        service: "turn_off"
-        data: { entity_id: "switch.wb_004_av_audiorack1_outlet_10" }
+      - type: wattbox_power
+        device: "wb_004_av_audiorack1.outlet_10"
+        action: "off"
         on_fail: skip
         message: "Turning off Social Hall Wireless Mics"
         verify: true
