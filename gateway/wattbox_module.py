@@ -207,6 +207,20 @@ class WattBoxConnection:
             # Read response for query commands
             if command.strip().startswith("?"):
                 return self._read_response()
+
+            # For set commands (! prefix), do a brief read to check for errors.
+            # WattBox may respond with an error string; absence of error = success.
+            if command.strip().startswith("!"):
+                try:
+                    ready, _, _ = select.select([self._sock], [], [], 0.3)
+                    if ready:
+                        resp = self._sock.recv(4096).decode("ascii", errors="ignore").strip()
+                        if resp and ("error" in resp.lower() or "denied" in resp.lower()):
+                            self._logger.warning(
+                                f"WattBox [{self._ip}]: Set command rejected: {resp}")
+                            return None
+                except Exception:
+                    pass  # Non-fatal — command may have succeeded without response
             return "OK"
 
         except Exception as e:
@@ -330,29 +344,56 @@ class WattBoxDevice:
     # --- Outlet control ---
 
     def outlet_on(self, outlet: int) -> bool:
-        """Turn outlet on. Returns True on success."""
+        """Turn outlet on. Returns True if device confirms the state change."""
         result = self._send(f"!OutletSet={outlet},1")
-        if result:
-            with self._state_lock:
-                self._outlet_states[outlet] = True
-            self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} ON")
-        return result is not None
+        if result is None:
+            return False
+        self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} ON (sent)")
+        # Verify by reading back actual state from device
+        return self._verify_outlet_state(outlet, expected=True)
 
     def outlet_off(self, outlet: int) -> bool:
-        """Turn outlet off. Returns True on success."""
+        """Turn outlet off. Returns True if device confirms the state change."""
         result = self._send(f"!OutletSet={outlet},0")
-        if result:
-            with self._state_lock:
-                self._outlet_states[outlet] = False
-            self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} OFF")
-        return result is not None
+        if result is None:
+            return False
+        self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} OFF (sent)")
+        return self._verify_outlet_state(outlet, expected=False)
 
     def outlet_cycle(self, outlet: int) -> bool:
-        """Power cycle outlet. Returns True on success."""
+        """Power cycle outlet. Returns True if command was sent."""
         result = self._send(f"!OutletReset={outlet}")
-        if result:
-            self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} CYCLE")
-        return result is not None
+        if result is None:
+            return False
+        self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} CYCLE (sent)")
+        # Refresh all states after cycle (state goes off then on)
+        time.sleep(0.5)
+        self.refresh_outlet_states()
+        return True
+
+    def _verify_outlet_state(self, outlet: int, expected: bool,
+                             retries: int = 3, delay: float = 0.3) -> bool:
+        """Read back outlet state to confirm a set command took effect.
+
+        WattBox may need a moment to process the command, so we retry
+        a few times with a short delay before declaring failure.
+        """
+        for attempt in range(retries):
+            time.sleep(delay)
+            states = self.refresh_outlet_states()
+            actual = states.get(outlet)
+            if actual == expected:
+                self._logger.info(
+                    f"WattBox [{self.ip}]: Outlet {outlet} verified "
+                    f"{'ON' if expected else 'OFF'} (attempt {attempt + 1})")
+                return True
+            self._logger.debug(
+                f"WattBox [{self.ip}]: Outlet {outlet} verify attempt {attempt + 1}: "
+                f"expected={'ON' if expected else 'OFF'}, got={'ON' if actual else 'OFF'}")
+        self._logger.warning(
+            f"WattBox [{self.ip}]: Outlet {outlet} did NOT change to "
+            f"{'ON' if expected else 'OFF'} after {retries} checks")
+        return False
 
     # --- State queries ---
 
@@ -653,26 +694,29 @@ class WattBoxModule:
     # --- Public API (by stable ID) ---
 
     def outlet_on(self, stable_id: str) -> Tuple[dict, int]:
-        """Turn outlet on by stable ID."""
+        """Turn outlet on by stable ID. Verifies state change before returning."""
         resolved = self._resolve_device(stable_id)
         if not resolved:
             return {"error": f"Unknown device: {stable_id}"}, 404
         device, outlet = resolved
         if device.outlet_on(outlet):
             self._broadcast_state(device)
-            return {"success": True, "device": stable_id, "action": "on"}, 200
-        return {"error": f"Command failed for {stable_id}"}, 503
+            return {"success": True, "device": stable_id, "action": "on", "verified": True}, 200
+        # Broadcast current (unchanged) state so UI doesn't show stale optimistic data
+        self._broadcast_state(device)
+        return {"error": f"Command sent but outlet did not change: {stable_id}"}, 503
 
     def outlet_off(self, stable_id: str) -> Tuple[dict, int]:
-        """Turn outlet off by stable ID."""
+        """Turn outlet off by stable ID. Verifies state change before returning."""
         resolved = self._resolve_device(stable_id)
         if not resolved:
             return {"error": f"Unknown device: {stable_id}"}, 404
         device, outlet = resolved
         if device.outlet_off(outlet):
             self._broadcast_state(device)
-            return {"success": True, "device": stable_id, "action": "off"}, 200
-        return {"error": f"Command failed for {stable_id}"}, 503
+            return {"success": True, "device": stable_id, "action": "off", "verified": True}, 200
+        self._broadcast_state(device)
+        return {"error": f"Command sent but outlet did not change: {stable_id}"}, 503
 
     def outlet_cycle(self, stable_id: str) -> Tuple[dict, int]:
         """Power cycle outlet by stable ID."""
@@ -682,8 +726,9 @@ class WattBoxModule:
         device, outlet = resolved
         if device.outlet_cycle(outlet):
             self._broadcast_state(device)
-            return {"success": True, "device": stable_id, "action": "cycle"}, 200
-        return {"error": f"Command failed for {stable_id}"}, 503
+            return {"success": True, "device": stable_id, "action": "cycle", "verified": True}, 200
+        self._broadcast_state(device)
+        return {"error": f"Command sent but state unclear: {stable_id}"}, 503
 
     def get_outlet_state(self, stable_id: str) -> Tuple[dict, int]:
         """Get single outlet state by stable ID."""

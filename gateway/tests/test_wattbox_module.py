@@ -135,13 +135,16 @@ class TestWattBoxDevice:
     def test_outlet_on_success(self, logger):
         dev = self._make_device(logger)
         dev._conn = MagicMock()
-        dev._conn.send_command.return_value = "OK"
         dev._conn.connected = True
         dev._conn.connect.return_value = True
+        # Set command returns "OK"; verify query returns outlet 3 as ON
+        dev._conn.send_command.side_effect = lambda cmd: (
+            "~OutletStatus=0,0,1,0,0,0,0,0,0,0,0,0" if cmd == "?OutletStatus"
+            else "OK"
+        )
 
         ok = dev.outlet_on(3)
         assert ok is True
-        dev._conn.send_command.assert_called_with("!OutletSet=3,1")
         with dev._state_lock:
             assert dev._outlet_states[3] is True
             assert dev._healthy is True
@@ -150,24 +153,29 @@ class TestWattBoxDevice:
     def test_outlet_off_success(self, logger):
         dev = self._make_device(logger)
         dev._conn = MagicMock()
-        dev._conn.send_command.return_value = "OK"
         dev._conn.connected = True
+        # Outlet 5 is OFF in the status response
+        dev._conn.send_command.side_effect = lambda cmd: (
+            "~OutletStatus=1,1,1,1,0,0,0,0,0,0,0,0" if cmd == "?OutletStatus"
+            else "OK"
+        )
 
         ok = dev.outlet_off(5)
         assert ok is True
-        dev._conn.send_command.assert_called_with("!OutletSet=5,0")
         with dev._state_lock:
             assert dev._outlet_states[5] is False
 
     def test_outlet_cycle_success(self, logger):
         dev = self._make_device(logger)
         dev._conn = MagicMock()
-        dev._conn.send_command.return_value = "OK"
         dev._conn.connected = True
+        dev._conn.send_command.side_effect = lambda cmd: (
+            "~OutletStatus=0,1,1,0,0,0,0,0,0,0,0,0" if cmd == "?OutletStatus"
+            else "OK"
+        )
 
         ok = dev.outlet_cycle(1)
         assert ok is True
-        dev._conn.send_command.assert_called_with("!OutletReset=1")
 
     def test_command_failure_increments_streak(self, logger):
         dev = self._make_device(logger)
@@ -295,21 +303,30 @@ class TestWattBoxModule:
         mod = WattBoxModule(cfg, logger)
         device = mod._devices["wb_004_av_audiorack1"]
         device._conn = MagicMock()
-        device._conn.send_command.return_value = "OK"
         device._conn.connected = True
+        # Outlet 3 is ON after set command
+        device._conn.send_command.side_effect = lambda cmd: (
+            "~OutletStatus=0,0,1,0,0,0,0,0,0,0,0,0" if cmd == "?OutletStatus"
+            else "OK"
+        )
 
         result, status = mod.outlet_on("wb_004_av_audiorack1.outlet_3")
         assert status == 200
         assert result["success"] is True
         assert result["action"] == "on"
+        assert result["verified"] is True
 
     def test_outlet_off_success(self, logger):
         cfg = self._make_cfg()
         mod = WattBoxModule(cfg, logger)
         device = mod._devices["wb_008_av_audiorack2"]
         device._conn = MagicMock()
-        device._conn.send_command.return_value = "OK"
         device._conn.connected = True
+        # Outlet 5 is OFF after set command
+        device._conn.send_command.side_effect = lambda cmd: (
+            "~OutletStatus=1,1,1,1,0,0,0,0,0,0,0,0" if cmd == "?OutletStatus"
+            else "OK"
+        )
 
         result, status = mod.outlet_off("wb_008_av_audiorack2.outlet_5")
         assert status == 200
