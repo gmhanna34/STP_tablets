@@ -264,6 +264,10 @@ class OBSModule:
              timeout: float = 10.0) -> Tuple[Optional[dict], Optional[str]]:
         """Execute OBS request and return (response_dict, error_string).
 
+        On transient connection errors (not timeouts), reconnects and retries
+        once before marking OBS offline.  This prevents a single dropped
+        WebSocket frame from taking down the whole OBS session.
+
         response_dict matches obs-websocket-http JSON format for backward compat.
         """
         if not self._online or not self._connected:
@@ -271,39 +275,73 @@ class OBSModule:
         with self._lock:
             if not self._ws:
                 return None, "obs-websocket is not connected."
-            try:
-                req_id = self._send_request(request_type, request_data)
-                resp_d = self._recv_response(req_id, timeout)
-                ret = {
-                    "requestType": resp_d.get("requestType", request_type),
-                    "requestStatus": resp_d.get("requestStatus", {}),
-                }
-                if resp_d.get("responseData"):
-                    ret["responseData"] = resp_d["responseData"]
-                return ret, None
-            except TimeoutError:
-                return None, "The obs-websocket request timed out."
-            except Exception as e:
-                self._online = False
-                self._last_error = str(e)
-                self._disconnect()
-                return None, str(e)
+
+            last_err = None
+            for attempt in range(2):  # attempt 0 = first try, 1 = retry
+                try:
+                    if attempt > 0:
+                        # Reconnect before retry
+                        self._disconnect()
+                        if not self._do_connect():
+                            break
+                    req_id = self._send_request(request_type, request_data)
+                    resp_d = self._recv_response(req_id, timeout)
+                    ret = {
+                        "requestType": resp_d.get("requestType", request_type),
+                        "requestStatus": resp_d.get("requestStatus", {}),
+                    }
+                    if resp_d.get("responseData"):
+                        ret["responseData"] = resp_d["responseData"]
+                    return ret, None
+                except TimeoutError:
+                    # Timeouts are not retried — OBS may genuinely be busy
+                    return None, "The obs-websocket request timed out."
+                except Exception as e:
+                    last_err = e
+                    if attempt == 0:
+                        self._logger.info(
+                            f"OBS: call({request_type}) failed ({e}), "
+                            f"reconnecting and retrying…"
+                        )
+                        continue
+
+            # Both attempts failed — mark offline
+            self._online = False
+            self._last_error = str(last_err)
+            self._disconnect()
+            return None, str(last_err)
 
     def emit(self, request_type: str,
              request_data: dict = None) -> Optional[str]:
-        """Fire-and-forget OBS request. Returns error string or None on success."""
+        """Fire-and-forget OBS request. Returns error string or None on success.
+
+        Retries once on transient connection errors (same as call()).
+        """
         if not self._online or not self._connected:
             return "obs-websocket is not connected."
         with self._lock:
             if not self._ws:
                 return "obs-websocket is not connected."
-            try:
-                # Send and immediately read response (to keep socket clean)
-                req_id = self._send_request(request_type, request_data)
-                self._recv_response(req_id, timeout=5)
-                return None
-            except Exception as e:
-                return str(e)
+
+            last_err = None
+            for attempt in range(2):
+                try:
+                    if attempt > 0:
+                        self._disconnect()
+                        if not self._do_connect():
+                            break
+                    req_id = self._send_request(request_type, request_data)
+                    self._recv_response(req_id, timeout=5)
+                    return None
+                except Exception as e:
+                    last_err = e
+                    if attempt == 0:
+                        self._logger.info(
+                            f"OBS: emit({request_type}) failed ({e}), "
+                            f"reconnecting and retrying…"
+                        )
+                        continue
+            return str(last_err)
 
     # --- Status / snapshot (called from Flask/eventlet green threads) ---
 

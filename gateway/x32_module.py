@@ -134,18 +134,35 @@ class X32Poller:
             return copy.deepcopy(self._snapshot), snap_age, self._online, self._last_error
 
     def command(self, func: Callable[[Any], Any]) -> Tuple[Optional[Any], Optional[str]]:
-        """Execute a command against the mixer. If it fails, flip offline + disconnect."""
+        """Execute a command against the mixer.
+
+        On transient failure, reconnects and retries once before flipping
+        the mixer offline.  This prevents a single dropped UDP packet or
+        momentary network glitch from taking down the whole mixer session.
+        """
         with self._lock:
-            try:
-                m = self._owner.require()
-                res = func(m)
-                return res, None
-            except Exception as e:
-                self._online = False
-                self._last_error = str(e)
-                self._ping_fail_streak = self._ping_fails_to_offline
-                self._owner.disconnect()
-                return None, str(e)
+            last_err = None
+            for attempt in range(2):  # attempt 0 = first try, 1 = retry
+                try:
+                    m = self._owner.require()
+                    res = func(m)
+                    return res, None
+                except Exception as e:
+                    last_err = e
+                    if attempt == 0:
+                        self._logger.info(
+                            f"X32: command failed ({e}), reconnecting and retrying…"
+                        )
+                        self._owner.disconnect()
+                        # Small pause before reconnect to let the mixer settle
+                        time.sleep(0.5)
+                        continue
+            # Both attempts failed — flip offline
+            self._online = False
+            self._last_error = str(last_err)
+            self._ping_fail_streak = self._ping_fails_to_offline
+            self._owner.disconnect()
+            return None, str(last_err)
 
     # -------------------
     # Poll internals

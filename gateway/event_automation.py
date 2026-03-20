@@ -268,25 +268,45 @@ class EventAutomation:
     # ------------------------------------------------------------------
 
     def fetch_calendar(self) -> Tuple[List[dict], bool]:
-        """Fetch and parse the church calendar RSS feed."""
+        """Fetch and parse the church calendar RSS feed.
+
+        Retries up to 2 times with exponential backoff (3s, 6s) before
+        falling back to stale events.  This avoids 15 minutes of stale
+        data when the calendar server has a brief hiccup.
+        """
         if not self._calendar_url:
             return [], False
-        try:
-            resp = requests.get(self._calendar_url, timeout=15,
-                                headers={"User-Agent": "STP-Gateway/1.0"})
-            if resp.status_code != 200:
-                logger.warning(f"Event automation: calendar HTTP {resp.status_code}")
-                return self._events, self._feed_ok  # return stale
-            events = self._parse_rss_calendar(resp.text)
-            self._last_fetch = time.time()
-            self._feed_ok = True
-            with self._events_lock:
-                self._events = events
-            logger.info(f"Event automation: fetched {len(events)} events from calendar")
-            return events, True
-        except Exception as e:
-            logger.warning(f"Event automation: calendar fetch failed: {type(e).__name__}: {e}")
-            return self._events, self._feed_ok
+
+        max_attempts = 3
+        backoff = 3
+        for attempt in range(max_attempts):
+            try:
+                resp = requests.get(self._calendar_url, timeout=15,
+                                    headers={"User-Agent": "STP-Gateway/1.0"})
+                if resp.status_code != 200:
+                    logger.warning(f"Event automation: calendar HTTP {resp.status_code} "
+                                   f"(attempt {attempt+1}/{max_attempts})")
+                    if attempt < max_attempts - 1:
+                        time.sleep(backoff)
+                        backoff *= 2
+                        continue
+                    return self._events, self._feed_ok  # return stale
+                events = self._parse_rss_calendar(resp.text)
+                self._last_fetch = time.time()
+                self._feed_ok = True
+                with self._events_lock:
+                    self._events = events
+                logger.info(f"Event automation: fetched {len(events)} events from calendar")
+                return events, True
+            except Exception as e:
+                logger.warning(f"Event automation: calendar fetch failed "
+                               f"(attempt {attempt+1}/{max_attempts}): "
+                               f"{type(e).__name__}: {e}")
+                if attempt < max_attempts - 1:
+                    time.sleep(backoff)
+                    backoff *= 2
+
+        return self._events, self._feed_ok
 
     @staticmethod
     def _parse_rss_calendar(xml_text: str) -> List[dict]:
