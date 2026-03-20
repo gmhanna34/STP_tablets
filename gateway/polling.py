@@ -382,6 +382,44 @@ def start_pollers(ctx):
             logger.info(f"{name} poll recovered after {_poll_fail_streaks[name]} failures")
             _poll_fail_streaks[name] = 0
 
+    # ---- Service health transition tracking ----
+    # Tracks the *device* healthy state (not the poll function).
+    # Emits service:status events on transitions so tablets can show toasts.
+    _service_health: Dict[str, Optional[bool]] = {}  # None = unknown (startup)
+    _SERVICE_LABELS = {
+        "x32": "Audio Mixer (X32)",
+        "obs": "OBS Studio",
+        "moip": "Video Matrix (MoIP)",
+        "ha": "Home Assistant",
+    }
+
+    def _report_service_health(name: str, healthy: bool):
+        """Track service health and emit Socket.IO event on transitions."""
+        prev = _service_health.get(name)
+        _service_health[name] = healthy
+
+        # No event on first poll (startup) or if state unchanged
+        if prev is None or prev == healthy:
+            return
+
+        label = _SERVICE_LABELS.get(name, name)
+        if healthy:
+            logger.info(f"Service RECOVERED: {label}")
+            socketio.emit("service:status", {
+                "service": name,
+                "label": label,
+                "healthy": True,
+                "message": f"{label} reconnected",
+            })
+        else:
+            logger.warning(f"Service DOWN: {label}")
+            socketio.emit("service:status", {
+                "service": name,
+                "label": label,
+                "healthy": False,
+                "message": f"{label} is offline",
+            })
+
     def poll_x32():
         if mock_mode:
             return MockBackend.X32_STATUS
@@ -390,9 +428,11 @@ def start_pollers(ctx):
             if status:
                 status.pop("age_seconds", None)
             _poll_log_ok("X32")
+            _report_service_health("x32", bool(status and status.get("healthy")))
             return status
         except Exception as e:
             _poll_log_fail("X32", e)
+            _report_service_health("x32", False)
             return None
 
     def poll_moip():
@@ -402,10 +442,13 @@ def start_pollers(ctx):
             result, status = ctx.moip.get_receivers()
             if status < 400:
                 _poll_log_ok("MoIP")
+                _report_service_health("moip", True)
                 return result
+            _report_service_health("moip", False)
             return None
         except Exception as e:
             _poll_log_fail("MoIP", e)
+            _report_service_health("moip", False)
             return None
 
     def poll_obs():
@@ -414,9 +457,11 @@ def start_pollers(ctx):
         try:
             snap = ctx.obs.get_snapshot()
             _poll_log_ok("OBS")
+            _report_service_health("obs", snap is not None)
             return snap
         except Exception as e:
             _poll_log_fail("OBS", e)
+            _report_service_health("obs", False)
             return None
 
     def poll_projectors():
@@ -438,7 +483,16 @@ def start_pollers(ctx):
         return statuses
 
     def poll_ha_states():
-        return fetch_ha_button_states(ctx)
+        result = fetch_ha_button_states(ctx)
+        # Detect HA health: if all entities are "unavailable", HA itself is likely down
+        if result:
+            all_unavailable = all(
+                v.get("state") == "unavailable" for v in result.values()
+            )
+            _report_service_health("ha", not all_unavailable)
+        else:
+            _report_service_health("ha", False)
+        return result
 
     def _get_camlytics_raw(url):
         if not url:
