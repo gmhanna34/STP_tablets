@@ -9,3 +9,13 @@ users:
     password_hash: $2b$12$w./F8OPURrK41/79Tjr26OE0u91fFaUak4dz9teBYb3AvWlmgFL72
     role: full_access
     enabled: true
+  fr_kyrillos:
+    display_name: Fr. Kyrillos Ibrahim
+    password_hash: $2b$12$IowwGcbGSJp.9yb1R6Wl4uUd6mlYVrArtTaJ850YAhNsGrISjmZfa
+    role: full_access
+    enabled: true
+  nmorcos4:
+    display_name: Nagy Morcos
+    password_hash: $2b$12$fie5MFdvW7dfAsqSqdFDd.pl1Qyfeo6uOKZ89GBp4nUSrz4sfKMNK
+    role: full_access
+    enabled: true
