@@ -532,6 +532,8 @@ def _execute_step(ctx, step: dict, tablet: str, depth: int,
             return _step_x32_mute(ctx, step, tablet)
         elif step_type == "x32_aux_mute":
             return _step_x32_aux_mute(ctx, step, tablet)
+        elif step_type == "wattbox_power":
+            return _step_wattbox_power(ctx, step, tablet)
         elif step_type == "obs_emit":
             return _step_obs_emit(ctx, step, tablet)
         elif step_type == "ptz_preset":
@@ -844,6 +846,42 @@ def _step_epson_all(ctx, step: dict, tablet: str) -> dict:
     return {"success": True}
 
 
+def _step_wattbox_power(ctx, step: dict, tablet: str) -> dict:
+    """Control a WattBox outlet via the direct Telnet module."""
+    device_id = step.get("device", "")
+    action = step.get("action", "on")
+    if action not in ("on", "off", "cycle"):
+        return {"success": False, "error": f"Invalid action: {action}"}
+    verbose = ctx.verbose_logging
+    if verbose.is_set():
+        logger.debug(f"[VERBOSE] wattbox_power: device={device_id}, action={action}")
+    if ctx.mock_mode:
+        return {"success": True}
+    if not ctx.wattbox:
+        return {"success": False, "error": "WattBox module not available"}
+
+    start = time.time()
+    if action == "on":
+        result, status = ctx.wattbox.outlet_on(device_id)
+    elif action == "off":
+        result, status = ctx.wattbox.outlet_off(device_id)
+    else:
+        result, status = ctx.wattbox.outlet_cycle(device_id)
+    latency = (time.time() - start) * 1000
+
+    ok = status < 400
+    if verbose.is_set():
+        logger.debug(f"[VERBOSE] wattbox_power result: device={device_id} "
+                     f"action={action} status={status}")
+    ctx.db.log_action(tablet, f"macro:wattbox_power:{action}", device_id,
+                      json.dumps({"device": device_id, "action": action}),
+                      "OK" if ok else f"FAILED status={status}", latency)
+    if ok:
+        return {"success": True}
+    error_msg = result.get("error", "") if isinstance(result, dict) else str(result)
+    return {"success": False, "error": error_msg or f"WattBox {action} failed for {device_id}"}
+
+
 def _step_x32_scene(ctx, step: dict, tablet: str) -> dict:
     num = step.get("scene", 0)
     if ctx.mock_mode:
@@ -1103,6 +1141,9 @@ def _check_module_connected(ctx, target: str) -> bool:
         elif target == "moip" and ctx.moip:
             status = ctx.moip.get_status()
             return status.get("healthy", False) if isinstance(status, dict) else False
+        elif target == "wattbox" and ctx.wattbox:
+            status = ctx.wattbox.get_health()
+            return status.get("healthy", False) if isinstance(status, dict) else False
     except Exception as e:
         logger.debug(f"Module health check failed for {target}: {e}")
     return False
@@ -1301,6 +1342,8 @@ def step_summary(step: dict, macro_defs: dict) -> str:
         return f"X32 mute ch{step.get('channel', '')} {step.get('state', '')}"
     elif t == "x32_aux_mute":
         return f"X32 aux{step.get('channel', '')} mute {step.get('state', '')}"
+    elif t == "wattbox_power":
+        return f"WattBox {step.get('action', '')} {step.get('device', '')}"
     elif t == "obs_emit":
         return f"OBS {step.get('request_type', '')}"
     elif t == "ptz_preset":
