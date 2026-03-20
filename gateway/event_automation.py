@@ -504,24 +504,36 @@ class EventAutomation:
         except Exception:
             pass
 
-        # Run macro in background thread
+        # Run macro in background thread with up to 2 retries on failure
         def _run():
-            result = execute_macro(self._ctx, macro_key, "EventAutomation", 0)
-            status = "success" if result.get("success") else "failed"
-            logger.info(f"Event automation: {action} macro '{macro_key}' {status} for '{title}'")
-            self._ctx.db.log_action(
-                "EventAutomation", f"event:{action}:result", macro_key,
-                json.dumps({"event_key": event_key, "title": title, "result": result}),
-                status, 0
-            )
-            try:
-                self._ctx.socketio.emit("event_automation:result", {
-                    "event_key": event_key,
-                    "action": action,
-                    "result": result,
-                })
-            except Exception:
-                pass
+            max_attempts = 3
+            retry_delay = 120  # seconds between retries
+            for attempt in range(max_attempts):
+                if attempt > 0:
+                    logger.info(f"Event automation: retry {attempt}/{max_attempts - 1} "
+                                f"for {action} macro '{macro_key}' in {retry_delay}s")
+                    time.sleep(retry_delay)
+                result = execute_macro(self._ctx, macro_key, "EventAutomation", 0)
+                status = "success" if result.get("success") else "failed"
+                logger.info(f"Event automation: {action} macro '{macro_key}' {status} "
+                            f"for '{title}' (attempt {attempt + 1}/{max_attempts})")
+                self._ctx.db.log_action(
+                    "EventAutomation", f"event:{action}:result", macro_key,
+                    json.dumps({"event_key": event_key, "title": title,
+                                "result": result, "attempt": attempt + 1}),
+                    status, 0
+                )
+                try:
+                    self._ctx.socketio.emit("event_automation:result", {
+                        "event_key": event_key,
+                        "action": action,
+                        "result": result,
+                        "attempt": attempt + 1,
+                    })
+                except Exception:
+                    pass
+                if result.get("success"):
+                    break
 
         threading.Thread(target=_run, daemon=True, name=f"event-{action}").start()
         return {"success": True, "macro": macro_key, "action": action}

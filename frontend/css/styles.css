@@ -760,6 +760,17 @@ body {
   filter: grayscale(40%);
 }
 
+.btn.btn-stale {
+  opacity: 0.55;
+  border-style: dashed;
+}
+
+.btn.btn-unknown {
+  opacity: 0.45;
+  filter: grayscale(50%);
+  border-color: var(--text-secondary);
+}
+
 /* ── Long Press Visual Feedback ──────────────────────────── */
 
 .btn.long-press-fire {
@@ -3188,6 +3199,21 @@ body {
   white-space: pre-wrap;
   opacity: 0.8;
 }
+
+.notif-retry-btn {
+  margin-top: 6px;
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--danger);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.notif-retry-btn:hover { background: var(--danger); color: #fff; }
+.notif-retry-btn:disabled { opacity: 0.5; cursor: default; }
 
 /* ── User Menu Dropdown ──────────────────────────────────── */
 
