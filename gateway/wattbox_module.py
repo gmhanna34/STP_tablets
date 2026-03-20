@@ -223,11 +223,11 @@ class WattBoxConnection:
             if cmd_stripped.startswith("?"):
                 return self._read_response()
 
-            # For set commands (! prefix), do a brief read to check for errors.
-            # WattBox may respond with an error or echo; absence of error = success.
+            # For set commands (! prefix), read for up to 1s to capture response.
+            # WattBox may echo the command, return an error, or stay silent.
             if cmd_stripped.startswith("!"):
                 try:
-                    ready, _, _ = select.select([self._sock], [], [], 0.3)
+                    ready, _, _ = select.select([self._sock], [], [], 1.0)
                     if ready:
                         resp = self._sock.recv(4096).decode("ascii", errors="ignore").strip()
                         self._logger.info(
@@ -236,8 +236,12 @@ class WattBoxConnection:
                             self._logger.warning(
                                 f"WattBox [{self._ip}]: Set command rejected: {resp}")
                             return None
-                except Exception:
-                    pass  # Non-fatal — command may have succeeded without response
+                    else:
+                        self._logger.info(
+                            f"WattBox [{self._ip}]: Set command got no response (silent accept)")
+                except Exception as e:
+                    self._logger.info(
+                        f"WattBox [{self._ip}]: Set response read error: {e}")
             return "OK"
 
         except Exception as e:
@@ -414,6 +418,13 @@ class WattBoxDevice:
             return False
         self._logger.info(f"WattBox [{self.ip}]: _set_outlet({outlet},{label}) lock acquired")
         try:
+            # Query current state + lock status before attempting set
+            pre_status = self._conn.send_command("?OutletStatus")
+            self._logger.info(f"WattBox [{self.ip}]: Pre-set status raw: {pre_status!r}")
+
+            lock_status = self._conn.send_command(f"?OutletLock={outlet}")
+            self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} lock status: {lock_status!r}")
+
             # Send the set command
             result = self._conn.send_command(f"!OutletSet={outlet},{value}")
             if result is None:
