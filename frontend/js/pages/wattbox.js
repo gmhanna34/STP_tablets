@@ -3,6 +3,7 @@ const WattBoxPage = {
   _data: {},        // pdu_id -> device state
   _pollTimer: null,
   _expanded: new Set(),
+  _gridHandlerBound: false,
 
   render(container) {
     container.innerHTML = `
@@ -19,6 +20,7 @@ const WattBoxPage = {
         </div>
       </div>
     `;
+    this._gridHandlerBound = false;
   },
 
   async init() {
@@ -32,14 +34,13 @@ const WattBoxPage = {
   },
 
   destroy() {
-    // Timers are cleared by App.clearPageTimers()
     this._pollTimer = null;
+    this._gridHandlerBound = false;
   },
 
   // Called by App when state:wattbox Socket.IO event arrives
   onStateUpdate(data) {
     if (!data) return;
-    // Merge partial update into full state
     for (const [pduId, pduState] of Object.entries(data)) {
       this._data[pduId] = pduState;
     }
@@ -158,14 +159,12 @@ const WattBoxPage = {
       `;
     }).join('');
 
-    this._bindEvents(grid);
-  },
-
-  _bindEvents(grid) {
-    // Expand/collapse PDU cards
+    // Bind expand/collapse on header elements (recreated each render)
     grid.querySelectorAll('.wb-card-header').forEach(header => {
       header.style.cursor = 'pointer';
-      header.addEventListener('click', () => {
+      header.addEventListener('click', (e) => {
+        // Don't toggle if clicking a button inside the header
+        if (e.target.closest('.wb-toggle-btn')) return;
         const pduId = header.dataset.pdu;
         if (this._expanded.has(pduId)) {
           this._expanded.delete(pduId);
@@ -176,70 +175,95 @@ const WattBoxPage = {
       });
     });
 
-    // Outlet toggle buttons (event delegation)
-    grid.addEventListener('click', async (e) => {
-      const btn = e.target.closest('.wb-toggle-btn');
-      if (!btn || btn.disabled) return;
+    // Bind outlet toggle and reboot via event delegation — ONCE on the grid
+    if (!this._gridHandlerBound) {
+      this._gridHandlerBound = true;
+      grid.addEventListener('click', (e) => this._handleGridClick(e));
+    }
+  },
 
-      const outletId = btn.dataset.outletId;
-      const action = btn.dataset.action;
-      btn.disabled = true;
-      btn.classList.add('wb-btn-loading');
-
-      try {
-        const resp = await fetch(`/api/wattbox/${encodeURIComponent(outletId)}/power`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action }),
-        });
-        const data = await resp.json();
-        if (!resp.ok || data.error) {
-          App.showToast(data.error || `Failed to ${action} outlet`, 3000, 'error');
-        } else {
-          App.showToast(`${outletId}: ${action.toUpperCase()}`, 2000);
-          // Refresh to get updated state
-          setTimeout(() => this._refresh(), 1000);
-        }
-      } catch (err) {
-        App.showToast(`Network error: ${err.message}`, 3000, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.classList.remove('wb-btn-loading');
-      }
-    });
+  async _handleGridClick(e) {
+    // Outlet toggle buttons
+    const toggleBtn = e.target.closest('.wb-toggle-btn');
+    if (toggleBtn && !toggleBtn.disabled) {
+      e.stopPropagation();  // Don't trigger header expand
+      await this._toggleOutlet(toggleBtn);
+      return;
+    }
 
     // PDU reboot buttons
-    grid.querySelectorAll('.wb-reboot-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const pduId = btn.dataset.pduReboot;
-        const dev = this._data[pduId];
-        const label = dev ? dev.label : pduId;
+    const rebootBtn = e.target.closest('.wb-reboot-btn');
+    if (rebootBtn && !rebootBtn.disabled) {
+      e.stopPropagation();
+      await this._rebootPdu(rebootBtn);
+      return;
+    }
+  },
 
-        const confirmed = await App.showConfirm(
-          `Reboot <strong>${this._esc(label)}</strong> firmware?<br>
-           <small style="opacity:0.7;">Outlets keep power. Network connection will drop for ~30 seconds.</small>`
-        );
-        if (!confirmed) return;
+  async _toggleOutlet(btn) {
+    const outletId = btn.dataset.outletId;
+    const action = btn.dataset.action;
 
-        btn.disabled = true;
-        try {
-          const resp = await fetch(`/api/wattbox/pdu/${encodeURIComponent(pduId)}/reboot`, {
-            method: 'POST',
-          });
-          const data = await resp.json();
-          if (resp.ok) {
-            App.showToast(`${label}: Rebooting...`, 3000);
-          } else {
-            App.showToast(data.error || 'Reboot failed', 3000, 'error');
-          }
-        } catch (err) {
-          App.showToast(`Network error: ${err.message}`, 3000, 'error');
-        } finally {
-          btn.disabled = false;
-        }
+    if (!outletId || !action) {
+      console.error('WattBox: Missing outlet-id or action on button', btn);
+      return;
+    }
+
+    console.log(`WattBox: Toggling ${outletId} -> ${action}`);
+    btn.disabled = true;
+    btn.classList.add('wb-btn-loading');
+
+    try {
+      const resp = await fetch(`/api/wattbox/${encodeURIComponent(outletId)}/power`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
       });
-    });
+      const data = await resp.json();
+      console.log(`WattBox: Response for ${outletId}:`, resp.status, data);
+      if (!resp.ok || data.error) {
+        App.showToast(data.error || `Failed to ${action} outlet`, 3000, 'error');
+      } else {
+        App.showToast(`${outletId}: ${action.toUpperCase()}`, 2000);
+        // Refresh to get updated state
+        setTimeout(() => this._refresh(), 1000);
+      }
+    } catch (err) {
+      console.error(`WattBox: Network error toggling ${outletId}:`, err);
+      App.showToast(`Network error: ${err.message}`, 3000, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('wb-btn-loading');
+    }
+  },
+
+  async _rebootPdu(btn) {
+    const pduId = btn.dataset.pduReboot;
+    const dev = this._data[pduId];
+    const label = dev ? dev.label : pduId;
+
+    const confirmed = await App.showConfirm(
+      `Reboot <strong>${this._esc(label)}</strong> firmware?<br>
+       <small style="opacity:0.7;">Outlets keep power. Network connection will drop for ~30 seconds.</small>`
+    );
+    if (!confirmed) return;
+
+    btn.disabled = true;
+    try {
+      const resp = await fetch(`/api/wattbox/pdu/${encodeURIComponent(pduId)}/reboot`, {
+        method: 'POST',
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        App.showToast(`${label}: Rebooting...`, 3000);
+      } else {
+        App.showToast(data.error || 'Reboot failed', 3000, 'error');
+      }
+    } catch (err) {
+      App.showToast(`Network error: ${err.message}`, 3000, 'error');
+    } finally {
+      btn.disabled = false;
+    }
   },
 
   _esc(str) {

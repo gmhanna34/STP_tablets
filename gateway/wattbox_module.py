@@ -215,7 +215,7 @@ class WattBoxConnection:
                     command += "\r\n"
 
             cmd_stripped = command.strip()
-            self._logger.debug(f"WattBox [{self._ip}]: Sending: {cmd_stripped}")
+            self._logger.info(f"WattBox [{self._ip}]: Sending: {cmd_stripped}")
             self._sock.sendall(command.encode("ascii"))
             time.sleep(0.05)
 
@@ -230,7 +230,7 @@ class WattBoxConnection:
                     ready, _, _ = select.select([self._sock], [], [], 0.3)
                     if ready:
                         resp = self._sock.recv(4096).decode("ascii", errors="ignore").strip()
-                        self._logger.debug(
+                        self._logger.info(
                             f"WattBox [{self._ip}]: Set response: {resp!r}")
                         if resp and ("error" in resp.lower() or "denied" in resp.lower()):
                             self._logger.warning(
