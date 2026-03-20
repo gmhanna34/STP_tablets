@@ -3,9 +3,8 @@ const WattBoxPage = {
   _data: {},        // pdu_id -> device state
   _pollTimer: null,
   _expanded: new Set(),
-  _gridHandlerBound: false,
 
-  _version: '26-085b',  // page version for cache debugging
+  _version: '26-087',  // page version for cache debugging
 
   render(container) {
     console.log(`[WattBox] render() — page version ${this._version}`);
@@ -24,7 +23,6 @@ const WattBoxPage = {
         <div style="text-align:right;font-size:10px;opacity:0.3;margin-top:8px;">wb ${this._version}</div>
       </div>
     `;
-    this._gridHandlerBound = false;
   },
 
   async init() {
@@ -39,7 +37,6 @@ const WattBoxPage = {
 
   destroy() {
     this._pollTimer = null;
-    this._gridHandlerBound = false;
   },
 
   // Called by App when state:wattbox Socket.IO event arrives
@@ -101,7 +98,7 @@ const WattBoxPage = {
       `;
     }
 
-    // PDU cards
+    // PDU cards — using onclick attributes for bulletproof click handling
     grid.innerHTML = pdus.map(([pduId, dev]) => {
       const expanded = this._expanded.has(pduId);
       const outlets = dev.outlets || {};
@@ -111,7 +108,7 @@ const WattBoxPage = {
 
       return `
         <div class="wb-card ${dev.connected ? '' : 'wb-card-offline'}">
-          <div class="wb-card-header" data-pdu="${this._esc(pduId)}">
+          <div class="wb-card-header" onclick="WattBoxPage._toggleExpand('${this._escAttr(pduId)}')">
             <div class="wb-card-status">
               <span class="wb-dot ${dev.connected ? 'wb-dot-ok' : 'wb-dot-down'}"></span>
               <strong>${this._esc(dev.label || pduId)}</strong>
@@ -125,7 +122,7 @@ const WattBoxPage = {
             </div>
           </div>
           <div class="wb-card-ip">${this._esc(dev.ip)}</div>
-          <div class="wb-outlet-list ${expanded ? '' : 'hidden'}" id="wb-outlets-${this._esc(pduId)}">
+          <div class="wb-outlet-list ${expanded ? '' : 'hidden'}" id="wb-outlets-${this._escAttr(pduId)}">
             ${outletEntries.map(([num, outlet]) => `
               <div class="wb-outlet-row">
                 <div class="wb-outlet-info">
@@ -135,15 +132,13 @@ const WattBoxPage = {
                 <div class="wb-outlet-controls">
                   <span class="wb-outlet-state wb-outlet-${outlet.state}">${outlet.state.toUpperCase()}</span>
                   <button class="wb-toggle-btn ${outlet.state === 'on' ? 'wb-btn-off' : 'wb-btn-on'}"
-                          data-outlet-id="${this._esc(outlet.stable_id)}"
-                          data-action="${outlet.state === 'on' ? 'off' : 'on'}"
+                          onclick="WattBoxPage._onToggle(this, '${this._escAttr(outlet.stable_id)}', '${outlet.state === 'on' ? 'off' : 'on'}'); event.stopPropagation();"
                           ${!dev.connected ? 'disabled' : ''}>
                     <span class="material-icons">${outlet.state === 'on' ? 'power_settings_new' : 'power'}</span>
                     ${outlet.state === 'on' ? 'OFF' : 'ON'}
                   </button>
                   <button class="wb-toggle-btn wb-btn-cycle"
-                          data-outlet-id="${this._esc(outlet.stable_id)}"
-                          data-action="cycle"
+                          onclick="WattBoxPage._onToggle(this, '${this._escAttr(outlet.stable_id)}', 'cycle'); event.stopPropagation();"
                           ${!dev.connected ? 'disabled' : ''}
                           title="Power cycle (off then on)">
                     <span class="material-icons">refresh</span>
@@ -153,7 +148,9 @@ const WattBoxPage = {
             `).join('')}
             ${dev.connected ? `
               <div class="wb-pdu-actions">
-                <button class="wb-reboot-btn" data-pdu-reboot="${this._esc(pduId)}" title="Reboot PDU firmware (outlets keep power)">
+                <button class="wb-reboot-btn"
+                        onclick="WattBoxPage._onReboot('${this._escAttr(pduId)}'); event.stopPropagation();"
+                        title="Reboot PDU firmware (outlets keep power)">
                   <span class="material-icons">restart_alt</span> Reboot PDU
                 </button>
               </div>
@@ -162,67 +159,49 @@ const WattBoxPage = {
         </div>
       `;
     }).join('');
-
-    // Bind expand/collapse on header elements (recreated each render)
-    grid.querySelectorAll('.wb-card-header').forEach(header => {
-      header.style.cursor = 'pointer';
-      header.addEventListener('click', (e) => {
-        // Don't toggle if clicking a button inside the header
-        if (e.target.closest('.wb-toggle-btn')) return;
-        const pduId = header.dataset.pdu;
-        if (this._expanded.has(pduId)) {
-          this._expanded.delete(pduId);
-        } else {
-          this._expanded.add(pduId);
-        }
-        this._renderGrid();
-      });
-    });
-
-    // Bind outlet toggle and reboot via event delegation — ONCE on the grid
-    if (!this._gridHandlerBound) {
-      this._gridHandlerBound = true;
-      grid.addEventListener('click', (e) => this._handleGridClick(e));
-    }
   },
 
-  async _handleGridClick(e) {
-    // Outlet toggle buttons
-    const toggleBtn = e.target.closest('.wb-toggle-btn');
-    if (toggleBtn && !toggleBtn.disabled) {
-      e.stopPropagation();  // Don't trigger header expand
-      await this._toggleOutlet(toggleBtn);
-      return;
-    }
+  // --- Click handlers called directly from onclick attributes ---
 
-    // PDU reboot buttons
-    const rebootBtn = e.target.closest('.wb-reboot-btn');
-    if (rebootBtn && !rebootBtn.disabled) {
-      e.stopPropagation();
-      await this._rebootPdu(rebootBtn);
-      return;
+  _toggleExpand(pduId) {
+    if (this._expanded.has(pduId)) {
+      this._expanded.delete(pduId);
+    } else {
+      this._expanded.add(pduId);
     }
+    this._renderGrid();
   },
 
-  async _toggleOutlet(btn) {
-    const outletId = btn.dataset.outletId;
-    const action = btn.dataset.action;
+  _onToggle(btn, outletId, action) {
+    console.log(`[WattBox] _onToggle called: ${outletId} -> ${action}`);
+    this._toggleOutlet(btn, outletId, action);
+  },
 
+  _onReboot(pduId) {
+    console.log(`[WattBox] _onReboot called: ${pduId}`);
+    // Find the button that was clicked
+    const btn = document.querySelector(`[onclick*="_onReboot('${pduId}')"]`);
+    this._rebootPdu(btn, pduId);
+  },
+
+  async _toggleOutlet(btn, outletId, action) {
     if (!outletId || !action) {
-      console.error('WattBox: Missing outlet-id or action on button', btn);
+      console.error('WattBox: Missing outlet-id or action');
       return;
     }
 
     console.log(`WattBox: Toggling ${outletId} -> ${action}`);
-    btn.disabled = true;
-    btn.classList.add('wb-btn-loading');
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('wb-btn-loading');
+    }
 
     try {
       const resp = await fetch(`/api/wattbox/${encodeURIComponent(outletId)}/power`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
-        signal: AbortSignal.timeout(15000),  // 15s — verification retries take time
+        signal: AbortSignal.timeout(15000),
       });
       const data = await resp.json();
       console.log(`WattBox: Response for ${outletId}:`, resp.status, data);
@@ -230,20 +209,20 @@ const WattBoxPage = {
         App.showToast(data.error || `Failed to ${action} outlet`, 3000, 'error');
       } else {
         App.showToast(`${outletId}: ${action.toUpperCase()}`, 2000);
-        // Refresh to get updated state
         setTimeout(() => this._refresh(), 1000);
       }
     } catch (err) {
       console.error(`WattBox: Network error toggling ${outletId}:`, err);
       App.showToast(`Network error: ${err.message}`, 3000, 'error');
     } finally {
-      btn.disabled = false;
-      btn.classList.remove('wb-btn-loading');
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove('wb-btn-loading');
+      }
     }
   },
 
-  async _rebootPdu(btn) {
-    const pduId = btn.dataset.pduReboot;
+  async _rebootPdu(btn, pduId) {
     const dev = this._data[pduId];
     const label = dev ? dev.label : pduId;
 
@@ -253,7 +232,7 @@ const WattBoxPage = {
     );
     if (!confirmed) return;
 
-    btn.disabled = true;
+    if (btn) btn.disabled = true;
     try {
       const resp = await fetch(`/api/wattbox/pdu/${encodeURIComponent(pduId)}/reboot`, {
         method: 'POST',
@@ -267,7 +246,7 @@ const WattBoxPage = {
     } catch (err) {
       App.showToast(`Network error: ${err.message}`, 3000, 'error');
     } finally {
-      btn.disabled = false;
+      if (btn) btn.disabled = false;
     }
   },
 
@@ -275,5 +254,10 @@ const WattBoxPage = {
     const d = document.createElement('div');
     d.textContent = str || '';
     return d.innerHTML;
+  },
+
+  // Escape for use inside onclick attribute single-quoted strings
+  _escAttr(str) {
+    return (str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
   },
 };

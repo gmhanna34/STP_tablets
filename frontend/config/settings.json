@@ -1,7 +1,7 @@
 {
   "app": {
     "name": "St. Paul Control Panel",
-    "version": "26-086",
+    "version": "26-087",
     "church": "St. Paul American Coptic Orthodox Church",
     "idleTimeout": 60
   },
