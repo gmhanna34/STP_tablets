@@ -600,9 +600,11 @@ def _step_ha_service(ctx, step: dict, tablet: str) -> dict:
     if ctx.mock_mode:
         return {"success": True}
 
-    max_attempts = 2  # Retry once on server errors (e.g. WattBox telnet concurrency)
+    max_attempts = 3  # Up to 2 retries on server errors (e.g. WattBox telnet concurrency)
     last_status = 0
     last_body = ""
+    # Exponential backoff: 1s, 2s (+ jitter avoids thundering herd)
+    _BACKOFF_BASE = [1, 2]
 
     for attempt in range(max_attempts):
         try:
@@ -633,9 +635,10 @@ def _step_ha_service(ctx, step: dict, tablet: str) -> dict:
 
             # Retry on server errors (500+) — often transient (e.g. WattBox telnet conflicts)
             if resp.status_code >= 500 and attempt < max_attempts - 1:
+                backoff = _BACKOFF_BASE[min(attempt, len(_BACKOFF_BASE) - 1)]
                 logger.info(f"ha_service {domain}/{service} got {resp.status_code}, "
-                            f"retrying in 2s (attempt {attempt+1}/{max_attempts})")
-                time.sleep(2)
+                            f"retrying in {backoff}s (attempt {attempt+1}/{max_attempts})")
+                time.sleep(backoff)
                 continue
 
             # Client error (4xx) or final attempt — report failure
@@ -649,9 +652,10 @@ def _step_ha_service(ctx, step: dict, tablet: str) -> dict:
 
         except Exception as e:
             if attempt < max_attempts - 1:
+                backoff = _BACKOFF_BASE[min(attempt, len(_BACKOFF_BASE) - 1)]
                 logger.info(f"ha_service {domain}/{service} exception: {e}, "
-                            f"retrying in 2s (attempt {attempt+1}/{max_attempts})")
-                time.sleep(2)
+                            f"retrying in {backoff}s (attempt {attempt+1}/{max_attempts})")
+                time.sleep(backoff)
                 continue
             return {"success": False, "error": f"HA service failed: {e}"}
 
@@ -788,24 +792,34 @@ def _step_epson_power(ctx, step: dict, tablet: str) -> dict:
         return {"success": False, "error": f"Unknown projector: {key}"}
     if ctx.mock_mode:
         return {"success": True}
-    try:
-        start = time.time()
-        resp = http_requests.get(
-            f"http://{proj['ip']}/api/v01/contentmgr/remote/power/{state}", timeout=20)
-        latency = (time.time() - start) * 1000
-        ok = resp.status_code == 200
-        ctx.socketio.emit("state:projectors", {"event": "power", "projector": key, "state": state}, room="projectors")
-        ctx.db.log_action(tablet, "macro:epson_power", key,
-                          json.dumps({"projector": key, "state": state}),
-                          "OK" if ok else f"FAILED status={resp.status_code}", latency)
-        if ok:
-            return {"success": True}
-        return {"success": False, "error": f"Projector {key} returned HTTP {resp.status_code}"}
-    except Exception as e:
-        ctx.db.log_action(tablet, "macro:epson_power", key,
-                          json.dumps({"projector": key, "state": state}),
-                          f"FAILED: {e}", 0)
-        return {"success": False, "error": str(e)}
+
+    # Projectors are notoriously slow to respond — retry once after 3s
+    max_attempts = 2
+    last_err = None
+    for attempt in range(max_attempts):
+        try:
+            start = time.time()
+            resp = http_requests.get(
+                f"http://{proj['ip']}/api/v01/contentmgr/remote/power/{state}", timeout=20)
+            latency = (time.time() - start) * 1000
+            ok = resp.status_code == 200
+            ctx.socketio.emit("state:projectors", {"event": "power", "projector": key, "state": state}, room="projectors")
+            ctx.db.log_action(tablet, "macro:epson_power", key,
+                              json.dumps({"projector": key, "state": state}),
+                              "OK" if ok else f"FAILED status={resp.status_code}", latency)
+            if ok:
+                return {"success": True}
+            last_err = f"Projector {key} returned HTTP {resp.status_code}"
+        except Exception as e:
+            last_err = str(e)
+        if attempt < max_attempts - 1:
+            logger.info(f"epson_power {key} failed ({last_err}), retrying in 3s…")
+            time.sleep(3)
+
+    ctx.db.log_action(tablet, "macro:epson_power", key,
+                      json.dumps({"projector": key, "state": state}),
+                      f"FAILED: {last_err}", 0)
+    return {"success": False, "error": last_err}
 
 
 def _step_epson_all(ctx, step: dict, tablet: str) -> dict:
@@ -814,11 +828,18 @@ def _step_epson_all(ctx, step: dict, tablet: str) -> dict:
     if ctx.mock_mode:
         return {"success": True}
     for key, proj in projectors.items():
-        try:
-            http_requests.get(
-                f"http://{proj['ip']}/api/v01/contentmgr/remote/power/{state}", timeout=20)
-        except Exception as e:
-            logger.debug(f"Projector {key} power command failed: {e}")
+        # Retry once per projector — they can be unresponsive transiently
+        for attempt in range(2):
+            try:
+                http_requests.get(
+                    f"http://{proj['ip']}/api/v01/contentmgr/remote/power/{state}", timeout=20)
+                break  # success
+            except Exception as e:
+                if attempt == 0:
+                    logger.debug(f"Projector {key} power command failed ({e}), retrying in 3s…")
+                    time.sleep(3)
+                else:
+                    logger.debug(f"Projector {key} power command failed after retry: {e}")
     ctx.socketio.emit("state:projectors", {"event": "all_power", "state": state}, room="projectors")
     return {"success": True}
 
@@ -908,23 +929,33 @@ def _step_ptz_preset(ctx, step: dict, tablet: str) -> dict:
         return {"success": False, "error": f"Unknown camera: {cam_key}"}
     if ctx.mock_mode:
         return {"success": True}
-    try:
-        start = time.time()
-        resp = http_requests.get(
-            f"http://{cam['ip']}/cgi-bin/ptzctrl.cgi?ptzcmd&poscall&{preset}", timeout=3)
-        latency = (time.time() - start) * 1000
-        ok = resp.status_code == 200
-        ctx.db.log_action(tablet, "macro:ptz_preset", f"{cam_key}:preset_{preset}",
-                          json.dumps({"camera": cam_key, "preset": preset}),
-                          "OK" if ok else f"FAILED status={resp.status_code}", latency)
-        if ok:
-            return {"success": True}
-        return {"success": False, "error": f"Camera {cam_key} preset {preset} failed (HTTP {resp.status_code})"}
-    except Exception as e:
-        ctx.db.log_action(tablet, "macro:ptz_preset", f"{cam_key}:preset_{preset}",
-                          json.dumps({"camera": cam_key, "preset": preset}),
-                          f"FAILED: {e}", 0)
-        return {"success": False, "error": str(e)}
+
+    # Retry once after 2s — cameras can briefly drop HTTP connections
+    max_attempts = 2
+    last_err = None
+    for attempt in range(max_attempts):
+        try:
+            start = time.time()
+            resp = http_requests.get(
+                f"http://{cam['ip']}/cgi-bin/ptzctrl.cgi?ptzcmd&poscall&{preset}", timeout=5)
+            latency = (time.time() - start) * 1000
+            ok = resp.status_code == 200
+            ctx.db.log_action(tablet, "macro:ptz_preset", f"{cam_key}:preset_{preset}",
+                              json.dumps({"camera": cam_key, "preset": preset}),
+                              "OK" if ok else f"FAILED status={resp.status_code}", latency)
+            if ok:
+                return {"success": True}
+            last_err = f"Camera {cam_key} preset {preset} failed (HTTP {resp.status_code})"
+        except Exception as e:
+            last_err = str(e)
+        if attempt < max_attempts - 1:
+            logger.info(f"ptz_preset {cam_key}:{preset} failed ({last_err}), retrying in 2s…")
+            time.sleep(2)
+
+    ctx.db.log_action(tablet, "macro:ptz_preset", f"{cam_key}:preset_{preset}",
+                      json.dumps({"camera": cam_key, "preset": preset}),
+                      f"FAILED: {last_err}", 0)
+    return {"success": False, "error": last_err}
 
 
 def _get_lan_ip() -> str:

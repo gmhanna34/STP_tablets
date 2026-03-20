@@ -14,6 +14,20 @@ const NotificationCenter = {
     if (bell) bell.addEventListener('click', () => this.toggle());
     if (overlay) overlay.addEventListener('click', () => this.close());
     if (clearBtn) clearBtn.addEventListener('click', () => this.clearAll());
+
+    // Event delegation for retry buttons
+    const list = document.getElementById('notif-list');
+    if (list) {
+      list.addEventListener('click', (e) => {
+        const retryBtn = e.target.closest('.notif-retry-btn');
+        if (!retryBtn) return;
+        const macroKey = retryBtn.dataset.macro;
+        if (!macroKey || typeof MacroAPI === 'undefined') return;
+        retryBtn.disabled = true;
+        retryBtn.textContent = 'Retrying…';
+        MacroAPI.execute(macroKey);
+      });
+    }
   },
 
   // ── Public API ──────────────────────────────────────────────────────
@@ -42,7 +56,11 @@ const NotificationCenter = {
     if (status === 'completed') {
       this.add(label, 'success', `Completed (${steps_completed}/${steps_total} steps)`);
     } else if (status === 'failed') {
-      this.add(label, 'error', error || 'Unknown error', this._buildStepDetails(data));
+      const item = this.add(label, 'error', error || 'Unknown error', this._buildStepDetails(data));
+      if (data.macro) {
+        item.macro_key = data.macro;
+        item.retryable = true;
+      }
     }
     // 'warning' type is handled by the caller for partial skips — see below
   },
@@ -115,6 +133,9 @@ const NotificationCenter = {
       const detailsHtml = item.details
         ? `<div class="notif-details">${this._esc(item.details)}</div>`
         : '';
+      const retryHtml = item.retryable && item.macro_key
+        ? `<button class="notif-retry-btn" data-macro="${this._esc(item.macro_key)}">Retry</button>`
+        : '';
       return `<div class="notif-item notif-item-${item.type}">
         <span class="material-icons notif-icon">${icon}</span>
         <div class="notif-content">
@@ -124,6 +145,7 @@ const NotificationCenter = {
           </div>
           <div class="notif-message">${this._esc(item.message)}</div>
           ${detailsHtml}
+          ${retryHtml}
         </div>
       </div>`;
     }).join('');

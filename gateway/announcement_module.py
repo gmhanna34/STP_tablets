@@ -213,26 +213,34 @@ class AnnouncementModule:
         self.logger.info("[ANNOUNCE] play_on_wiim: entity=%s url=%s announce=%s ha_url=%s",
                          self.wiim_entity, audio_url, announce, ha_url)
 
-        try:
-            resp = http_requests.post(
-                ha_url,
-                headers={
-                    "Authorization": f"Bearer {ha_cfg['token']}",
-                    "Content-Type": "application/json",
-                },
-                json=play_data,
-                timeout=ha_cfg.get("timeout", 10),
-            )
-            self.logger.info("[ANNOUNCE] play_on_wiim: HA responded %d (%d bytes)",
-                             resp.status_code, len(resp.content))
-            if resp.status_code < 400:
-                return {"success": True, "ha_status": resp.status_code}
-            self.logger.error("[ANNOUNCE] play_on_wiim: HA error %d: %s",
-                              resp.status_code, resp.text[:200])
-            return {"error": f"HA play_media returned {resp.status_code}"}
-        except Exception as e:
-            self.logger.error("[ANNOUNCE] play_on_wiim failed: %s", e)
-            return {"error": f"WiiM playback failed: {e}"}
+        # Retry once on failure — WiiM/HA can be transiently unavailable
+        last_err = None
+        for attempt in range(2):
+            try:
+                resp = http_requests.post(
+                    ha_url,
+                    headers={
+                        "Authorization": f"Bearer {ha_cfg['token']}",
+                        "Content-Type": "application/json",
+                    },
+                    json=play_data,
+                    timeout=ha_cfg.get("timeout", 10),
+                )
+                self.logger.info("[ANNOUNCE] play_on_wiim: HA responded %d (%d bytes)",
+                                 resp.status_code, len(resp.content))
+                if resp.status_code < 400:
+                    return {"success": True, "ha_status": resp.status_code}
+                last_err = f"HA play_media returned {resp.status_code}"
+                self.logger.error("[ANNOUNCE] play_on_wiim: HA error %d: %s",
+                                  resp.status_code, resp.text[:200])
+            except Exception as e:
+                last_err = f"WiiM playback failed: {e}"
+                self.logger.error("[ANNOUNCE] play_on_wiim failed: %s", e)
+            if attempt == 0:
+                self.logger.info("[ANNOUNCE] play_on_wiim: retrying in 2s…")
+                time.sleep(2)
+
+        return {"error": last_err}
 
     # ---- Pre-announce Actions ----
 

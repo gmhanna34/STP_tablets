@@ -268,25 +268,45 @@ class EventAutomation:
     # ------------------------------------------------------------------
 
     def fetch_calendar(self) -> Tuple[List[dict], bool]:
-        """Fetch and parse the church calendar RSS feed."""
+        """Fetch and parse the church calendar RSS feed.
+
+        Retries up to 2 times with exponential backoff (3s, 6s) before
+        falling back to stale events.  This avoids 15 minutes of stale
+        data when the calendar server has a brief hiccup.
+        """
         if not self._calendar_url:
             return [], False
-        try:
-            resp = requests.get(self._calendar_url, timeout=15,
-                                headers={"User-Agent": "STP-Gateway/1.0"})
-            if resp.status_code != 200:
-                logger.warning(f"Event automation: calendar HTTP {resp.status_code}")
-                return self._events, self._feed_ok  # return stale
-            events = self._parse_rss_calendar(resp.text)
-            self._last_fetch = time.time()
-            self._feed_ok = True
-            with self._events_lock:
-                self._events = events
-            logger.info(f"Event automation: fetched {len(events)} events from calendar")
-            return events, True
-        except Exception as e:
-            logger.warning(f"Event automation: calendar fetch failed: {type(e).__name__}: {e}")
-            return self._events, self._feed_ok
+
+        max_attempts = 3
+        backoff = 3
+        for attempt in range(max_attempts):
+            try:
+                resp = requests.get(self._calendar_url, timeout=15,
+                                    headers={"User-Agent": "STP-Gateway/1.0"})
+                if resp.status_code != 200:
+                    logger.warning(f"Event automation: calendar HTTP {resp.status_code} "
+                                   f"(attempt {attempt+1}/{max_attempts})")
+                    if attempt < max_attempts - 1:
+                        time.sleep(backoff)
+                        backoff *= 2
+                        continue
+                    return self._events, self._feed_ok  # return stale
+                events = self._parse_rss_calendar(resp.text)
+                self._last_fetch = time.time()
+                self._feed_ok = True
+                with self._events_lock:
+                    self._events = events
+                logger.info(f"Event automation: fetched {len(events)} events from calendar")
+                return events, True
+            except Exception as e:
+                logger.warning(f"Event automation: calendar fetch failed "
+                               f"(attempt {attempt+1}/{max_attempts}): "
+                               f"{type(e).__name__}: {e}")
+                if attempt < max_attempts - 1:
+                    time.sleep(backoff)
+                    backoff *= 2
+
+        return self._events, self._feed_ok
 
     @staticmethod
     def _parse_rss_calendar(xml_text: str) -> List[dict]:
@@ -484,24 +504,36 @@ class EventAutomation:
         except Exception:
             pass
 
-        # Run macro in background thread
+        # Run macro in background thread with up to 2 retries on failure
         def _run():
-            result = execute_macro(self._ctx, macro_key, "EventAutomation", 0)
-            status = "success" if result.get("success") else "failed"
-            logger.info(f"Event automation: {action} macro '{macro_key}' {status} for '{title}'")
-            self._ctx.db.log_action(
-                "EventAutomation", f"event:{action}:result", macro_key,
-                json.dumps({"event_key": event_key, "title": title, "result": result}),
-                status, 0
-            )
-            try:
-                self._ctx.socketio.emit("event_automation:result", {
-                    "event_key": event_key,
-                    "action": action,
-                    "result": result,
-                })
-            except Exception:
-                pass
+            max_attempts = 3
+            retry_delay = 120  # seconds between retries
+            for attempt in range(max_attempts):
+                if attempt > 0:
+                    logger.info(f"Event automation: retry {attempt}/{max_attempts - 1} "
+                                f"for {action} macro '{macro_key}' in {retry_delay}s")
+                    time.sleep(retry_delay)
+                result = execute_macro(self._ctx, macro_key, "EventAutomation", 0)
+                status = "success" if result.get("success") else "failed"
+                logger.info(f"Event automation: {action} macro '{macro_key}' {status} "
+                            f"for '{title}' (attempt {attempt + 1}/{max_attempts})")
+                self._ctx.db.log_action(
+                    "EventAutomation", f"event:{action}:result", macro_key,
+                    json.dumps({"event_key": event_key, "title": title,
+                                "result": result, "attempt": attempt + 1}),
+                    status, 0
+                )
+                try:
+                    self._ctx.socketio.emit("event_automation:result", {
+                        "event_key": event_key,
+                        "action": action,
+                        "result": result,
+                        "attempt": attempt + 1,
+                    })
+                except Exception:
+                    pass
+                if result.get("success"):
+                    break
 
         threading.Thread(target=_run, daemon=True, name=f"event-{action}").start()
         return {"success": True, "macro": macro_key, "action": action}

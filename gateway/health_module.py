@@ -328,7 +328,16 @@ class HealthModule:
     # -------------------------------------------------------------------------
 
     def _run_check(self, svc: dict) -> ServiceResult:
-        """Dispatch to the appropriate check type."""
+        """Dispatch to the appropriate check type, retrying once on failure."""
+        result = self._run_check_once(svc)
+        # If the first attempt returned "down", retry once after a short pause
+        if result.status.get("level") == "down":
+            time.sleep(2)
+            result = self._run_check_once(svc)
+        return result
+
+    def _run_check_once(self, svc: dict) -> ServiceResult:
+        """Single-attempt dispatch to the appropriate check type."""
         stype = svc.get("type", "")
         try:
             if stype == "http":

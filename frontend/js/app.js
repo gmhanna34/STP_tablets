@@ -314,6 +314,16 @@ const App = {
       }
     });
 
+    // Service health transitions — show toast when a device goes down or recovers
+    this.socket.on('service:status', (data) => {
+      if (!data || !data.message) return;
+      if (data.healthy) {
+        this.showToast(data.message, 4000, 'info');
+      } else {
+        this.showToast(data.message, 5000, 'warning');
+      }
+    });
+
     // Gateway restart notification — show full-screen overlay until reconnected
     this.socket.on('gateway:restarting', (data) => {
       this._showRestartOverlay(data?.message || 'Gateway is restarting...');

@@ -2,6 +2,8 @@
 const MacroAPI = {
   _buttonCache: {},
   _stateCache: {},
+  _stateTimestamps: {},   // tracks last update time per subsystem
+  _staleSecs: 120,        // seconds before state is considered stale
   _stateListeners: [],
   _longPressDelay: 800,
 
@@ -18,12 +20,13 @@ const MacroAPI = {
     if (this._socketBound) return; // Guard against double-registration
     this._socketBound = true;
 
-    socket.on('state:ha', (data) => { this._stateCache.ha = data; this._notifyListeners(); });
-    socket.on('state:obs', (data) => { this._stateCache.obs = data; this._notifyListeners(); });
-    socket.on('state:x32', (data) => { this._stateCache.x32 = data; this._notifyListeners(); });
-    socket.on('state:projectors', (data) => { this._stateCache.projectors = data; this._notifyListeners(); });
-    socket.on('state:moip', (data) => { this._stateCache.moip = data; this._notifyListeners(); });
-    socket.on('state:camlytics', (data) => { this._stateCache.camlytics = data; this._notifyListeners(); });
+    const _track = (key, data) => { this._stateCache[key] = data; this._stateTimestamps[key] = Date.now(); this._notifyListeners(); };
+    socket.on('state:ha', (data) => _track('ha', data));
+    socket.on('state:obs', (data) => _track('obs', data));
+    socket.on('state:x32', (data) => _track('x32', data));
+    socket.on('state:projectors', (data) => _track('projectors', data));
+    socket.on('state:moip', (data) => _track('moip', data));
+    socket.on('state:camlytics', (data) => _track('camlytics', data));
 
     // Macro progress events
     socket.on('macro:progress', (data) => {
@@ -46,7 +49,7 @@ const MacroAPI = {
           }
         }
       } else if (status === 'failed') {
-        App.showToast(`${label}: FAILED — ${error || 'unknown error'}`, 6000, 'error');
+        App.showToast(`${label}: FAILED — tap bell to retry`, 6000, 'error');
         if (typeof NotificationCenter !== 'undefined') {
           NotificationCenter.addMacroResult(data);
         }
@@ -170,6 +173,17 @@ const MacroAPI = {
       console.error('MacroAPI.fetchState:', e);
       return {};
     }
+  },
+
+  // -----------------------------------------------------------------------
+  // Staleness — returns true if the subsystem data hasn't updated recently
+  // -----------------------------------------------------------------------
+
+  isStateStale(source) {
+    if (!source) return false;
+    const ts = this._stateTimestamps[source];
+    if (!ts) return true; // never received → stale
+    return (Date.now() - ts) > this._staleSecs * 1000;
   },
 
   // -----------------------------------------------------------------------
@@ -825,6 +839,7 @@ const MacroAPI = {
         const isOn = this.resolveState(item.toggle.state);
         const resolved = isOn ? item.toggle.on : item.toggle.off;
         const onStyle = item.toggle.state?.on_style || 'active';
+        const staleSource = item.toggle.state?.source;
 
         // Update icon
         const iconEl = btn.querySelector('.material-icons');
@@ -835,10 +850,10 @@ const MacroAPI = {
         if (labelEl) labelEl.textContent = resolved.label || item.label || '';
 
         // Clear previous state classes, apply current
-        btn.classList.remove('active', 'active-source', 'active-danger', 'live', 'recording');
+        btn.classList.remove('active', 'active-source', 'active-danger', 'live', 'recording', 'btn-stale', 'btn-unknown');
         // Clear dynamic btn-* style classes (but keep btn and structural classes)
         [...btn.classList].forEach(c => {
-          if (c.startsWith('btn-') && c !== 'btn-badge' && c !== 'btn-disabled-state' && c !== 'btn-label') {
+          if (c.startsWith('btn-') && c !== 'btn-badge' && c !== 'btn-disabled-state' && c !== 'btn-label' && c !== 'btn-stale' && c !== 'btn-unknown') {
             btn.classList.remove(c);
           }
         });
@@ -847,19 +862,28 @@ const MacroAPI = {
         if (resolvedStyle) {
           resolvedStyle.split(' ').filter(Boolean).forEach(s => btn.classList.add(`btn-${s}`));
         }
-        if (isOn) {
+        if (isOn === null) {
+          btn.classList.add('btn-unknown');
+        } else if (isOn) {
           btn.classList.add(onStyle);
         }
+        if (this.isStateStale(staleSource)) btn.classList.add('btn-stale');
 
       } else if (item.state) {
         // --- Regular state binding (existing behavior) ---
         const stateActive = this.resolveState(item.state);
         const onStyle = item.state.on_style || 'active';
-        if (stateActive === true) {
+        btn.classList.remove('btn-stale', 'btn-unknown');
+        if (stateActive === null) {
+          btn.classList.remove(onStyle);
+          btn.classList.add('btn-unknown');
+        } else if (stateActive === true) {
           btn.classList.add(onStyle);
+          btn.classList.remove('btn-unknown');
         } else {
           btn.classList.remove(onStyle);
         }
+        if (this.isStateStale(item.state.source)) btn.classList.add('btn-stale');
       }
 
       // --- Badge update ---
