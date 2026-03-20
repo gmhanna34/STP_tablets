@@ -4,7 +4,7 @@ const WattBoxPage = {
   _pollTimer: null,
   _expanded: new Set(),
 
-  _version: '26-089',  // page version for cache debugging
+  _version: '26-090',  // page version for cache debugging
 
   render(container) {
     console.log(`[WattBox] render() — page version ${this._version}`);

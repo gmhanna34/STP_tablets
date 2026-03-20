@@ -406,11 +406,13 @@ class WattBoxDevice:
         Holds _connection_lock for the entire operation (~2-3s) so the push
         listener thread cannot grab the socket between send and verify.
         """
+        self._logger.info(f"WattBox [{self.ip}]: _set_outlet({outlet},{label}) acquiring lock...")
         acquired = self._connection_lock.acquire(timeout=8)
         if not acquired:
             self._logger.warning(
                 f"WattBox [{self.ip}]: Lock timeout for {label} outlet {outlet}")
             return False
+        self._logger.info(f"WattBox [{self.ip}]: _set_outlet({outlet},{label}) lock acquired")
         try:
             # Send the set command
             result = self._conn.send_command(f"!OutletSet={outlet},{value}")
@@ -934,7 +936,9 @@ class WattBoxModule:
                 # Use a short timeout so we don't starve command threads.
                 acquired = device._connection_lock.acquire(timeout=0.5)
                 if not acquired:
-                    continue  # Command in progress — skip this cycle
+                    # Command thread holds the lock — yield and retry
+                    self._stop.wait(timeout=0.1)
+                    continue
                 try:
                     data = device._conn.read_push_data(timeout=1.0)
                 finally:
@@ -946,6 +950,11 @@ class WattBoxModule:
                         self._logger.debug(
                             f"WattBox [{device.pdu_id}]: Push state update received")
                         self._broadcast_state(device)
+
+                # Yield time between lock cycles so command threads can acquire
+                # the lock. Without this gap, the push listener re-acquires
+                # immediately and starves outlet set/verify operations.
+                self._stop.wait(timeout=0.2)
             except Exception as e:
                 self._logger.debug(
                     f"WattBox [{device.pdu_id}]: Listener error: {e}")
