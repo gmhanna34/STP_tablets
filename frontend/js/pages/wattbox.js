@@ -5,7 +5,10 @@ const WattBoxPage = {
   _expanded: new Set(),
   _gridHandlerBound: false,
 
+  _version: '26-085b',  // page version for cache debugging
+
   render(container) {
+    console.log(`[WattBox] render() — page version ${this._version}`);
     container.innerHTML = `
       <div class="wattbox-page">
         <div class="wattbox-header">
@@ -18,6 +21,7 @@ const WattBoxPage = {
         <div id="wb-grid" class="wb-grid">
           <div class="wb-loading">Loading WattBox devices...</div>
         </div>
+        <div style="text-align:right;font-size:10px;opacity:0.3;margin-top:8px;">wb ${this._version}</div>
       </div>
     `;
     this._gridHandlerBound = false;

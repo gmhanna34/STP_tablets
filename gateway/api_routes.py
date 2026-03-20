@@ -51,7 +51,9 @@ def register_api_routes(ctx):
 
     @app.route("/")
     def serve_index():
-        return send_from_directory(static_dir, "index.html")
+        resp = send_from_directory(static_dir, "index.html")
+        resp.cache_control.no_cache = True  # always revalidate HTML
+        return resp
 
     # File extensions that are safe to cache long-term (images, fonts)
     _LONG_CACHE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico",
@@ -68,6 +70,8 @@ def register_api_routes(ctx):
             if ext in _LONG_CACHE_EXTS:
                 resp.cache_control.max_age = 86400  # 1 day
                 resp.cache_control.public = True
+            elif ext in (".html", ".js", ".css", ".json"):
+                resp.cache_control.no_cache = True  # always revalidate code
             return resp
         slug = filepath.strip("/").lower()
         if slug in ctx.known_location_slugs:
