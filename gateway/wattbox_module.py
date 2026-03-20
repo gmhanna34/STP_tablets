@@ -223,25 +223,18 @@ class WattBoxConnection:
             if cmd_stripped.startswith("?"):
                 return self._read_response()
 
-            # For set commands (! prefix), read for up to 1s to capture response.
-            # WattBox may echo the command, return an error, or stay silent.
+            # For set commands (! prefix), briefly check for error responses.
             if cmd_stripped.startswith("!"):
                 try:
-                    ready, _, _ = select.select([self._sock], [], [], 1.0)
+                    ready, _, _ = select.select([self._sock], [], [], 0.5)
                     if ready:
                         resp = self._sock.recv(4096).decode("ascii", errors="ignore").strip()
-                        self._logger.info(
-                            f"WattBox [{self._ip}]: Set response: {resp!r}")
                         if resp and ("error" in resp.lower() or "denied" in resp.lower()):
                             self._logger.warning(
                                 f"WattBox [{self._ip}]: Set command rejected: {resp}")
                             return None
-                    else:
-                        self._logger.info(
-                            f"WattBox [{self._ip}]: Set command got no response (silent accept)")
-                except Exception as e:
-                    self._logger.info(
-                        f"WattBox [{self._ip}]: Set response read error: {e}")
+                except Exception:
+                    pass  # Non-fatal — command may have succeeded without response
             return "OK"
 
         except Exception as e:
@@ -411,18 +404,15 @@ class WattBoxDevice:
         Holds _connection_lock for the entire operation (~2-3s) so the push
         listener thread cannot grab the socket between send and verify.
         """
-        self._logger.info(f"WattBox [{self.ip}]: _set_outlet({outlet},{label}) acquiring lock...")
         acquired = self._connection_lock.acquire(timeout=8)
         if not acquired:
             self._logger.warning(
                 f"WattBox [{self.ip}]: Lock timeout for {label} outlet {outlet}")
             return False
-        self._logger.info(f"WattBox [{self.ip}]: _set_outlet({outlet},{label}) lock acquired")
         try:
             # Use text action values (ON/OFF) — firmware 2.x ignores numeric 0/1
             action_str = "ON" if value == 1 else "OFF"
             cmd = f"!OutletSet={outlet},{action_str}"
-            self._logger.info(f"WattBox [{self.ip}]: Attempting: {cmd}")
             result = self._conn.send_command(cmd)
             if result is None:
                 if self._conn.connect():
@@ -433,11 +423,11 @@ class WattBoxDevice:
                 self._record_failure()
                 return False
 
-            self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} {label} (sent, result={result!r})")
+            self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} {label} (sent)")
 
-            # Verify state — 3 attempts with increasing delays
-            for attempt in range(3):
-                delay = 0.3 * (attempt + 1)  # 0.3s, 0.6s, 0.9s
+            # Verify state — 2 attempts
+            for attempt in range(2):
+                delay = 0.3 * (attempt + 1)  # 0.3s, 0.6s
                 time.sleep(delay)
                 resp = self._conn.send_command("?OutletStatus")
                 if resp:
@@ -457,7 +447,7 @@ class WattBoxDevice:
                             f"{attempt + 1}: expected={label}, got={'ON' if actual else 'OFF'}")
 
             self._logger.warning(
-                f"WattBox [{self.ip}]: Outlet {outlet} did NOT change to {label} after 3 checks")
+                f"WattBox [{self.ip}]: Outlet {outlet} did NOT change to {label} after 2 checks")
             self._record_success()  # command sent OK, just didn't verify
             return False
         finally:
@@ -778,15 +768,11 @@ class WattBoxModule:
 
     def outlet_on(self, stable_id: str) -> Tuple[dict, int]:
         """Turn outlet on by stable ID. Verifies state change before returning."""
-        self._logger.info(f"WattBox module: outlet_on({stable_id})")
         resolved = self._resolve_device(stable_id)
         if not resolved:
-            self._logger.warning(f"WattBox module: _resolve_device returned None for {stable_id}")
             return {"error": f"Unknown device: {stable_id}"}, 404
         device, outlet = resolved
-        self._logger.info(f"WattBox module: Resolved {stable_id} -> PDU={device.pdu_id} outlet={outlet} connected={device.connected}")
         success = device.outlet_on(outlet)
-        self._logger.info(f"WattBox module: device.outlet_on({outlet}) returned {success}")
         self._broadcast_state(device)
         if success:
             return {"success": True, "device": stable_id, "action": "on", "verified": True}, 200
@@ -794,15 +780,11 @@ class WattBoxModule:
 
     def outlet_off(self, stable_id: str) -> Tuple[dict, int]:
         """Turn outlet off by stable ID. Verifies state change before returning."""
-        self._logger.info(f"WattBox module: outlet_off({stable_id})")
         resolved = self._resolve_device(stable_id)
         if not resolved:
-            self._logger.warning(f"WattBox module: _resolve_device returned None for {stable_id}")
             return {"error": f"Unknown device: {stable_id}"}, 404
         device, outlet = resolved
-        self._logger.info(f"WattBox module: Resolved {stable_id} -> PDU={device.pdu_id} outlet={outlet} connected={device.connected}")
         success = device.outlet_off(outlet)
-        self._logger.info(f"WattBox module: device.outlet_off({outlet}) returned {success}")
         self._broadcast_state(device)
         if success:
             return {"success": True, "device": stable_id, "action": "off", "verified": True}, 200
@@ -810,15 +792,11 @@ class WattBoxModule:
 
     def outlet_cycle(self, stable_id: str) -> Tuple[dict, int]:
         """Power cycle outlet by stable ID."""
-        self._logger.info(f"WattBox module: outlet_cycle({stable_id})")
         resolved = self._resolve_device(stable_id)
         if not resolved:
-            self._logger.warning(f"WattBox module: _resolve_device returned None for {stable_id}")
             return {"error": f"Unknown device: {stable_id}"}, 404
         device, outlet = resolved
-        self._logger.info(f"WattBox module: Resolved {stable_id} -> PDU={device.pdu_id} outlet={outlet} connected={device.connected}")
         success = device.outlet_cycle(outlet)
-        self._logger.info(f"WattBox module: device.outlet_cycle({outlet}) returned {success}")
         self._broadcast_state(device)
         if success:
             return {"success": True, "device": stable_id, "action": "cycle", "verified": True}, 200

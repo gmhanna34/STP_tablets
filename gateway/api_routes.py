@@ -1478,7 +1478,6 @@ def register_api_routes(ctx):
 
         # Primary: Telnet module
         wattbox = ctx.wattbox
-        logger.info(f"WattBox POST received: device={device_key} action={action} tablet={tablet} module={'loaded' if wattbox else 'NONE'}")
         if wattbox:
             start = time.time()
             if action == "on":
@@ -1491,7 +1490,7 @@ def register_api_routes(ctx):
             db.log_action(tablet, f"wattbox:{action}", device_key,
                           json.dumps({"device": device_key, "action": action}),
                           f"status={status}", latency)
-            logger.info(f"WattBox {action} -> {device_key} (Telnet) status={status} result={result} latency={latency:.0f}ms [{tablet}]")
+            logger.info(f"WattBox {action} -> {device_key} status={status} latency={latency:.0f}ms [{tablet}]")
             if isinstance(result, dict):
                 result["latency_ms"] = round(latency, 1)
             return jsonify(result), status
