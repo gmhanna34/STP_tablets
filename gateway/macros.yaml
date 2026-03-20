@@ -10,6 +10,7 @@
 #   ha_service      Call a Home Assistant service
 #   wattbox_check   Check a WattBox outlet state (direct Telnet, no HA)
 #   wattbox_power   Control a WattBox outlet on/off/cycle (direct Telnet, no HA)
+#   wattbox_reboot  Reboot a WattBox PDU firmware (Telnet !Reset, HTTP fallback)
 #   moip_switch     Switch a single video TX → RX
 #   moip_ir         Send an IR code via MoIP receiver
 #   moip_scene      Execute a pre-defined MoIP scene (DEPRECATED — use moip_switch)
@@ -1528,6 +1529,139 @@ macros:
         domain: "switch"
         service: "turn_off"
         data: { entity_id: "switch.wattbox_outlet_2" }
+
+  # --- WattBox PDU Reboot macros ---
+
+  reboot_pdu_wb1:
+    label: "Reboot WB-1 (Audio Wall)"
+    icon: "restart_alt"
+    description: "Firmware reboot of WB-1 — outlets keep power"
+    confirm: "Reboot WB-1 Audio Wall Rack? Network drops for ~30s."
+    steps:
+      - type: wattbox_reboot
+        pdu: "wb_001_audiowallrack"
+
+  reboot_pdu_wb2:
+    label: "Reboot WB-2 (Video Wall)"
+    icon: "restart_alt"
+    description: "Firmware reboot of WB-2 — outlets keep power"
+    confirm: "Reboot WB-2 Video Wall? Network drops for ~30s."
+    steps:
+      - type: wattbox_reboot
+        pdu: "wb_002_av_videowall"
+
+  reboot_pdu_wb3:
+    label: "Reboot WB-3 (Floor Switch 2)"
+    icon: "restart_alt"
+    description: "Firmware reboot of WB-3 — outlets keep power"
+    confirm: "Reboot WB-3 AV Floor Switch 2? Network drops for ~30s."
+    steps:
+      - type: wattbox_reboot
+        pdu: "wb_003_av_floorswitch2"
+
+  reboot_pdu_wb4:
+    label: "Reboot WB-4 (Audio Rack 1)"
+    icon: "restart_alt"
+    description: "Firmware reboot of WB-4 — outlets keep power"
+    confirm: "Reboot WB-4 AV Audio Rack 1? Network drops for ~30s."
+    steps:
+      - type: wattbox_reboot
+        pdu: "wb_004_av_audiorack1"
+
+  reboot_pdu_wb5:
+    label: "Reboot WB-5 (Chapel Ceiling)"
+    icon: "restart_alt"
+    description: "Firmware reboot of WB-5 — outlets keep power"
+    confirm: "Reboot WB-5 Chapel Ceiling Rack? Network drops for ~30s."
+    steps:
+      - type: wattbox_reboot
+        pdu: "wb_005_chapel_ceilingrack"
+
+  reboot_pdu_wb6:
+    label: "Reboot WB-6"
+    icon: "restart_alt"
+    description: "Firmware reboot of WB-6 — outlets keep power"
+    confirm: "Reboot WB-6? Network drops for ~30s."
+    steps:
+      - type: wattbox_reboot
+        pdu: "wb_006"
+
+  reboot_pdu_wb7:
+    label: "Reboot WB-7"
+    icon: "restart_alt"
+    description: "Firmware reboot of WB-7 — outlets keep power"
+    confirm: "Reboot WB-7? Network drops for ~30s."
+    steps:
+      - type: wattbox_reboot
+        pdu: "wb_007"
+
+  reboot_pdu_wb8:
+    label: "Reboot WB-8 (Audio Rack 2)"
+    icon: "restart_alt"
+    description: "Firmware reboot of WB-8 — outlets keep power"
+    confirm: "Reboot WB-8 AV Audio Rack 2? Network drops for ~30s."
+    steps:
+      - type: wattbox_reboot
+        pdu: "wb_008_av_audiorack2"
+
+  reboot_pdu_wb9:
+    label: "Reboot WB-9 (Floor Switch 1)"
+    icon: "restart_alt"
+    description: "Firmware reboot of WB-9 — outlets keep power"
+    confirm: "Reboot WB-9 AV Floor Switch 1? Network drops for ~30s."
+    steps:
+      - type: wattbox_reboot
+        pdu: "wb_009_av_floorswitch1"
+
+  reboot_all_pdus:
+    label: "Reboot All PDUs"
+    icon: "restart_alt"
+    description: "Firmware reboot of all 9 WattBox PDUs sequentially — outlets keep power"
+    confirm: "Reboot ALL 9 WattBox PDUs? Each drops network for ~30s."
+    steps:
+      - type: wattbox_reboot
+        pdu: "wb_001_audiowallrack"
+        on_fail: skip
+      - type: delay
+        seconds: 5
+      - type: wattbox_reboot
+        pdu: "wb_002_av_videowall"
+        on_fail: skip
+      - type: delay
+        seconds: 5
+      - type: wattbox_reboot
+        pdu: "wb_003_av_floorswitch2"
+        on_fail: skip
+      - type: delay
+        seconds: 5
+      - type: wattbox_reboot
+        pdu: "wb_004_av_audiorack1"
+        on_fail: skip
+      - type: delay
+        seconds: 5
+      - type: wattbox_reboot
+        pdu: "wb_005_chapel_ceilingrack"
+        on_fail: skip
+      - type: delay
+        seconds: 5
+      - type: wattbox_reboot
+        pdu: "wb_006"
+        on_fail: skip
+      - type: delay
+        seconds: 5
+      - type: wattbox_reboot
+        pdu: "wb_007"
+        on_fail: skip
+      - type: delay
+        seconds: 5
+      - type: wattbox_reboot
+        pdu: "wb_008_av_audiorack2"
+        on_fail: skip
+      - type: delay
+        seconds: 5
+      - type: wattbox_reboot
+        pdu: "wb_009_av_floorswitch1"
+        on_fail: skip
 
   # --- Main Church baptism camera ---
 

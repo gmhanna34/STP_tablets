@@ -18,8 +18,7 @@ const Router = {
       security: SecurityPage,
       settings: SettingsPage,
       health: HealthPage,
-      occupancy: OccupancyPage,
-      wattbox: WattBoxPage
+      occupancy: OccupancyPage
     };
 
     // Setup nav click handlers

@@ -579,6 +579,8 @@ def _execute_step(ctx, step: dict, tablet: str, depth: int,
                         logger.debug(f"Queued WattBox verification for {entry.entity_id} "
                                      f"(expect={entry.expected_state}, call={status})")
             return result
+        elif step_type == "wattbox_reboot":
+            return _step_wattbox_reboot(ctx, step, tablet)
         elif step_type == "obs_emit":
             return _step_obs_emit(ctx, step, tablet)
         elif step_type == "ptz_preset":
@@ -946,6 +948,29 @@ def _step_wattbox_power(ctx, step: dict, tablet: str) -> dict:
         return {"success": True}
     error_msg = result.get("error", "") if isinstance(result, dict) else str(result)
     return {"success": False, "error": error_msg or f"WattBox {action} failed for {device_id}"}
+
+
+def _step_wattbox_reboot(ctx, step: dict, tablet: str) -> dict:
+    """Reboot a WattBox PDU's firmware via macro step."""
+    pdu_id = step.get("pdu", "")
+    if not pdu_id:
+        return {"success": False, "error": "Missing 'pdu' in wattbox_reboot step"}
+    if ctx.mock_mode:
+        return {"success": True}
+    if not ctx.wattbox:
+        return {"success": False, "error": "WattBox module not available"}
+
+    start = time.time()
+    result, status = ctx.wattbox.reboot_pdu(pdu_id)
+    latency = (time.time() - start) * 1000
+    ok = status < 400
+    ctx.db.log_action(tablet, "macro:wattbox_reboot", pdu_id,
+                      json.dumps({"pdu": pdu_id}),
+                      "OK" if ok else f"FAILED status={status}", latency)
+    if ok:
+        return {"success": True}
+    error_msg = result.get("error", "") if isinstance(result, dict) else str(result)
+    return {"success": False, "error": error_msg or f"WattBox reboot failed for {pdu_id}"}
 
 
 def _step_x32_scene(ctx, step: dict, tablet: str) -> dict:
@@ -1441,6 +1466,8 @@ def step_summary(step: dict, macro_defs: dict) -> str:
         return f"X32 aux{step.get('channel', '')} mute {step.get('state', '')}"
     elif t == "wattbox_power":
         return f"WattBox {step.get('action', '')} {step.get('device', '')}"
+    elif t == "wattbox_reboot":
+        return f"WattBox reboot PDU {step.get('pdu', '')}"
     elif t == "obs_emit":
         return f"OBS {step.get('request_type', '')}"
     elif t == "ptz_preset":

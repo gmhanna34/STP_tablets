@@ -854,18 +854,31 @@ class WattBoxModule:
     def reboot_pdu(self, pdu_id: str) -> Tuple[dict, int]:
         """Reboot a WattBox PDU's firmware (network restart, outlets keep power).
 
-        Uses HTTP since Telnet connection may be the thing that's broken.
+        Tries Telnet !Reset first (firmware 2.x), then HTTP /reboot.cgi as fallback.
         """
         device = self._devices.get(pdu_id)
         if not device:
             return {"error": f"Unknown PDU: {pdu_id}"}, 404
 
+        # --- Method 1: Telnet !Reset (preferred for firmware 2.x) ---
+        if device.connected:
+            result = device._send("!Reset")
+            if result is not None:
+                self._logger.warning(
+                    f"WattBox [{pdu_id}]: Firmware reboot triggered via Telnet !Reset "
+                    f"(outlets remain powered)")
+                with device._state_lock:
+                    device._last_reboot = datetime.now()
+                    device._failure_streak = 0
+                return {"success": True, "pdu_id": pdu_id, "action": "reboot",
+                        "method": "telnet"}, 200
+
+        # --- Method 2: HTTP fallback (if Telnet is down) ---
         username = self._cfg.get("username", "admin")
         password = self._cfg.get("password", "")
         timeout = self._cfg.get("timeout", 10)
 
         try:
-            # WattBox HTTP reboot endpoint — restarts firmware, not outlets
             resp = http_requests.get(
                 f"http://{device.ip}/reboot.cgi",
                 auth=(username, password),
@@ -878,7 +891,8 @@ class WattBoxModule:
                 with device._state_lock:
                     device._last_reboot = datetime.now()
                     device._failure_streak = 0
-                return {"success": True, "pdu_id": pdu_id, "action": "reboot"}, 200
+                return {"success": True, "pdu_id": pdu_id, "action": "reboot",
+                        "method": "http"}, 200
 
             self._logger.warning(
                 f"WattBox [{pdu_id}]: Reboot returned HTTP {resp.status_code}")

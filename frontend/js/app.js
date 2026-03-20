@@ -284,12 +284,6 @@ const App = {
       this.refreshCurrentPage('camlytics');
     });
 
-    this.socket.on('state:wattbox', (data) => {
-      if (typeof WattBoxPage !== 'undefined' && WattBoxPage.onStateUpdate) {
-        WattBoxPage.onStateUpdate(data);
-      }
-    });
-
     this.socket.on('state:health', (data) => {
       if (data && data.counts) {
         HealthAPI.state.downCount = data.counts.down || 0;

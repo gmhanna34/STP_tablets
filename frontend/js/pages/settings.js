@@ -71,13 +71,13 @@ const SettingsPage = {
             </button>
           </div>
           <div class="control-section col-span-6">
-            <div class="section-title">WattBox Outlets</div>
+            <div class="section-title">WattBox PDUs</div>
             <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
-              Control WattBox IP power distribution outlets.
+              View and control all WattBox PDU outlets directly via Telnet.
             </div>
             <button class="btn" id="btn-open-wattbox" style="display:inline-flex;">
               <span class="material-icons">electrical_services</span>
-              <span class="btn-label">Open WattBox Panel</span>
+              <span class="btn-label">Open WattBox Device Browser</span>
             </button>
           </div>
           <div class="control-section">
@@ -549,7 +549,7 @@ const SettingsPage = {
 
     // ── Power tab ──────────────────────────────────────────────────
     document.getElementById('btn-open-smartthings')?.addEventListener('click', () => this._openSwitchPanel('SmartThings', 'SW_'));
-    document.getElementById('btn-open-wattbox')?.addEventListener('click', () => this._openSwitchPanel('WattBox', 'WB_'));
+    document.getElementById('btn-open-wattbox')?.addEventListener('click', () => this._openWattBoxDeviceBrowser());
     document.getElementById('btn-open-ecoflow')?.addEventListener('click', () => this._openEcoFlowPanel());
     this._loadBreakGlassDevices();
 
@@ -820,6 +820,203 @@ const SettingsPage = {
         renderSwitches();
       }, 5000);
     });
+  },
+
+  // =====================================================================
+  // Power Tab — WattBox Device Browser Panel
+  // =====================================================================
+
+  _wbPanelTimer: null,
+  _wbPanelData: {},
+  _wbExpanded: new Set(),
+
+  _openWattBoxDeviceBrowser() {
+    const self = this;
+    self._wbPanelData = {};
+    self._wbExpanded = new Set();
+
+    App.showPanel('WattBox Power Distribution', async (body) => {
+      body.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.5;">Loading WattBox devices...</div>';
+
+      const loadData = async () => {
+        try {
+          const resp = await fetch('/api/wattbox/devices');
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          self._wbPanelData = await resp.json();
+        } catch (e) {
+          console.error('WattBox load failed:', e);
+          self._wbPanelData = {};
+        }
+        renderPanel();
+      };
+
+      const esc = (str) => {
+        const d = document.createElement('div');
+        d.textContent = str || '';
+        return d.innerHTML;
+      };
+
+      const escAttr = (str) => (str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+      const renderPanel = () => {
+        const pdus = Object.entries(self._wbPanelData);
+        if (pdus.length === 0) {
+          body.innerHTML = `
+            <div style="text-align:center;padding:40px;">
+              <span class="material-icons" style="font-size:48px;opacity:0.3;">power_off</span>
+              <p style="opacity:0.5;">No WattBox devices available</p>
+            </div>`;
+          return;
+        }
+
+        const connected = pdus.filter(([, d]) => d.connected).length;
+        const offline = pdus.length - connected;
+
+        body.innerHTML = `
+          <div class="wb-panel-summary">
+            <span class="wb-pill wb-pill-ok">${connected} Connected</span>
+            ${offline > 0 ? `<span class="wb-pill wb-pill-down">${offline} Offline</span>` : ''}
+          </div>
+          <div class="wb-panel-grid">
+            ${pdus.map(([pduId, dev]) => {
+              const expanded = self._wbExpanded.has(pduId);
+              const outlets = dev.outlets || {};
+              const outletEntries = Object.entries(outlets).sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+              const onCount = outletEntries.filter(([, o]) => o.state === 'on').length;
+              const offCount = outletEntries.length - onCount;
+
+              return `
+                <div class="wb-card ${dev.connected ? '' : 'wb-card-offline'}" id="wb-panel-card-${escAttr(pduId)}">
+                  <div class="wb-card-header" onclick="SettingsPage._wbToggleExpand('${escAttr(pduId)}')">
+                    <div class="wb-card-status">
+                      <span class="wb-dot ${dev.connected ? 'wb-dot-ok' : 'wb-dot-down'}"></span>
+                      <strong>${esc(dev.label || pduId)}</strong>
+                    </div>
+                    <div class="wb-card-meta">
+                      ${dev.model ? `<span class="wb-meta-tag">${esc(dev.model)}</span>` : ''}
+                      ${dev.voltage ? `<span class="wb-meta-tag">${dev.voltage}V</span>` : ''}
+                      ${dev.current != null ? `<span class="wb-meta-tag">${dev.current}A</span>` : ''}
+                      <span class="wb-outlet-counts">${onCount} on / ${offCount} off</span>
+                      <span class="material-icons wb-expand-icon">${expanded ? 'expand_less' : 'expand_more'}</span>
+                    </div>
+                  </div>
+                  <div class="wb-card-ip">${esc(dev.ip)}</div>
+                  <div class="wb-outlet-list ${expanded ? '' : 'hidden'}">
+                    ${outletEntries.map(([num, outlet]) => `
+                      <div class="wb-outlet-row">
+                        <div class="wb-outlet-info">
+                          <span class="wb-outlet-num">#${num}</span>
+                          <span class="wb-outlet-name">${esc(outlet.name || 'Outlet ' + num)}</span>
+                        </div>
+                        <div class="wb-outlet-controls">
+                          <span class="wb-outlet-state wb-outlet-${outlet.state}">${outlet.state.toUpperCase()}</span>
+                          <button class="wb-toggle-btn ${outlet.state === 'on' ? 'wb-btn-off' : 'wb-btn-on'}"
+                                  onclick="SettingsPage._wbToggleOutlet(this, '${escAttr(outlet.stable_id)}', '${outlet.state === 'on' ? 'off' : 'on'}'); event.stopPropagation();"
+                                  ${!dev.connected ? 'disabled' : ''}>
+                            <span class="material-icons">${outlet.state === 'on' ? 'power_settings_new' : 'power'}</span>
+                            ${outlet.state === 'on' ? 'OFF' : 'ON'}
+                          </button>
+                          <button class="wb-toggle-btn wb-btn-cycle"
+                                  onclick="SettingsPage._wbToggleOutlet(this, '${escAttr(outlet.stable_id)}', 'cycle'); event.stopPropagation();"
+                                  ${!dev.connected ? 'disabled' : ''}
+                                  title="Power cycle (off then on)">
+                            <span class="material-icons">refresh</span>
+                          </button>
+                        </div>
+                      </div>
+                    `).join('')}
+                    ${dev.connected ? `
+                      <div class="wb-pdu-actions">
+                        <button class="wb-reboot-btn"
+                                onclick="SettingsPage._wbRebootPdu('${escAttr(pduId)}'); event.stopPropagation();"
+                                title="Reboot PDU firmware (outlets keep power)">
+                          <span class="material-icons">restart_alt</span> Reboot PDU
+                        </button>
+                      </div>
+                    ` : ''}
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>`;
+      };
+
+      await loadData();
+
+      // Auto-refresh
+      self._wbPanelTimer = setInterval(() => {
+        if (!body.isConnected) {
+          clearInterval(self._wbPanelTimer);
+          self._wbPanelTimer = null;
+          return;
+        }
+        loadData();
+      }, 5000);
+    });
+  },
+
+  _wbToggleExpand(pduId) {
+    if (this._wbExpanded.has(pduId)) {
+      this._wbExpanded.delete(pduId);
+    } else {
+      this._wbExpanded.add(pduId);
+    }
+    // Re-open panel with current data (panel remembers state via _wbExpanded)
+    this._openWattBoxDeviceBrowser();
+  },
+
+  async _wbToggleOutlet(btn, outletId, action) {
+    if (!outletId || !action) return;
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add('wb-btn-loading');
+    }
+    try {
+      const resp = await fetch(`/api/wattbox/${encodeURIComponent(outletId)}/power`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+        signal: AbortSignal.timeout(15000),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        App.showToast(`[${resp.status}] ${data.error || 'Failed'}`, 5000, 'error');
+      } else {
+        const verified = data.verified ? ' (verified)' : '';
+        App.showToast(`${action.toUpperCase()}${verified}`, 2000);
+      }
+    } catch (err) {
+      App.showToast(`Network error: ${err.message}`, 5000, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove('wb-btn-loading');
+      }
+    }
+  },
+
+  async _wbRebootPdu(pduId) {
+    const dev = this._wbPanelData[pduId];
+    const label = dev ? dev.label : pduId;
+
+    const confirmed = await App.showConfirm(
+      `Reboot <strong>${label}</strong> firmware?<br>
+       <small style="opacity:0.7;">Outlets keep power. Network connection will drop for ~30 seconds.</small>`
+    );
+    if (!confirmed) return;
+
+    try {
+      const resp = await fetch(`/api/wattbox/pdu/${encodeURIComponent(pduId)}/reboot`, {
+        method: 'POST',
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        App.showToast(`${label}: Rebooting...`, 3000);
+      } else {
+        App.showToast(data.error || 'Reboot failed', 3000, 'error');
+      }
+    } catch (err) {
+      App.showToast(`Network error: ${err.message}`, 3000, 'error');
+    }
   },
 
   // =====================================================================
