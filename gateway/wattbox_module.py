@@ -418,30 +418,36 @@ class WattBoxDevice:
             return False
         self._logger.info(f"WattBox [{self.ip}]: _set_outlet({outlet},{label}) lock acquired")
         try:
-            # Query current state + lock status before attempting set
+            # Discover firmware capabilities on first command to this device
+            firmware = self._conn.send_command("?Firmware")
+            self._logger.info(f"WattBox [{self.ip}]: Firmware: {firmware!r}")
+
+            help_text = self._conn.send_command("?Help")
+            self._logger.info(f"WattBox [{self.ip}]: Help: {help_text!r}")
+
+            # Query current state before set
             pre_status = self._conn.send_command("?OutletStatus")
             self._logger.info(f"WattBox [{self.ip}]: Pre-set status raw: {pre_status!r}")
 
-            lock_status = self._conn.send_command(f"?OutletLock={outlet}")
-            self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} lock status: {lock_status!r}")
-
-            # Send the set command
-            result = self._conn.send_command(f"!OutletSet={outlet},{value}")
+            # Try the set command — standard format first
+            cmd = f"!OutletSet={outlet},{value}"
+            self._logger.info(f"WattBox [{self.ip}]: Attempting: {cmd}")
+            result = self._conn.send_command(cmd)
             if result is None:
-                # One retry: reconnect and try again
                 if self._conn.connect():
-                    result = self._conn.send_command(f"!OutletSet={outlet},{value}")
+                    result = self._conn.send_command(cmd)
             if result is None:
                 self._logger.warning(
                     f"WattBox [{self.ip}]: Outlet {outlet} {label} failed to send")
                 self._record_failure()
                 return False
 
-            self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} {label} (sent)")
+            self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} {label} (sent, result={result!r})")
 
-            # Verify state — 2 attempts, still within same lock hold (no contention)
-            for attempt in range(2):
-                time.sleep(0.2)
+            # Verify state — 3 attempts with increasing delays
+            for attempt in range(3):
+                delay = 0.3 * (attempt + 1)  # 0.3s, 0.6s, 0.9s
+                time.sleep(delay)
                 resp = self._conn.send_command("?OutletStatus")
                 if resp:
                     states = parse_outlet_status(resp, self._outlet_count)
@@ -460,7 +466,7 @@ class WattBoxDevice:
                             f"{attempt + 1}: expected={label}, got={'ON' if actual else 'OFF'}")
 
             self._logger.warning(
-                f"WattBox [{self.ip}]: Outlet {outlet} did NOT change to {label} after 2 checks")
+                f"WattBox [{self.ip}]: Outlet {outlet} did NOT change to {label} after 3 checks")
             self._record_success()  # command sent OK, just didn't verify
             return False
         finally:
