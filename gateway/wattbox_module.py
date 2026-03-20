@@ -100,7 +100,7 @@ class WattBoxConnection:
     """
 
     def __init__(self, ip: str, port: int, username: str, password: str,
-                 logger: logging.Logger, read_timeout: float = 5.0) -> None:
+                 logger: logging.Logger, read_timeout: float = 2.0) -> None:
         self._logger = logger
         self._ip = ip
         self._port = port
@@ -359,59 +359,114 @@ class WattBoxDevice:
         return result
 
     # --- Outlet control ---
+    #
+    # These methods hold _connection_lock for the ENTIRE send+verify cycle.
+    # This prevents the push listener thread from grabbing the lock in between,
+    # which was causing 15s+ delays (lock contention × 3 acquires × read timeout).
 
     def outlet_on(self, outlet: int) -> bool:
         """Turn outlet on. Returns True if device confirms the state change."""
-        result = self._send(f"!OutletSet={outlet},1")
-        if result is None:
-            return False
-        self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} ON (sent)")
-        # Verify by reading back actual state from device
-        return self._verify_outlet_state(outlet, expected=True)
+        return self._set_outlet(outlet, value=1, expected=True, label="ON")
 
     def outlet_off(self, outlet: int) -> bool:
         """Turn outlet off. Returns True if device confirms the state change."""
-        result = self._send(f"!OutletSet={outlet},0")
-        if result is None:
-            return False
-        self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} OFF (sent)")
-        return self._verify_outlet_state(outlet, expected=False)
+        return self._set_outlet(outlet, value=0, expected=False, label="OFF")
 
     def outlet_cycle(self, outlet: int) -> bool:
         """Power cycle outlet. Returns True if command was sent."""
-        result = self._send(f"!OutletReset={outlet}")
-        if result is None:
+        acquired = self._connection_lock.acquire(timeout=8)
+        if not acquired:
+            self._logger.warning(f"WattBox [{self.ip}]: Lock timeout for cycle outlet {outlet}")
             return False
-        self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} CYCLE (sent)")
-        # Refresh all states after cycle (state goes off then on)
-        time.sleep(0.5)
-        self.refresh_outlet_states()
-        return True
+        try:
+            result = self._conn.send_command(f"!OutletReset={outlet}")
+            if result is None:
+                if self._conn.connect():
+                    result = self._conn.send_command(f"!OutletReset={outlet}")
+            if result is None:
+                self._logger.warning(f"WattBox [{self.ip}]: Outlet {outlet} CYCLE failed to send")
+                return False
+            self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} CYCLE (sent)")
+            # Brief pause then refresh states within the same lock hold
+            time.sleep(0.5)
+            resp = self._conn.send_command("?OutletStatus")
+            if resp:
+                states = parse_outlet_status(resp, self._outlet_count)
+                if states:
+                    with self._state_lock:
+                        self._outlet_states = states
+            return True
+        finally:
+            self._connection_lock.release()
+            self._record_success() if result else self._record_failure()
 
-    def _verify_outlet_state(self, outlet: int, expected: bool,
-                             retries: int = 2, delay: float = 0.2) -> bool:
-        """Read back outlet state to confirm a set command took effect.
+    def _set_outlet(self, outlet: int, value: int, expected: bool, label: str) -> bool:
+        """Send outlet set command and verify state — all under one lock hold.
 
-        WattBox may need a moment to process the command, so we retry
-        a couple times with a short delay before declaring failure.
-        Keep total time under ~3s to avoid client-side fetch timeouts.
+        Holds _connection_lock for the entire operation (~2-3s) so the push
+        listener thread cannot grab the socket between send and verify.
         """
-        for attempt in range(retries):
-            time.sleep(delay)
-            states = self.refresh_outlet_states()
-            actual = states.get(outlet)
-            if actual == expected:
-                self._logger.info(
-                    f"WattBox [{self.ip}]: Outlet {outlet} verified "
-                    f"{'ON' if expected else 'OFF'} (attempt {attempt + 1})")
-                return True
-            self._logger.debug(
-                f"WattBox [{self.ip}]: Outlet {outlet} verify attempt {attempt + 1}: "
-                f"expected={'ON' if expected else 'OFF'}, got={'ON' if actual else 'OFF'}")
-        self._logger.warning(
-            f"WattBox [{self.ip}]: Outlet {outlet} did NOT change to "
-            f"{'ON' if expected else 'OFF'} after {retries} checks")
-        return False
+        acquired = self._connection_lock.acquire(timeout=8)
+        if not acquired:
+            self._logger.warning(
+                f"WattBox [{self.ip}]: Lock timeout for {label} outlet {outlet}")
+            return False
+        try:
+            # Send the set command
+            result = self._conn.send_command(f"!OutletSet={outlet},{value}")
+            if result is None:
+                # One retry: reconnect and try again
+                if self._conn.connect():
+                    result = self._conn.send_command(f"!OutletSet={outlet},{value}")
+            if result is None:
+                self._logger.warning(
+                    f"WattBox [{self.ip}]: Outlet {outlet} {label} failed to send")
+                self._record_failure()
+                return False
+
+            self._logger.info(f"WattBox [{self.ip}]: Outlet {outlet} {label} (sent)")
+
+            # Verify state — 2 attempts, still within same lock hold (no contention)
+            for attempt in range(2):
+                time.sleep(0.2)
+                resp = self._conn.send_command("?OutletStatus")
+                if resp:
+                    states = parse_outlet_status(resp, self._outlet_count)
+                    if states:
+                        with self._state_lock:
+                            self._outlet_states = states
+                        actual = states.get(outlet)
+                        if actual == expected:
+                            self._logger.info(
+                                f"WattBox [{self.ip}]: Outlet {outlet} verified "
+                                f"{label} (attempt {attempt + 1})")
+                            self._record_success()
+                            return True
+                        self._logger.info(
+                            f"WattBox [{self.ip}]: Outlet {outlet} verify attempt "
+                            f"{attempt + 1}: expected={label}, got={'ON' if actual else 'OFF'}")
+
+            self._logger.warning(
+                f"WattBox [{self.ip}]: Outlet {outlet} did NOT change to {label} after 2 checks")
+            self._record_success()  # command sent OK, just didn't verify
+            return False
+        finally:
+            self._connection_lock.release()
+
+    def _record_success(self):
+        with self._state_lock:
+            self._last_success = datetime.now()
+            self._healthy = True
+            self._failure_streak = 0
+
+    def _record_failure(self):
+        with self._state_lock:
+            self._healthy = False
+            self._failure_streak += 1
+            streak = self._failure_streak
+        if streak == 1 or streak % 5 == 0:
+            self._logger.warning(
+                f"WattBox [{self.ip}] ({self.pdu_id}): Failure streak: {streak}")
 
     # --- State queries ---
 
