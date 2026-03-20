@@ -389,11 +389,12 @@ class WattBoxDevice:
         return True
 
     def _verify_outlet_state(self, outlet: int, expected: bool,
-                             retries: int = 3, delay: float = 0.3) -> bool:
+                             retries: int = 2, delay: float = 0.2) -> bool:
         """Read back outlet state to confirm a set command took effect.
 
         WattBox may need a moment to process the command, so we retry
-        a few times with a short delay before declaring failure.
+        a couple times with a short delay before declaring failure.
+        Keep total time under ~3s to avoid client-side fetch timeouts.
         """
         for attempt in range(retries):
             time.sleep(delay)

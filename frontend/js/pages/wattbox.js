@@ -218,6 +218,7 @@ const WattBoxPage = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
+        signal: AbortSignal.timeout(15000),  // 15s — verification retries take time
       });
       const data = await resp.json();
       console.log(`WattBox: Response for ${outletId}:`, resp.status, data);
