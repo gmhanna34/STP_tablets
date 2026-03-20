@@ -383,10 +383,11 @@ class WattBoxDevice:
             self._logger.warning(f"WattBox [{self.ip}]: Lock timeout for cycle outlet {outlet}")
             return False
         try:
-            result = self._conn.send_command(f"!OutletReset={outlet}")
+            # Use text RESET action — firmware 2.x uses ON/OFF/RESET
+            result = self._conn.send_command(f"!OutletSet={outlet},RESET")
             if result is None:
                 if self._conn.connect():
-                    result = self._conn.send_command(f"!OutletReset={outlet}")
+                    result = self._conn.send_command(f"!OutletSet={outlet},RESET")
             if result is None:
                 self._logger.warning(f"WattBox [{self.ip}]: Outlet {outlet} CYCLE failed to send")
                 return False
@@ -418,19 +419,9 @@ class WattBoxDevice:
             return False
         self._logger.info(f"WattBox [{self.ip}]: _set_outlet({outlet},{label}) lock acquired")
         try:
-            # Discover firmware capabilities on first command to this device
-            firmware = self._conn.send_command("?Firmware")
-            self._logger.info(f"WattBox [{self.ip}]: Firmware: {firmware!r}")
-
-            help_text = self._conn.send_command("?Help")
-            self._logger.info(f"WattBox [{self.ip}]: Help: {help_text!r}")
-
-            # Query current state before set
-            pre_status = self._conn.send_command("?OutletStatus")
-            self._logger.info(f"WattBox [{self.ip}]: Pre-set status raw: {pre_status!r}")
-
-            # Try the set command — standard format first
-            cmd = f"!OutletSet={outlet},{value}"
+            # Use text action values (ON/OFF) — firmware 2.x ignores numeric 0/1
+            action_str = "ON" if value == 1 else "OFF"
+            cmd = f"!OutletSet={outlet},{action_str}"
             self._logger.info(f"WattBox [{self.ip}]: Attempting: {cmd}")
             result = self._conn.send_command(cmd)
             if result is None:
