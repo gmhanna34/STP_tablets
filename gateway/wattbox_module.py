@@ -525,7 +525,7 @@ class WattBoxDevice:
             self._logger.warning(
                 f"WattBox [{self.ip}]: Empty name for outlet {outlet}")
             return False
-        result = self._send(f"!OutletName={outlet},{clean_name}")
+        result = self._send(f"!OutletNameSet={outlet},{clean_name}")
         if result is None:
             self._logger.warning(
                 f"WattBox [{self.ip}]: Failed to set outlet {outlet} name")
