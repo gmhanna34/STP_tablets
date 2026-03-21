@@ -92,19 +92,21 @@ All retries are conservative (1–2 extra attempts) to avoid masking real failur
 ## What's Left
 
 ### Task #2: WattBox Device Browser (Frontend)
-**Status:** Not started
+**Status:** Complete
 **Priority:** Medium
 **Depends on:** Task #1 (complete)
 
-Build a frontend page/panel that surfaces the WattBox module's REST API data:
-- Grid/list view of all 9 PDUs and their outlets
-- Real-time outlet state (on/off) via Socket.IO events
-- Manual outlet toggle (for troubleshooting)
-- PDU health indicators (connection status, uptime, voltage/current if available)
-- Firmware reboot button per PDU (with confirmation dialog)
-- Possibly integrate into the existing health page or as a new `#/wattbox` page
-
-The backend APIs already exist (`/api/wattbox/devices`, `/api/wattbox/health`). This is purely a frontend task.
+Built a full WattBox Device Browser panel in the Settings page (`frontend/js/pages/settings.js`):
+- Grid view of all 9 PDUs with per-outlet cards showing friendly names and on/off state
+- Real-time outlet state via Socket.IO events (joins `wattbox` room)
+- Manual outlet toggle buttons for troubleshooting
+- PDU health indicators (connection status)
+- Firmware reboot button per PDU with confirmation dialog
+- Outlet rename support (sends `!OutletNameSet` via Telnet)
+- Break-glass direct WattBox control panel (bypasses HA entirely)
+- Integrated into Settings page Power tab, accessible via "Open WattBox Device Browser" button
+- Dedicated CSS styles (`.wattbox-page`, `.wattbox-header`)
+- Permission gated via `permissions.json` (`wattbox: true`)
 
 ### Task #3: Remove HA WattBox Integration
 **Status:** Not started — **should wait for production validation of Task #1**
@@ -147,6 +149,8 @@ Once the direct Telnet path is confirmed stable:
 | `frontend/js/app.js` | +23 | Service status toasts, stale indicators |
 | `frontend/js/api/macro.js` | +46 | Retry button in notification panel |
 | `frontend/js/api/notifications.js` | +24 | HA call failure notifications |
-| `frontend/css/styles.css` | +26 | Stale/unknown button indicators |
+| `frontend/js/pages/settings.js` | +500~ | WattBox Device Browser panel, break-glass control, outlet rename |
+| `frontend/css/styles.css` | +150~ | Stale/unknown indicators, WattBox Device Browser styles |
+| `frontend/config/permissions.json` | +1 | `wattbox` permission flag |
 
-**Total:** ~2,460 lines added across 19 files.
+**Total:** ~3,100+ lines added across 22 files.
