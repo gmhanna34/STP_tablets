@@ -349,6 +349,22 @@ const SettingsPage = {
 
         <div class="page-grid" style="margin-top:12px;">
           <div class="control-section" style="grid-column:1/-1;">
+            <div class="section-title">
+              <span class="material-icons" style="font-size:18px;vertical-align:middle;margin-right:4px;">schema</span>
+              Macro Builder
+            </div>
+            <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+              Build and edit gateway macros visually, then hand them off to Scheduled Automations without editing raw YAML.
+            </div>
+            <button class="btn" id="btn-open-macro-builder">
+              <span class="material-icons">schema</span>
+              <span class="btn-label">Open Macro Builder</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="page-grid" style="margin-top:12px;">
+          <div class="control-section" style="grid-column:1/-1;">
             <div class="section-title">Apply Changes</div>
             <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
               Save writes to config.yaml (backup created automatically).
@@ -596,6 +612,7 @@ const SettingsPage = {
     // Raw file editors
     document.getElementById('btn-edit-config-yaml')?.addEventListener('click', () => this._openFileEditor('config'));
     document.getElementById('btn-edit-macros-yaml')?.addEventListener('click', () => this._openFileEditor('macros'));
+    document.getElementById('btn-open-macro-builder')?.addEventListener('click', () => this._openMacroBuilder());
 
     // ── Admin tab ──────────────────────────────────────────────────
     // Role selection
@@ -3245,6 +3262,796 @@ const SettingsPage = {
     const days = Math.floor(hours / 24);
     if (days < 7) return `${days}d ago`;
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  },
+
+  // =========================================================================
+  // MACRO BUILDER
+  // =========================================================================
+
+  _mbCatalog: [],
+  _mbOptions: {},
+  _mbDraft: null,
+  _mbSearch: '',
+
+  _mbEmptyDraft() {
+    return {
+      key: '',
+      label: '',
+      description: '',
+      confirm: '',
+      category: '',
+      managed: true,
+      supported: true,
+      steps: [],
+    };
+  },
+
+  _mbClone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  },
+
+  async _openMacroBuilder(initialKey = '') {
+    this._mbSearch = '';
+    this._mbDraft = this._mbEmptyDraft();
+
+    App.showPanel('Macro Builder', async (body) => {
+      body.style.padding = '0';
+      body.style.width = '92vw';
+      body.style.maxWidth = '1320px';
+      body.style.maxHeight = '88vh';
+      body.style.overflow = 'hidden';
+
+      body.innerHTML = `<div style="padding:24px;text-align:center;opacity:0.6;">Loading macro builder…</div>`;
+
+      try {
+        const resp = await fetch('/api/macro-builder', { signal: AbortSignal.timeout(8000) });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        this._mbCatalog = data.macros || [];
+        this._mbOptions = data.options || {};
+
+        if (initialKey) {
+          await this._mbLoadMacro(initialKey);
+        } else {
+          const preferred = this._mbCatalog.find(m => m.managed && m.supported) || this._mbCatalog.find(m => m.supported);
+          if (preferred) {
+            await this._mbLoadMacro(preferred.key);
+          }
+        }
+
+        this._mbRender(body);
+        body.addEventListener('click', (e) => this._mbHandleClick(body, e));
+        body.addEventListener('input', (e) => this._mbHandleInput(body, e));
+        body.addEventListener('change', (e) => this._mbHandleInput(body, e));
+      } catch (e) {
+        body.innerHTML = `<div style="padding:24px;color:var(--danger);">Failed to load Macro Builder: ${this._escHtml(e.message)}</div>`;
+      }
+    });
+  },
+
+  async _mbLoadMacro(key) {
+    const resp = await fetch(`/api/macro-builder/${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    this._mbDraft = {
+      key: data.key || key,
+      label: data.label || key,
+      description: data.description || '',
+      confirm: data.confirm || '',
+      category: data.category || '',
+      managed: !!data.managed,
+      supported: data.supported !== false,
+      steps: this._mbClone(data.steps || []),
+      raw: data.raw || null,
+    };
+  },
+
+  _mbRender(body) {
+    const draft = this._mbDraft || this._mbEmptyDraft();
+    const readonly = draft.supported === false;
+    const search = (this._mbSearch || '').toLowerCase();
+    const filteredMacros = (this._mbCatalog || []).filter(m => {
+      if (!search) return true;
+      return (m.key || '').toLowerCase().includes(search)
+        || (m.label || '').toLowerCase().includes(search)
+        || (m.description || '').toLowerCase().includes(search);
+    });
+
+    body.innerHTML = `
+      <div style="display:grid;grid-template-columns:280px 1fr;height:88vh;min-height:700px;background:var(--surface);">
+        <aside style="border-right:1px solid var(--border);padding:16px;overflow:auto;background:var(--surface-alt);">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+            <button class="btn" data-mb-action="new" style="flex:1;min-height:auto;padding:8px 10px;">
+              <span class="material-icons" style="font-size:16px;">add</span>
+              <span class="btn-label">New Macro</span>
+            </button>
+            <button class="btn" data-mb-action="duplicate" ${draft.key ? '' : 'disabled'} style="min-height:auto;padding:8px 10px;" title="Duplicate current macro">
+              <span class="material-icons" style="font-size:16px;">content_copy</span>
+            </button>
+          </div>
+          <div class="switch-search-bar" style="margin:0 0 12px 0;">
+            <span class="material-icons" style="opacity:0.5;font-size:16px;">search</span>
+            <input type="text" class="switch-search-input" data-mb-field="search" placeholder="Filter macros..." value="${this._escAttr(this._mbSearch || '')}" style="font-size:12px;">
+          </div>
+          <div style="display:grid;gap:6px;">
+            ${filteredMacros.map(m => `
+              <button class="btn ${m.key === draft.key ? 'active' : ''}" data-mb-action="load" data-key="${this._escAttr(m.key)}"
+                style="justify-content:flex-start;text-align:left;max-width:none;padding:10px 12px;min-height:auto;${m.supported ? '' : 'opacity:0.75;'}">
+                <div style="display:flex;flex-direction:column;align-items:flex-start;width:100%;gap:2px;">
+                  <div style="display:flex;align-items:center;gap:6px;width:100%;">
+                    <span class="material-icons" style="font-size:15px;color:${m.supported ? 'var(--accent)' : 'var(--warn)'};">${m.supported ? (m.managed ? 'schema' : 'play_circle') : 'warning'}</span>
+                    <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${this._escHtml(m.label || m.key)}</span>
+                  </div>
+                  <div style="font-size:11px;color:var(--text-secondary);">${this._escHtml(m.key)}</div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    ${m.managed ? '<span style="font-size:10px;padding:2px 6px;border-radius:999px;background:rgba(33,150,243,0.18);color:var(--accent);">Builder</span>' : ''}
+                    ${!m.supported ? '<span style="font-size:10px;padding:2px 6px;border-radius:999px;background:rgba(255,152,0,0.18);color:var(--warn);">Read-only</span>' : ''}
+                    ${m.category ? `<span style="font-size:10px;padding:2px 6px;border-radius:999px;background:var(--surface);color:var(--text-secondary);">${this._escHtml(m.category)}</span>` : ''}
+                  </div>
+                </div>
+              </button>
+            `).join('') || '<div style="opacity:0.6;font-size:12px;text-align:center;padding:20px;">No macros match your search.</div>'}
+          </div>
+        </aside>
+        <main style="display:flex;flex-direction:column;overflow:hidden;">
+          <div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+            <div>
+              <div style="font-size:1.2rem;font-weight:700;">${this._escHtml(draft.label || draft.key || 'New Macro')}</div>
+              <div style="font-size:12px;color:var(--text-secondary);">${readonly ? 'Read-only preview — unsupported step types must stay in raw YAML.' : 'Builder-managed macro. Save writes directly to macros.yaml with a backup.'}</div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn" data-mb-action="preview" style="min-height:auto;padding:8px 12px;">
+                <span class="material-icons" style="font-size:16px;">code</span>
+                <span class="btn-label">Preview YAML</span>
+              </button>
+              <button class="btn" data-mb-action="schedule" ${draft.key ? '' : 'disabled'} style="min-height:auto;padding:8px 12px;">
+                <span class="material-icons" style="font-size:16px;">schedule</span>
+                <span class="btn-label">Schedule</span>
+              </button>
+              <button class="btn danger" data-mb-action="delete" ${(draft.key && draft.managed) ? '' : 'disabled'} style="min-height:auto;padding:8px 12px;">
+                <span class="material-icons" style="font-size:16px;">delete</span>
+                <span class="btn-label">Delete</span>
+              </button>
+              <button class="btn btn-success" data-mb-action="save" ${readonly ? 'disabled' : ''} style="min-height:auto;padding:8px 12px;background:#00b050;border-color:#00b050;">
+                <span class="material-icons" style="font-size:16px;">save</span>
+                <span class="btn-label">Save Macro</span>
+              </button>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:minmax(0, 1fr) 340px;gap:0;flex:1;min-height:0;">
+            <section style="overflow:auto;padding:18px;">
+              <div class="control-section" style="margin-bottom:14px;">
+                <div class="section-title">Macro Details</div>
+                ${readonly ? '<div class="info-text" style="margin-bottom:8px;color:var(--warn);">This macro contains advanced step types outside the current builder scope. You can review it here and use the raw YAML editor for deeper edits.</div>' : ''}
+                <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:10px;">
+                  <div>
+                    <label style="font-size:11px;opacity:0.75;">Macro Key</label>
+                    <input type="text" data-mb-field="key" value="${this._escAttr(draft.key || '')}" ${readonly ? 'disabled' : ''} placeholder="e.g. restart_chapel_appletv"
+                      style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+                  </div>
+                  <div>
+                    <label style="font-size:11px;opacity:0.75;">Display Name</label>
+                    <input type="text" data-mb-field="label" value="${this._escAttr(draft.label || '')}" ${readonly ? 'disabled' : ''} placeholder="Friendly name shown in builder"
+                      style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+                  </div>
+                  <div style="grid-column:1/-1;">
+                    <label style="font-size:11px;opacity:0.75;">Description</label>
+                    <input type="text" data-mb-field="description" value="${this._escAttr(draft.description || '')}" ${readonly ? 'disabled' : ''} placeholder="What this macro does"
+                      style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+                  </div>
+                  <div>
+                    <label style="font-size:11px;opacity:0.75;">Category</label>
+                    <input type="text" data-mb-field="category" value="${this._escAttr(draft.category || '')}" ${readonly ? 'disabled' : ''} placeholder="Power, Routing, Utility..."
+                      style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+                  </div>
+                  <div>
+                    <label style="font-size:11px;opacity:0.75;">Confirmation Message</label>
+                    <input type="text" data-mb-field="confirm" value="${this._escAttr(draft.confirm || '')}" ${readonly ? 'disabled' : ''} placeholder="Optional confirmation before run"
+                      style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+                  </div>
+                </div>
+              </div>
+
+              <div class="control-section">
+                <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
+                  <span>Macro Steps</span>
+                  ${readonly ? '' : `
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                      ${this._mbQuickAddButton('ha_service', 'HA Action', 'smart_home')}
+                      ${this._mbQuickAddButton('wattbox_power', 'WattBox', 'electrical_services')}
+                      ${this._mbQuickAddButton('moip_switch', 'MoIP Route', 'settings_input_hdmi')}
+                      ${this._mbQuickAddButton('delay', 'Delay', 'hourglass_empty')}
+                      ${this._mbQuickAddButton('parallel', 'Parallel', 'splitscreen')}
+                      ${this._mbQuickAddButton('condition', 'Condition', 'call_split')}
+                      ${this._mbQuickAddButton('macro', 'Call Macro', 'play_circle')}
+                    </div>
+                  `}
+                </div>
+                <div class="info-text" style="margin-bottom:12px;">Build steps top-to-bottom. Use Parallel for simultaneous actions and Condition for verify/recovery branches.</div>
+                ${this._mbRenderStepContainer(draft.steps || [], 'steps', readonly)}
+              </div>
+            </section>
+
+            <aside style="border-left:1px solid var(--border);overflow:auto;padding:18px;background:var(--surface-alt);">
+              <div class="control-section" style="margin-bottom:14px;">
+                <div class="section-title">Builder Notes</div>
+                <div class="info-text" style="font-size:13px;">
+                  <ul style="margin:0;padding-left:18px;display:grid;gap:6px;">
+                    <li>Use <strong>Verify</strong> on critical HA and WattBox power steps.</li>
+                    <li><strong>Cycle</strong> is best for one-shot outlet restarts; for precise off/wait/on, use three explicit steps.</li>
+                    <li>Parallel groups should only contain independent actions.</li>
+                    <li>After saving, use <strong>Schedule</strong> to create cron-style timed runs.</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="control-section">
+                <div class="section-title">Live Preview</div>
+                <div id="mb-preview-status" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Preview generated from the current draft.</div>
+                <pre id="mb-preview" style="margin:0;white-space:pre-wrap;word-break:break-word;max-height:55vh;overflow:auto;font-size:11px;line-height:1.5;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;">Loading preview…</pre>
+              </div>
+            </aside>
+          </div>
+        </main>
+      </div>
+    `;
+
+    this._mbRefreshPreview(body);
+  },
+
+  _mbQuickAddButton(stepType, label, icon) {
+    return `<button class="btn" data-mb-action="add-root-step" data-step-type="${stepType}" style="min-height:auto;padding:6px 10px;font-size:11px;">
+      <span class="material-icons" style="font-size:15px;">${icon}</span>
+      <span class="btn-label">${label}</span>
+    </button>`;
+  },
+
+  _mbRenderStepContainer(steps, containerPath, readonly, title = '') {
+    const items = Array.isArray(steps) ? steps : [];
+    return `
+      <div style="display:grid;gap:10px;">
+        ${title ? `<div style="font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.04em;">${this._escHtml(title)}</div>` : ''}
+        ${items.map((step, idx) => this._mbRenderStep(step, `${containerPath}.${idx}`, readonly, idx, items.length)).join('')}
+        ${items.length === 0 ? '<div style="padding:14px;border:1px dashed var(--border);border-radius:8px;text-align:center;opacity:0.6;">No steps yet.</div>' : ''}
+        ${readonly ? '' : `
+          <div style="display:flex;justify-content:flex-start;">
+            <button class="btn" data-mb-action="add-step" data-container="${containerPath}" style="min-height:auto;padding:8px 12px;">
+              <span class="material-icons" style="font-size:16px;">add</span>
+              <span class="btn-label">Add Step</span>
+            </button>
+          </div>
+        `}
+      </div>
+    `;
+  },
+
+  _mbRenderStep(step, path, readonly, idx, total) {
+    const stepType = step.type || 'delay';
+    const titleMap = {
+      ha_service: 'Home Assistant Action',
+      wattbox_power: 'WattBox Power',
+      moip_switch: 'MoIP Route',
+      delay: 'Delay',
+      macro: 'Run Macro',
+      parallel: 'Parallel Group',
+      condition: 'Condition',
+    };
+    const verifyEnabled = step.verify === true || typeof step.verify === 'object';
+    const verify = typeof step.verify === 'object' ? step.verify : {};
+    const onFail = step.on_fail || 'abort';
+
+    let inner = '';
+    if (stepType === 'ha_service') {
+      const data = step.data || {};
+      inner = `
+        <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:10px;">
+          ${this._mbField(path, 'domain', 'Domain', step.domain || 'switch', readonly)}
+          ${this._mbField(path, 'service', 'Service', step.service || 'turn_on', readonly)}
+          ${this._mbField(path, 'data.entity_id', 'Entity ID', data.entity_id || '', readonly, 'switch.example_outlet')}
+          ${this._mbField(path, 'label', 'Optional Step Label', step.label || '', readonly, 'Turn on projector outlet')}
+        </div>
+      `;
+    } else if (stepType === 'wattbox_power') {
+      const options = (this._mbOptions.wattbox_devices || []).map(dev =>
+        `<option value="${this._escAttr(dev.key)}"${dev.key === step.device ? ' selected' : ''}>${this._escHtml(dev.label || dev.key)}</option>`
+      ).join('');
+      inner = `
+        <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:10px;">
+          <div>
+            <label style="font-size:11px;opacity:0.75;">Outlet</label>
+            <select data-mb-step-field="${path}|device" ${readonly ? 'disabled' : ''}
+              style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+              <option value="">Select outlet…</option>
+              ${options}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;opacity:0.75;">Action</label>
+            <select data-mb-step-field="${path}|action" ${readonly ? 'disabled' : ''}
+              style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+              <option value="on"${step.action === 'on' ? ' selected' : ''}>Turn On</option>
+              <option value="off"${step.action === 'off' ? ' selected' : ''}>Turn Off</option>
+              <option value="cycle"${step.action === 'cycle' ? ' selected' : ''}>Cycle</option>
+            </select>
+          </div>
+          ${this._mbField(path, 'label', 'Optional Step Label', step.label || '', readonly, 'Power cycle Apple TV')}
+        </div>
+      `;
+    } else if (stepType === 'moip_switch') {
+      const txOptions = (this._mbOptions.moip_transmitters || []).map(tx =>
+        `<option value="${this._escAttr(String(tx.id ?? ''))}"${String(tx.id ?? '') === String(step.tx ?? '') ? ' selected' : ''}>${this._escHtml(tx.name || `TX ${tx.id}`)}</option>`
+      ).join('');
+      const rxOptions = (this._mbOptions.moip_receivers || []).map(rx =>
+        `<option value="${this._escAttr(String(rx.id ?? ''))}"${String(rx.id ?? '') === String(step.rx ?? '') ? ' selected' : ''}>${this._escHtml(rx.name || `RX ${rx.id}`)}</option>`
+      ).join('');
+      inner = `
+        <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:10px;">
+          <div>
+            <label style="font-size:11px;opacity:0.75;">Source (TX)</label>
+            <select data-mb-step-field="${path}|tx" ${readonly ? 'disabled' : ''}
+              style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+              <option value="">Select source…</option>
+              ${txOptions}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;opacity:0.75;">Destination (RX)</label>
+            <select data-mb-step-field="${path}|rx" ${readonly ? 'disabled' : ''}
+              style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+              <option value="">Select destination…</option>
+              ${rxOptions}
+            </select>
+          </div>
+          ${this._mbField(path, 'label', 'Optional Step Label', step.label || '', readonly, 'Route podium to chapel TV')}
+        </div>
+      `;
+    } else if (stepType === 'delay') {
+      inner = `
+        <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:10px;">
+          ${this._mbField(path, 'seconds', 'Seconds', step.seconds ?? 10, readonly, '10', 'number')}
+          ${this._mbField(path, 'message', 'Progress Message', step.message || '', readonly, 'Waiting for device reboot')}
+        </div>
+      `;
+    } else if (stepType === 'macro') {
+      const macroOptions = (this._mbCatalog || [])
+        .filter(m => m.key !== this._mbDraft.key)
+        .map(m => `<option value="${this._escAttr(m.key)}"${m.key === step.macro ? ' selected' : ''}>${this._escHtml(m.label || m.key)}</option>`)
+        .join('');
+      inner = `
+        <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:10px;">
+          <div>
+            <label style="font-size:11px;opacity:0.75;">Nested Macro</label>
+            <select data-mb-step-field="${path}|macro" ${readonly ? 'disabled' : ''}
+              style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+              <option value="">Select macro…</option>
+              ${macroOptions}
+            </select>
+          </div>
+          ${this._mbField(path, 'label', 'Optional Step Label', step.label || '', readonly, 'Boot shared audio')}
+        </div>
+      `;
+    } else if (stepType === 'parallel') {
+      inner = `
+        ${this._mbField(path, 'label', 'Group Label', step.label || '', readonly, 'Run rack boot actions together')}
+        <div style="margin-top:10px;padding:12px;border:1px dashed var(--border);border-radius:8px;background:rgba(255,255,255,0.02);">
+          ${this._mbRenderStepContainer(step.steps || [], `${path}.steps`, readonly, 'Parallel Steps')}
+        </div>
+      `;
+    } else if (stepType === 'condition') {
+      const check = step.check || {};
+      inner = `
+        <div style="display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:10px;">
+          <div>
+            <label style="font-size:11px;opacity:0.75;">Check Type</label>
+            <select data-mb-step-field="${path}|check.type" ${readonly ? 'disabled' : ''}
+              style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+              <option value="ha_check"${check.type === 'ha_check' ? ' selected' : ''}>Home Assistant State</option>
+              <option value="wattbox_check"${check.type === 'wattbox_check' ? ' selected' : ''}>WattBox State</option>
+            </select>
+          </div>
+          ${check.type === 'wattbox_check'
+            ? `<div>
+                <label style="font-size:11px;opacity:0.75;">WattBox Device</label>
+                <select data-mb-step-field="${path}|check.device" ${readonly ? 'disabled' : ''}
+                  style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+                  <option value="">Select outlet…</option>
+                  ${(this._mbOptions.wattbox_devices || []).map(dev => `<option value="${this._escAttr(dev.key)}"${dev.key === check.device ? ' selected' : ''}>${this._escHtml(dev.label || dev.key)}</option>`).join('')}
+                </select>
+              </div>`
+            : this._mbField(path, 'check.entity', 'Entity ID', check.entity || '', readonly, 'switch.example_outlet')}
+          ${this._mbField(path, 'check.expect', 'Expected State', check.expect || 'on', readonly, 'on')}
+        </div>
+        ${this._mbField(path, 'label', 'Condition Label', step.label || '', readonly, 'If device is off, recover it')}
+        <div style="display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px;">
+          <div style="padding:12px;border:1px dashed var(--border);border-radius:8px;background:rgba(255,255,255,0.02);">
+            ${this._mbRenderStepContainer(step.then || [], `${path}.then`, readonly, 'Then')}
+          </div>
+          <div style="padding:12px;border:1px dashed var(--border);border-radius:8px;background:rgba(255,255,255,0.02);">
+            ${this._mbRenderStepContainer(step.else || [], `${path}.else`, readonly, 'Else')}
+          </div>
+        </div>
+      `;
+    }
+
+    const showVerify = stepType === 'ha_service' || stepType === 'wattbox_power';
+
+    return `
+      <div style="border:1px solid var(--border);border-radius:10px;padding:14px;background:var(--card-bg);display:grid;gap:12px;">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;">
+          <div style="display:flex;align-items:center;gap:8px;font-weight:700;">
+            ${this._stepIcon(stepType)}
+            <span>${this._escHtml(titleMap[stepType] || stepType)}</span>
+          </div>
+          ${readonly ? '' : `
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn" data-mb-action="move-step" data-direction="up" data-path="${path}" ${idx === 0 ? 'disabled' : ''} style="min-height:auto;padding:6px 8px;"><span class="material-icons" style="font-size:16px;">arrow_upward</span></button>
+              <button class="btn" data-mb-action="move-step" data-direction="down" data-path="${path}" ${idx === total - 1 ? 'disabled' : ''} style="min-height:auto;padding:6px 8px;"><span class="material-icons" style="font-size:16px;">arrow_downward</span></button>
+              <button class="btn" data-mb-action="duplicate-step" data-path="${path}" style="min-height:auto;padding:6px 8px;"><span class="material-icons" style="font-size:16px;">content_copy</span></button>
+              <button class="btn btn-danger" data-mb-action="remove-step" data-path="${path}" style="min-height:auto;padding:6px 8px;"><span class="material-icons" style="font-size:16px;">delete</span></button>
+            </div>
+          `}
+        </div>
+        ${inner}
+        ${showVerify ? `
+          <div style="padding:12px;border-radius:8px;background:var(--surface);border:1px solid var(--border);display:grid;gap:10px;">
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+              <input type="checkbox" data-mb-step-field="${path}|verify.enabled" ${verifyEnabled ? 'checked' : ''} ${readonly ? 'disabled' : ''}>
+              <span>Verify device state after this step</span>
+            </label>
+            ${verifyEnabled ? `
+              <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:10px;">
+                ${this._mbField(path, 'verify.state', 'Expected State', verify.state || (stepType === 'ha_service' ? (step.service === 'turn_off' ? 'off' : 'on') : (step.action === 'off' ? 'off' : 'on')), readonly, 'on')}
+                ${this._mbField(path, 'verify.timeout', 'Timeout (s)', verify.timeout ?? 10, readonly, '10', 'number')}
+                ${this._mbField(path, 'verify.retries', 'Retries', verify.retries ?? 2, readonly, '2', 'number')}
+                <div>
+                  <label style="font-size:11px;opacity:0.75;">On Failure</label>
+                  <select data-mb-step-field="${path}|on_fail" ${readonly ? 'disabled' : ''}
+                    style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+                    <option value="abort"${onFail === 'abort' ? ' selected' : ''}>Abort macro</option>
+                    <option value="skip"${onFail === 'skip' ? ' selected' : ''}>Continue / skip</option>
+                  </select>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  },
+
+  _mbField(path, field, label, value, readonly, placeholder = '', type = 'text') {
+    return `<div>
+      <label style="font-size:11px;opacity:0.75;">${this._escHtml(label)}</label>
+      <input type="${type}" data-mb-step-field="${path}|${field}" value="${this._escAttr(String(value ?? ''))}" ${readonly ? 'disabled' : ''} placeholder="${this._escAttr(placeholder)}"
+        style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--input-border);background:var(--input-bg);color:var(--text);font-size:13px;font-family:inherit;">
+    </div>`;
+  },
+
+  _mbHandleInput(body, event) {
+    const target = event.target;
+    if (!target) return;
+
+    if (target.dataset.mbField === 'search') {
+      this._mbSearch = target.value || '';
+      this._mbRender(body);
+      return;
+    }
+
+    const topField = target.dataset.mbField;
+    if (topField) {
+      this._mbDraft[topField] = target.value;
+      this._mbRefreshPreview(body);
+      return;
+    }
+
+    const stepField = target.dataset.mbStepField;
+    if (!stepField) return;
+    const [path, field] = stepField.split('|');
+    this._mbSetField(path, field, target.type === 'checkbox' ? target.checked : target.value);
+    if (field === 'check.type') {
+      this._mbRender(body);
+      return;
+    }
+    this._mbRefreshPreview(body);
+  },
+
+  async _mbHandleClick(body, event) {
+    const btn = event.target.closest('[data-mb-action]');
+    if (!btn) return;
+    const action = btn.dataset.mbAction;
+
+    try {
+      if (action === 'new') {
+        this._mbDraft = this._mbEmptyDraft();
+        this._mbRender(body);
+      } else if (action === 'load') {
+        const key = btn.dataset.key;
+        if (!key) return;
+        await this._mbLoadMacro(key);
+        this._mbRender(body);
+      } else if (action === 'duplicate') {
+        if (!this._mbDraft) return;
+        const sourceKey = this._mbDraft.key || 'macro';
+        this._mbDraft = {
+          ...this._mbClone(this._mbDraft),
+          key: `${sourceKey}_copy`,
+          label: `${this._mbDraft.label || sourceKey} Copy`,
+          managed: true,
+          supported: true,
+        };
+        this._mbRender(body);
+      } else if (action === 'add-root-step') {
+        this._mbDraft.steps.push(this._mbDefaultStep(btn.dataset.stepType));
+        this._mbRender(body);
+      } else if (action === 'add-step') {
+        this._mbAddStep(btn.dataset.container || 'root');
+        this._mbRender(body);
+      } else if (action === 'remove-step') {
+        this._mbRemoveStep(btn.dataset.path);
+        this._mbRender(body);
+      } else if (action === 'duplicate-step') {
+        this._mbDuplicateStep(btn.dataset.path);
+        this._mbRender(body);
+      } else if (action === 'move-step') {
+        this._mbMoveStep(btn.dataset.path, btn.dataset.direction);
+        this._mbRender(body);
+      } else if (action === 'save') {
+        await this._mbSave(body);
+      } else if (action === 'delete') {
+        await this._mbDelete(body);
+      } else if (action === 'preview') {
+        await this._mbRefreshPreview(body, true);
+      } else if (action === 'schedule') {
+        this._openScheduleForMacro(this._mbDraft.key, this._mbDraft.label || this._mbDraft.key);
+      }
+    } catch (e) {
+      App.showToast(e.message || 'Macro Builder action failed', 4000, 'error');
+    }
+  },
+
+  _mbDefaultStep(stepType) {
+    if (stepType === 'ha_service') return { type: 'ha_service', domain: 'switch', service: 'turn_on', data: { entity_id: '' } };
+    if (stepType === 'wattbox_power') return { type: 'wattbox_power', device: '', action: 'cycle' };
+    if (stepType === 'moip_switch') return { type: 'moip_switch', tx: '', rx: '' };
+    if (stepType === 'macro') return { type: 'macro', macro: '' };
+    if (stepType === 'parallel') return { type: 'parallel', steps: [] };
+    if (stepType === 'condition') return { type: 'condition', check: { type: 'ha_check', entity: '', expect: 'on' }, then: [], else: [] };
+    return { type: 'delay', seconds: 10, message: '' };
+  },
+
+  _mbPathSegments(path) {
+    if (!path || path === 'root') return [];
+    return path.split('.').filter(seg => seg && seg !== 'root');
+  },
+
+  _mbResolve(path) {
+    let node = this._mbDraft;
+    for (const seg of this._mbPathSegments(path)) {
+      if (node == null) return null;
+      node = /^\d+$/.test(seg) ? node[parseInt(seg, 10)] : node[seg];
+    }
+    return node;
+  },
+
+  _mbResolveParent(path) {
+    const parts = this._mbPathSegments(path);
+    if (!parts.length) return null;
+    const last = parts.pop();
+    let node = this._mbDraft;
+    for (const seg of parts) {
+      node = /^\d+$/.test(seg) ? node[parseInt(seg, 10)] : node[seg];
+      if (node == null) return null;
+    }
+    return { parent: node, key: last };
+  },
+
+  _mbContainerRef(containerPath) {
+    if (!containerPath || containerPath === 'root') {
+      return { parent: this._mbDraft, key: 'steps', list: this._mbDraft.steps };
+    }
+    const ref = this._mbResolveParent(containerPath);
+    if (!ref) return null;
+    return { ...ref, list: ref.parent[ref.key] };
+  },
+
+  _mbSetField(path, field, value) {
+    const step = this._mbResolve(path);
+    if (!step) return;
+
+    if (field === 'verify.enabled') {
+      if (value) {
+        step.verify = typeof step.verify === 'object' ? step.verify : {};
+      } else {
+        delete step.verify;
+        if (step.on_fail === 'skip') delete step.on_fail;
+      }
+      return;
+    }
+
+    let target = step;
+    const parts = field.split('.');
+    const leaf = parts.pop();
+    for (const seg of parts) {
+      if (!target[seg] || typeof target[seg] !== 'object') target[seg] = {};
+      target = target[seg];
+    }
+
+    let nextValue = value;
+    if (leaf === 'seconds' || leaf === 'timeout' || leaf === 'retries') {
+      nextValue = value === '' ? '' : Number(value);
+    }
+    if (target === step && leaf === 'on_fail' && !nextValue) {
+      delete step.on_fail;
+      return;
+    }
+    target[leaf] = nextValue;
+  },
+
+  _mbAddStep(containerPath) {
+    const ref = this._mbContainerRef(containerPath);
+    if (!ref || !Array.isArray(ref.list)) return;
+    ref.list.push(this._mbDefaultStep('delay'));
+  },
+
+  _mbRemoveStep(path) {
+    const ref = this._mbResolveParent(path);
+    if (!ref) return;
+    ref.parent.splice(parseInt(ref.key, 10), 1);
+  },
+
+  _mbDuplicateStep(path) {
+    const ref = this._mbResolveParent(path);
+    if (!ref) return;
+    const idx = parseInt(ref.key, 10);
+    ref.parent.splice(idx + 1, 0, this._mbClone(ref.parent[idx]));
+  },
+
+  _mbMoveStep(path, direction) {
+    const ref = this._mbResolveParent(path);
+    if (!ref) return;
+    const idx = parseInt(ref.key, 10);
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= ref.parent.length) return;
+    const [item] = ref.parent.splice(idx, 1);
+    ref.parent.splice(swapIdx, 0, item);
+  },
+
+  _mbValidateDraft() {
+    const errors = [];
+    const draft = this._mbDraft || {};
+    if (!draft.key?.trim()) errors.push('Macro key is required.');
+    if (!draft.label?.trim()) errors.push('Display name is required.');
+    if (!Array.isArray(draft.steps) || draft.steps.length === 0) errors.push('At least one step is required.');
+
+    const walk = (steps, prefix) => {
+      (steps || []).forEach((step, idx) => {
+        const here = `${prefix} ${idx + 1}`;
+        if (step.type === 'ha_service') {
+          if (!step.domain) errors.push(`${here}: Home Assistant domain is required.`);
+          if (!step.service) errors.push(`${here}: Home Assistant service is required.`);
+          if (!step.data?.entity_id) errors.push(`${here}: Home Assistant entity ID is required.`);
+        } else if (step.type === 'wattbox_power') {
+          if (!step.device) errors.push(`${here}: WattBox outlet is required.`);
+        } else if (step.type === 'moip_switch') {
+          if (!step.tx || !step.rx) errors.push(`${here}: MoIP source and destination are required.`);
+        } else if (step.type === 'macro') {
+          if (!step.macro) errors.push(`${here}: Nested macro is required.`);
+        } else if (step.type === 'parallel') {
+          if (!(step.steps || []).length) errors.push(`${here}: Parallel group needs at least one child step.`);
+          walk(step.steps || [], `${here} → parallel`);
+        } else if (step.type === 'condition') {
+          if (!step.check?.type) errors.push(`${here}: Condition type is required.`);
+          if (step.check?.type === 'ha_check' && !step.check?.entity) errors.push(`${here}: Condition entity is required.`);
+          if (step.check?.type === 'wattbox_check' && !step.check?.device) errors.push(`${here}: Condition outlet is required.`);
+          if (step.check?.expect === '' || step.check?.expect == null) errors.push(`${here}: Condition expected state is required.`);
+          walk(step.then || [], `${here} → then`);
+          walk(step.else || [], `${here} → else`);
+        }
+      });
+    };
+    walk(draft.steps || [], 'Step');
+    return errors;
+  },
+
+  async _mbSave(body) {
+    const errors = this._mbValidateDraft();
+    if (errors.length) {
+      App.showToast(errors[0], 5000, 'error');
+      return;
+    }
+    const resp = await fetch('/api/macro-builder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(this._mbDraft),
+      signal: AbortSignal.timeout(10000),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      const detail = data.details?.[0] || data.error || 'Save failed';
+      throw new Error(detail);
+    }
+    this._mbDraft = {
+      ...(data.macro || this._mbDraft),
+      steps: this._mbClone((data.macro || this._mbDraft).steps || []),
+    };
+    await this._mbReloadCatalog();
+    this.loadMacroDropdown();
+    this._mbRender(body);
+    App.showToast(`Saved macro: ${this._mbDraft.label || this._mbDraft.key}`, 2500);
+  },
+
+  async _mbDelete(body) {
+    const draft = this._mbDraft || {};
+    if (!draft.key) return;
+    if (!await App.showConfirm(`Delete macro "${draft.label || draft.key}"?`)) return;
+    const resp = await fetch(`/api/macro-builder/${encodeURIComponent(draft.key)}`, {
+      method: 'DELETE',
+      signal: AbortSignal.timeout(8000),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Delete failed');
+    await this._mbReloadCatalog();
+    this._mbDraft = this._mbEmptyDraft();
+    this.loadMacroDropdown();
+    this._mbRender(body);
+    App.showToast(`Deleted macro: ${draft.label || draft.key}`, 2500);
+  },
+
+  async _mbReloadCatalog() {
+    const resp = await fetch('/api/macro-builder', { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    this._mbCatalog = data.macros || [];
+    this._mbOptions = data.options || this._mbOptions || {};
+  },
+
+  async _mbRefreshPreview(body, toastOnSuccess = false) {
+    const previewEl = body.querySelector('#mb-preview');
+    const statusEl = body.querySelector('#mb-preview-status');
+    if (!previewEl || !statusEl) return;
+    previewEl.textContent = 'Generating preview…';
+    statusEl.textContent = 'Validating current draft…';
+    try {
+      const resp = await fetch('/api/macro-builder/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this._mbDraft || this._mbEmptyDraft()),
+        signal: AbortSignal.timeout(8000),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        previewEl.textContent = (data.details || [data.error || 'Preview failed']).join('\n');
+        statusEl.textContent = 'Preview blocked by validation errors.';
+        return;
+      }
+      previewEl.textContent = data.preview || '';
+      statusEl.textContent = 'Preview is valid and matches the current draft.';
+      if (toastOnSuccess) App.showToast('YAML preview refreshed', 2000);
+    } catch (e) {
+      previewEl.textContent = `Preview failed: ${e.message}`;
+      statusEl.textContent = 'Could not generate preview.';
+    }
+  },
+
+  _openScheduleForMacro(macroKey, label) {
+    if (!macroKey) return;
+    App.closePanel();
+    this._switchTab('schedule');
+    this.loadMacroDropdown().then(() => {
+      this._resetScheduleForm();
+      const form = document.getElementById('schedule-form');
+      form?.classList.remove('hidden');
+      const macroSelect = document.getElementById('sched-macro');
+      const nameInput = document.getElementById('sched-name');
+      if (macroSelect) {
+        macroSelect.value = macroKey;
+        this._showMacroDetails(macroKey);
+      }
+      if (nameInput && !nameInput.value) {
+        nameInput.value = label ? `${label} Schedule` : `${macroKey} Schedule`;
+      }
+      App.showToast(`Scheduling ${label || macroKey}`, 2500);
+    });
   },
 
   // =========================================================================
