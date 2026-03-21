@@ -2193,7 +2193,8 @@ const SettingsPage = {
     }
 
     let html = '';
-    const todayStr = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     for (const [date, events] of Object.entries(groups)) {
       const dateObj = new Date(date + 'T12:00:00');
       const dayLabel = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });

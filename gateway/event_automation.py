@@ -577,7 +577,39 @@ class EventAutomation:
         except Exception:
             pass
 
+        # Fire HA webhook alert if any checks failed
+        if not all_ok:
+            self._fire_preflight_alert(event_key, preflight)
+
         return preflight
+
+    def _fire_preflight_alert(self, event_key: str, preflight: dict):
+        """Send a webhook alert to Home Assistant when preflight checks fail."""
+        try:
+            webhook_url = self._ctx.cfg.get("healthdash", {}).get("alerts", {}).get("ha_webhook_url", "")
+            if not webhook_url:
+                return
+
+            failed = {cid: r for cid, r in preflight["checks"].items()
+                      if r.get("level") not in ("ok", "expected_off")}
+
+            payload = {
+                "type": "preflight_failure",
+                "event_key": event_key,
+                "timestamp": preflight["timestamp"],
+                "failed_checks": {cid: {"name": r.get("name", cid),
+                                         "level": r.get("level", "unknown"),
+                                         "message": r.get("message", "")}
+                                  for cid, r in failed.items()},
+                "total_checks": len(preflight["checks"]),
+                "failed_count": len(failed),
+            }
+
+            requests.post(webhook_url, json=payload, timeout=5)
+            logger.info(f"Event automation: preflight ALERT sent for {event_key} "
+                        f"({len(failed)}/{len(preflight['checks'])} failed)")
+        except Exception as e:
+            logger.warning(f"Event automation: preflight alert webhook failed: {e}")
 
     def _cleanup_old_state(self, now: datetime):
         """Remove state entries for events more than 24 hours old."""

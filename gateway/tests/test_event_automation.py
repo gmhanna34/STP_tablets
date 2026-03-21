@@ -92,6 +92,7 @@ def _make_ctx():
     ctx = MagicMock()
     ctx.mock_mode = True
     ctx.health = None
+    ctx.cfg = {"healthdash": {"alerts": {"ha_webhook_url": ""}}}
     ctx.db = MagicMock()
     ctx.db.get_event_overrides.return_value = []
     ctx.socketio = MagicMock()
@@ -561,6 +562,47 @@ class TestPreflight:
         result = ea.run_preflight(events[0]["key"])
         assert result["success"] is True
         assert result["result"]["all_ok"] is True
+
+    @patch("event_automation.requests.post")
+    def test_preflight_failure_fires_alert(self, mock_post):
+        ctx = _make_ctx()
+        ctx.cfg = {"healthdash": {"alerts": {"ha_webhook_url": "http://ha.local/webhook"}}}
+        ctx.health = MagicMock()
+        ctx.health.get_all_results.return_value = {
+            "x32_module": {"status": {"level": "down"}, "message": "Connection refused", "name": "X32 Audio"},
+            "moip_module": {"status": {"level": "ok"}, "message": "Healthy", "name": "MoIP Video"},
+        }
+        ea = EventAutomation(SAMPLE_CFG, ctx)
+        now = datetime.now(TZ)
+        ea._events = [
+            {"title": "Chapel Vespers", "start": now + timedelta(hours=2), "end": now + timedelta(hours=5)},
+        ]
+        events = ea.get_upcoming_events(hours=48)
+        result = ea.run_preflight(events[0]["key"])
+        assert result["result"]["all_ok"] is False
+        mock_post.assert_called_once()
+        payload = mock_post.call_args[1]["json"]
+        assert payload["type"] == "preflight_failure"
+        assert payload["failed_count"] == 1
+        assert "x32_module" in payload["failed_checks"]
+
+    @patch("event_automation.requests.post")
+    def test_preflight_success_no_alert(self, mock_post):
+        ctx = _make_ctx()
+        ctx.cfg = {"healthdash": {"alerts": {"ha_webhook_url": "http://ha.local/webhook"}}}
+        ctx.health = MagicMock()
+        ctx.health.get_all_results.return_value = {
+            "x32_module": {"status": {"level": "ok"}, "message": "Healthy", "name": "X32 Audio"},
+            "moip_module": {"status": {"level": "ok"}, "message": "Healthy", "name": "MoIP Video"},
+        }
+        ea = EventAutomation(SAMPLE_CFG, ctx)
+        now = datetime.now(TZ)
+        ea._events = [
+            {"title": "Chapel Vespers", "start": now + timedelta(hours=2), "end": now + timedelta(hours=5)},
+        ]
+        events = ea.get_upcoming_events(hours=48)
+        ea.run_preflight(events[0]["key"])
+        mock_post.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
