@@ -28,6 +28,8 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
+import xml.etree.ElementTree as ET
+
 import requests as http_requests
 import urllib3
 
@@ -304,6 +306,8 @@ class WattBoxDevice:
         self.pdu_id = pdu_id
         self.ip = ip
         self.label = label
+        self._username = username
+        self._password = password
 
         self._conn = WattBoxConnection(ip, port, username, password, logger)
         self._connection_lock = threading.Lock()
@@ -483,8 +487,10 @@ class WattBoxDevice:
             return dict(self._outlet_states)
 
     def refresh_outlet_names(self) -> Dict[int, str]:
-        """Query outlet names from device."""
+        """Query outlet names from device. Tries Telnet first, falls back to HTTP XML."""
         names: Dict[int, str] = {}
+
+        # Method 1: Telnet ?OutletName=N queries
         for i in range(1, self._outlet_count + 1):
             response = self._send(f"?OutletName={i}")
             if response:
@@ -492,9 +498,38 @@ class WattBoxDevice:
                 if parsed:
                     names[parsed[0]] = parsed[1]
             time.sleep(0.05)  # Don't flood
+
+        # Method 2: HTTP /wattbox_info.xml fallback if Telnet returned no names
+        if not names:
+            names = self._fetch_outlet_names_http()
+
         if names:
             with self._state_lock:
                 self._outlet_names = names
+        return names
+
+    def _fetch_outlet_names_http(self) -> Dict[int, str]:
+        """Scrape outlet names from /wattbox_info.xml as fallback."""
+        names: Dict[int, str] = {}
+        try:
+            resp = http_requests.get(
+                f"http://{self.ip}/wattbox_info.xml",
+                auth=(self._username, self._password),
+                timeout=5,
+            )
+            if resp.status_code != 200:
+                return names
+            root = ET.fromstring(resp.text)
+            # WattBox XML has <outlet_name_N> elements
+            for i in range(1, self._outlet_count + 1):
+                el = root.find(f"outlet_name_{i}")
+                if el is not None and el.text and el.text.strip():
+                    names[i] = el.text.strip()
+            if names:
+                self._logger.info(
+                    f"WattBox [{self.ip}]: Loaded {len(names)} outlet names via HTTP")
+        except Exception as e:
+            self._logger.debug(f"WattBox [{self.ip}]: HTTP outlet names failed: {e}")
         return names
 
     def refresh_device_info(self) -> None:
@@ -852,28 +887,11 @@ class WattBoxModule:
     # --- PDU-level operations ---
 
     def reboot_pdu(self, pdu_id: str) -> Tuple[dict, int]:
-        """Reboot a WattBox PDU's firmware (network restart, outlets keep power).
-
-        Tries Telnet !Reset first (firmware 2.x), then HTTP /reboot.cgi as fallback.
-        """
+        """Reboot a WattBox PDU's firmware via HTTP (outlets keep power)."""
         device = self._devices.get(pdu_id)
         if not device:
             return {"error": f"Unknown PDU: {pdu_id}"}, 404
 
-        # --- Method 1: Telnet !Reset (preferred for firmware 2.x) ---
-        if device.connected:
-            result = device._send("!Reset")
-            if result is not None:
-                self._logger.warning(
-                    f"WattBox [{pdu_id}]: Firmware reboot triggered via Telnet !Reset "
-                    f"(outlets remain powered)")
-                with device._state_lock:
-                    device._last_reboot = datetime.now()
-                    device._failure_streak = 0
-                return {"success": True, "pdu_id": pdu_id, "action": "reboot",
-                        "method": "telnet"}, 200
-
-        # --- Method 2: HTTP fallback (if Telnet is down) ---
         username = self._cfg.get("username", "admin")
         password = self._cfg.get("password", "")
         timeout = self._cfg.get("timeout", 10)
