@@ -182,7 +182,11 @@ const X32API = {
     if (data && data.data) this._parseSnapshot(data.data);
     else if (data && data.healthy !== undefined) {
       if (data.healthy && data.data) this._parseSnapshot(data.data);
-      else this.state.online = false;
+      else {
+        this.state.online = false;
+        this.state.currentScene = '';
+        this.state.currentSceneName = '';
+      }
     }
   }
 };
