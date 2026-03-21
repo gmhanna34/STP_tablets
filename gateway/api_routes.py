@@ -1526,6 +1526,31 @@ def register_api_routes(ctx):
             logger.warning(f"WattBox unreachable: {dev['ip']} [{tablet}]")
             return jsonify({"error": f"WattBox at {dev['ip']} unreachable"}), 503
 
+    @app.route("/api/wattbox/<device_key>/name", methods=["POST"])
+    def wattbox_rename(device_key: str):
+        """Rename a WattBox outlet on the device itself."""
+        data = request.get_json(silent=True) or {}
+        name = data.get("name", "").strip()
+        if not name:
+            return jsonify({"error": "name is required"}), 400
+        if len(name) > 30:
+            return jsonify({"error": "Name too long (max 30 chars)"}), 400
+        tablet = get_tablet_id()
+
+        if mock_mode:
+            return jsonify({"success": True, "device": device_key, "name": name, "mock": True}), 200
+
+        wattbox = ctx.wattbox
+        if not wattbox:
+            return jsonify({"error": "WattBox module not loaded"}), 503
+
+        result, status = wattbox.rename_outlet(device_key, name)
+        db.log_action(tablet, "wattbox:rename", device_key,
+                      json.dumps({"device": device_key, "name": name}),
+                      f"status={status}", 0)
+        logger.info(f"WattBox rename {device_key} -> '{name}' status={status} [{tablet}]")
+        return jsonify(result), status
+
     @app.route("/api/wattbox/health")
     def wattbox_health():
         """WattBox module health status for the health dashboard."""

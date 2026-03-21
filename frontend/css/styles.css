@@ -5055,6 +5055,18 @@ body {
   white-space: nowrap;
 }
 
+.wb-rename-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.35;
+  cursor: pointer;
+  padding: 2px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.wb-rename-btn:hover { opacity: 0.8; }
+
 .wb-outlet-controls {
   display: flex;
   align-items: center;

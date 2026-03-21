@@ -509,6 +509,33 @@ class WattBoxDevice:
                 self._outlet_names = names
         return names
 
+    def set_outlet_name(self, outlet: int, name: str) -> bool:
+        """Set a single outlet's friendly name on the device.
+
+        Uses Telnet command: !OutletName=<outlet>,<name>
+        Then refreshes all names to confirm.
+        """
+        if outlet < 1 or outlet > self._outlet_count:
+            self._logger.warning(
+                f"WattBox [{self.ip}]: Invalid outlet {outlet} for rename")
+            return False
+        # Sanitize: WattBox names are comma-delimited so strip commas
+        clean_name = name.strip().replace(",", "")
+        if not clean_name:
+            self._logger.warning(
+                f"WattBox [{self.ip}]: Empty name for outlet {outlet}")
+            return False
+        result = self._send(f"!OutletName={outlet},{clean_name}")
+        if result is None:
+            self._logger.warning(
+                f"WattBox [{self.ip}]: Failed to set outlet {outlet} name")
+            return False
+        self._logger.info(
+            f"WattBox [{self.ip}]: Outlet {outlet} renamed to '{clean_name}'")
+        # Refresh names from device to confirm
+        self.refresh_outlet_names()
+        return True
+
     def _fetch_outlet_names_http(self) -> Dict[int, str]:
         """Scrape outlet names from /wattbox_info.xml as fallback."""
         names: Dict[int, str] = {}
@@ -855,6 +882,26 @@ class WattBoxModule:
             "pdu_id": device.pdu_id,
             "pdu_label": device.label,
         }, 200
+
+    def rename_outlet(self, stable_id: str, name: str) -> Tuple[dict, int]:
+        """Rename outlet on the WattBox device by stable ID."""
+        resolved = self._resolve_device(stable_id)
+        if not resolved:
+            return {"error": f"Unknown device: {stable_id}"}, 404
+        device, outlet = resolved
+        success = device.set_outlet_name(outlet, name)
+        if success:
+            # Get the confirmed name from the device
+            with device._state_lock:
+                confirmed_name = device._outlet_names.get(outlet, name.strip())
+            self._broadcast_state(device)
+            return {
+                "success": True,
+                "device": stable_id,
+                "outlet": outlet,
+                "name": confirmed_name,
+            }, 200
+        return {"error": f"Failed to rename outlet: {stable_id}"}, 503
 
     # --- Bulk APIs ---
 

@@ -903,10 +903,11 @@ const SettingsPage = {
                   <div class="wb-card-ip">${esc(dev.ip)}</div>
                   <div class="wb-outlet-list ${expanded ? '' : 'hidden'}">
                     ${outletEntries.map(([num, outlet]) => `
-                      <div class="wb-outlet-row">
+                      <div class="wb-outlet-row" data-wb-stable-id="${escAttr(outlet.stable_id)}">
                         <div class="wb-outlet-info">
                           <span class="wb-outlet-num">#${num}</span>
                           <span class="wb-outlet-name">${esc(outlet.name || 'Outlet ' + num)}</span>
+                          ${dev.connected ? `<button class="wb-rename-btn" onclick="SettingsPage._wbRenameOutlet('${escAttr(outlet.stable_id)}', '${escAttr(outlet.name || 'Outlet ' + num)}'); event.stopPropagation();" title="Rename outlet"><span class="material-icons" style="font-size:16px;">edit</span></button>` : ''}
                         </div>
                         <div class="wb-outlet-controls">
                           <span class="wb-outlet-state wb-outlet-${outlet.state}">${outlet.state.toUpperCase()}</span>
@@ -997,6 +998,41 @@ const SettingsPage = {
         btn.disabled = false;
         btn.classList.remove('wb-btn-loading');
       }
+    }
+  },
+
+  async _wbRenameOutlet(stableId, currentName) {
+    const newName = prompt('Rename outlet:', currentName);
+    if (newName === null || newName.trim() === '' || newName.trim() === currentName) return;
+    const trimmed = newName.trim().substring(0, 30);
+    try {
+      const resp = await fetch(`/api/wattbox/${encodeURIComponent(stableId)}/name`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        App.showToast(`Renamed to "${data.name}"`, 2000);
+        // Refresh panel data to show updated name
+        try {
+          const devResp = await fetch('/api/wattbox/devices');
+          if (devResp.ok) {
+            this._wbPanelData = await devResp.json();
+            // Re-render the outlet name in-place
+            const card = document.querySelector(`[data-wb-stable-id="${stableId}"]`);
+            if (card) {
+              const nameEl = card.querySelector('.wb-outlet-name');
+              if (nameEl) nameEl.textContent = data.name;
+            }
+          }
+        } catch (_) { /* panel will refresh on next poll */ }
+      } else {
+        App.showToast(data.error || 'Rename failed', 3000, 'error');
+      }
+    } catch (err) {
+      App.showToast(`Network error: ${err.message}`, 3000, 'error');
     }
   },
 
