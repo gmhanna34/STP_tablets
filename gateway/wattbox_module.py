@@ -519,8 +519,9 @@ class WattBoxDevice:
             self._logger.warning(
                 f"WattBox [{self.ip}]: Invalid outlet {outlet} for rename")
             return False
-        # Sanitize: WattBox names are comma-delimited so strip commas
-        clean_name = name.strip().replace(",", "")
+        # Sanitize: WattBox firmware truncates at spaces, so replace with
+        # underscores. Commas are field delimiters so strip those too.
+        clean_name = name.strip().replace(" ", "_").replace(",", "")
         if not clean_name:
             self._logger.warning(
                 f"WattBox [{self.ip}]: Empty name for outlet {outlet}")
