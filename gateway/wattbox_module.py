@@ -58,21 +58,26 @@ def parse_outlet_status(response: str, outlet_count: int = 12) -> Dict[int, bool
     return states
 
 
-def parse_outlet_name(response: str) -> Optional[Tuple[int, str]]:
-    """Parse outlet name response: 'OutletName=3,X32 Mixer' -> (3, 'X32 Mixer')."""
+def parse_outlet_names(response: str) -> Dict[int, str]:
+    """Parse bulk outlet name response.
+
+    API v3 format: ?OutletName={Name1},{Name2},{Name3},...
+    Returns {1: 'Name1', 2: 'Name2', ...}.
+    """
+    names: Dict[int, str] = {}
     if not response:
-        return None
+        return names
     for line in response.strip().split("\n"):
         line = line.strip()
         if "OutletName=" in line:
             data = line.split("OutletName=")[1].strip()
-            parts = data.split(",", 1)
-            if len(parts) == 2:
-                try:
-                    return int(parts[0].strip()), parts[1].strip()
-                except ValueError:
-                    pass
-    return None
+            # Extract names from {Name1},{Name2},... format
+            parts = re.findall(r'\{([^}]*)\}', data)
+            for i, name in enumerate(parts, start=1):
+                name = name.strip()
+                if name:
+                    names[i] = name
+    return names
 
 
 def parse_simple_value(response: str, key: str) -> Optional[str]:
@@ -490,14 +495,10 @@ class WattBoxDevice:
         """Query outlet names from device. Tries Telnet first, falls back to HTTP XML."""
         names: Dict[int, str] = {}
 
-        # Method 1: Telnet ?OutletName=N queries
-        for i in range(1, self._outlet_count + 1):
-            response = self._send(f"?OutletName={i}")
-            if response:
-                parsed = parse_outlet_name(response)
-                if parsed:
-                    names[parsed[0]] = parsed[1]
-            time.sleep(0.05)  # Don't flood
+        # Method 1: Telnet ?OutletName (returns all names in bulk)
+        response = self._send("?OutletName")
+        if response:
+            names = parse_outlet_names(response)
 
         # Method 2: HTTP /wattbox_info.xml fallback if Telnet returned no names
         if not names:
@@ -887,11 +888,28 @@ class WattBoxModule:
     # --- PDU-level operations ---
 
     def reboot_pdu(self, pdu_id: str) -> Tuple[dict, int]:
-        """Reboot a WattBox PDU's firmware via HTTP (outlets keep power)."""
+        """Reboot a WattBox PDU firmware. Tries Telnet !Reboot, falls back to HTTP.
+
+        Per WattBox Integration Protocol v3.0: !Reboot requests immediate device
+        reboot via Linux system call. The Telnet connection will drop.
+        """
         device = self._devices.get(pdu_id)
         if not device:
             return {"error": f"Unknown PDU: {pdu_id}"}, 404
 
+        # --- Method 1: Telnet !Reboot (per API v3.0 spec) ---
+        if device.connected:
+            result = device._send("!Reboot")
+            if result is not None:
+                self._logger.warning(
+                    f"WattBox [{pdu_id}]: Firmware reboot triggered via Telnet !Reboot")
+                with device._state_lock:
+                    device._last_reboot = datetime.now()
+                    device._failure_streak = 0
+                return {"success": True, "pdu_id": pdu_id, "action": "reboot",
+                        "method": "telnet"}, 200
+
+        # --- Method 2: HTTP fallback (if Telnet is down) ---
         username = self._cfg.get("username", "admin")
         password = self._cfg.get("password", "")
         timeout = self._cfg.get("timeout", 10)
@@ -905,7 +923,7 @@ class WattBoxModule:
             if resp.status_code in (200, 302):
                 self._logger.warning(
                     f"WattBox [{pdu_id}]: Firmware reboot triggered via HTTP "
-                    f"(outlets remain powered)")
+                    f"(Telnet was down)")
                 with device._state_lock:
                     device._last_reboot = datetime.now()
                     device._failure_streak = 0

@@ -15,7 +15,7 @@ from wattbox_module import (
     WattBoxDevice,
     WattBoxModule,
     parse_outlet_status,
-    parse_outlet_name,
+    parse_outlet_names,
     parse_simple_value,
 )
 
@@ -61,29 +61,32 @@ class TestParseOutletStatus:
         assert states == {1: True, 2: False, 3: True}
 
 
-class TestParseOutletName:
+class TestParseOutletNames:
     def test_basic(self):
-        resp = "OutletName=3,X32 Mixer"
-        result = parse_outlet_name(resp)
-        assert result == (3, "X32 Mixer")
+        """API v3 bulk format: ?OutletName={Name1},{Name2},..."""
+        resp = "?OutletName={X32 Mixer},{Amplifier},{Sub},{Antenna}"
+        result = parse_outlet_names(resp)
+        assert result == {1: "X32 Mixer", 2: "Amplifier", 3: "Sub", 4: "Antenna"}
 
-    def test_empty_name(self):
-        resp = "OutletName=1,"
-        result = parse_outlet_name(resp)
-        assert result == (1, "")
-
-    def test_name_with_comma(self):
-        """Names can contain commas — only split on first comma."""
-        resp = "OutletName=5,Device A, Unit B"
-        result = parse_outlet_name(resp)
-        assert result == (5, "Device A, Unit B")
+    def test_twelve_outlets(self):
+        names = ",".join(f"{{Outlet {i}}}" for i in range(1, 13))
+        resp = f"?OutletName={names}"
+        result = parse_outlet_names(resp)
+        assert len(result) == 12
+        assert result[1] == "Outlet 1"
+        assert result[12] == "Outlet 12"
 
     def test_empty_response(self):
-        assert parse_outlet_name("") is None
-        assert parse_outlet_name(None) is None
+        assert parse_outlet_names("") == {}
+        assert parse_outlet_names(None) == {}
 
     def test_no_match(self):
-        assert parse_outlet_name("SomeOtherResponse=foo") is None
+        assert parse_outlet_names("SomeOtherResponse=foo") == {}
+
+    def test_multiline(self):
+        resp = "some header\n?OutletName={Mixer},{Amp}\nfooter"
+        result = parse_outlet_names(resp)
+        assert result == {1: "Mixer", 2: "Amp"}
 
 
 class TestParseSimpleValue:
