@@ -1683,7 +1683,7 @@ const MacroAPI = {
     const self = this;
     container.innerHTML = '<div style="text-align:center;padding:24px;opacity:0.5;">Loading switches...</div>';
 
-    let switchIds;
+    let switchIds, wattboxIds;
     try {
       const resp = await fetch(`/api/macros/switches?page=${roomId}`, {
 
@@ -1691,58 +1691,122 @@ const MacroAPI = {
       });
       const data = await resp.json();
       switchIds = data.switches || [];
+      wattboxIds = data.wattbox || [];
     } catch (e) {
       container.innerHTML = '<div style="text-align:center;color:#cc0000;padding:24px;">Failed to load power settings</div>';
       return;
     }
 
-    if (switchIds.length === 0) {
-      container.innerHTML = '<div style="text-align:center;opacity:0.5;padding:24px;">No switches found for this room.</div>';
+    if (switchIds.length === 0 && wattboxIds.length === 0) {
+      container.innerHTML = '<div style="text-align:center;opacity:0.5;padding:24px;">No power devices found for this room.</div>';
       return;
     }
 
-    const renderSwitches = async () => {
-      let entities = [];
-      try {
-        const resp = await fetch('/api/ha/entities?domain=switch', {
-  
-          signal: AbortSignal.timeout(5000),
-        });
-        const data = await resp.json();
-        const allEntities = [];
-        for (const [, info] of Object.entries(data.domains || {})) {
-          for (const ent of (info.entities || [])) allEntities.push(ent);
-        }
-        const idSet = new Set(switchIds);
-        entities = allEntities.filter(e => idSet.has(e.entity_id));
-      } catch (e) { return; }
+    const esc = (str) => {
+      const d = document.createElement('div');
+      d.textContent = str || '';
+      return d.innerHTML;
+    };
 
-      const orderMap = {};
-      switchIds.forEach((id, i) => { orderMap[id] = i; });
-      entities.sort((a, b) => (orderMap[a.entity_id] ?? 999) - (orderMap[b.entity_id] ?? 999));
-      const foundIds = new Set(entities.map(e => e.entity_id));
-      for (const id of switchIds) {
-        if (!foundIds.has(id)) {
-          entities.push({ entity_id: id, state: 'unknown', friendly_name: '' });
+    const renderPower = async () => {
+      // --- HA switches ---
+      let switchHtml = '';
+      if (switchIds.length > 0) {
+        let entities = [];
+        try {
+          const resp = await fetch('/api/ha/entities?domain=switch', {
+            signal: AbortSignal.timeout(5000),
+          });
+          const data = await resp.json();
+          const allEntities = [];
+          for (const [, info] of Object.entries(data.domains || {})) {
+            for (const ent of (info.entities || [])) allEntities.push(ent);
+          }
+          const idSet = new Set(switchIds);
+          entities = allEntities.filter(e => idSet.has(e.entity_id));
+        } catch (e) { /* keep empty */ }
+
+        const orderMap = {};
+        switchIds.forEach((id, i) => { orderMap[id] = i; });
+        entities.sort((a, b) => (orderMap[a.entity_id] ?? 999) - (orderMap[b.entity_id] ?? 999));
+        const foundIds = new Set(entities.map(e => e.entity_id));
+        for (const id of switchIds) {
+          if (!foundIds.has(id)) {
+            entities.push({ entity_id: id, state: 'unknown', friendly_name: '' });
+          }
         }
+
+        switchHtml = entities.map(e => {
+          const name = e.friendly_name || e.entity_id.split('.').pop() || e.entity_id;
+          const isOn = e.state === 'on';
+          return `<div class="switch-card ${isOn ? 'switch-on' : 'switch-off'}">
+            <div class="switch-info">
+              <span class="status-dot ${isOn ? 'idle' : 'offline'}"></span>
+              <span class="switch-name">${esc(name)}</span>
+            </div>
+            <button class="btn switch-toggle ${isOn ? 'active' : ''}" data-entity="${esc(e.entity_id)}">
+              <span class="material-icons">${isOn ? 'toggle_on' : 'toggle_off'}</span>
+            </button>
+          </div>`;
+        }).join('');
       }
 
-      const cardsHtml = entities.map(e => {
-        const name = e.friendly_name || e.entity_id.split('.').pop() || e.entity_id;
-        const isOn = e.state === 'on';
-        return `<div class="switch-card ${isOn ? 'switch-on' : 'switch-off'}">
-          <div class="switch-info">
-            <span class="status-dot ${isOn ? 'idle' : 'offline'}"></span>
-            <span class="switch-name">${name}</span>
-          </div>
-          <button class="btn switch-toggle ${isOn ? 'active' : ''}" data-entity="${e.entity_id}">
-            <span class="material-icons">${isOn ? 'toggle_on' : 'toggle_off'}</span>
-          </button>
-        </div>`;
-      }).join('');
+      // --- WattBox outlets ---
+      let wbHtml = '';
+      if (wattboxIds.length > 0) {
+        let wbDevices = {};
+        try {
+          const resp = await fetch('/api/wattbox/devices', {
+            signal: AbortSignal.timeout(5000),
+          });
+          if (resp.ok) wbDevices = await resp.json();
+        } catch (e) { /* keep empty */ }
 
-      container.innerHTML = `<div class="switch-panel-grid">${cardsHtml}</div>`;
-      container.querySelectorAll('.switch-toggle').forEach(btn => {
+        // Build a lookup from stable_id to outlet info + pdu label
+        const wbLookup = {};
+        for (const [pduId, pdu] of Object.entries(wbDevices)) {
+          for (const [num, outlet] of Object.entries(pdu.outlets || {})) {
+            wbLookup[outlet.stable_id] = {
+              ...outlet,
+              num,
+              pduLabel: pdu.label || pduId,
+              pduConnected: pdu.connected,
+            };
+          }
+        }
+
+        wbHtml = wattboxIds.map(stableId => {
+          const outlet = wbLookup[stableId];
+          if (!outlet) {
+            // Device not found in live data — show placeholder
+            const shortName = stableId.replace(/\./g, ' ').replace(/_/g, ' ');
+            return `<div class="switch-card switch-off">
+              <div class="switch-info">
+                <span class="status-dot offline"></span>
+                <span class="switch-name">${esc(shortName)}</span>
+              </div>
+              <span style="opacity:0.4;font-size:12px;">unavailable</span>
+            </div>`;
+          }
+          const isOn = outlet.state === 'on';
+          const label = `${outlet.name || 'Outlet ' + outlet.num} (${outlet.pduLabel})`;
+          return `<div class="switch-card ${isOn ? 'switch-on' : 'switch-off'}">
+            <div class="switch-info">
+              <span class="status-dot ${outlet.pduConnected ? (isOn ? 'idle' : 'offline') : 'offline'}"></span>
+              <span class="switch-name">${esc(label)}</span>
+            </div>
+            <button class="btn switch-toggle ${isOn ? 'active' : ''}" data-wb-outlet="${esc(stableId)}"
+                    ${!outlet.pduConnected ? 'disabled' : ''}>
+              <span class="material-icons">${isOn ? 'toggle_on' : 'toggle_off'}</span>
+            </button>
+          </div>`;
+        }).join('');
+      }
+
+      container.innerHTML = `<div class="switch-panel-grid">${switchHtml}${wbHtml}</div>`;
+
+      // HA switch toggle handlers
+      container.querySelectorAll('.switch-toggle[data-entity]').forEach(btn => {
         btn.addEventListener('click', async () => {
           const entityId = btn.dataset.entity;
           btn.disabled = true;
@@ -1752,7 +1816,33 @@ const MacroAPI = {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ entity_id: entityId }),
             });
-            setTimeout(() => renderSwitches(), 500);
+            setTimeout(() => renderPower(), 500);
+          } catch (e) {
+            App.showToast('Toggle failed', 2000, 'error');
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+
+      // WattBox outlet toggle handlers
+      container.querySelectorAll('.switch-toggle[data-wb-outlet]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const stableId = btn.dataset.wbOutlet;
+          const isOn = btn.classList.contains('active');
+          const action = isOn ? 'off' : 'on';
+          btn.disabled = true;
+          try {
+            const resp = await fetch(`/api/wattbox/${encodeURIComponent(stableId)}/power`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action }),
+            });
+            const data = await resp.json();
+            if (!resp.ok || data.error) {
+              App.showToast(data.error || 'Failed', 3000, 'error');
+            }
+            setTimeout(() => renderPower(), 500);
           } catch (e) {
             App.showToast('Toggle failed', 2000, 'error');
           } finally {
@@ -1762,8 +1852,8 @@ const MacroAPI = {
       });
     };
 
-    await renderSwitches();
-    this._advancedPanelTimers.push(setInterval(renderSwitches, 5000));
+    await renderPower();
+    this._advancedPanelTimers.push(setInterval(renderPower, 5000));
   },
 
   _renderAdvVideoTab(container, roomId) {

@@ -2080,9 +2080,10 @@ def register_api_routes(ctx):
                         if ba.get("type") == "macro" and ba.get("macro"):
                             macro_keys.add(ba["macro"])
         switch_ids = set()
+        wattbox_ids = set()
         visited = set()
         def _walk_steps(steps, depth=0):
-            """Recursively walk macro steps to find switch entity_ids."""
+            """Recursively walk macro steps to find switch entity_ids and WattBox devices."""
             for step_item in steps:
                 stype = step_item.get("type", "")
                 if stype == "ha_service":
@@ -2093,6 +2094,10 @@ def register_api_routes(ctx):
                     eid = step_item.get("entity", "")
                     if eid.startswith("switch."):
                         switch_ids.add(eid)
+                elif stype == "wattbox_power":
+                    device = step_item.get("device", "")
+                    if device:
+                        wattbox_ids.add(device)
                 elif stype == "macro":
                     child = step_item.get("macro", "")
                     if child:
@@ -2132,7 +2137,7 @@ def register_api_routes(ctx):
                         if eid.startswith("switch."):
                             switch_ids.add(eid)
         switch_ids = {s for s in switch_ids if "TODO" not in s.upper()}
-        return sorted(switch_ids)
+        return {"switches": sorted(switch_ids), "wattbox": sorted(wattbox_ids)}
 
     @app.route("/api/macros/switches")
     def api_macros_switches():
@@ -2146,7 +2151,7 @@ def register_api_routes(ctx):
             _switches_cache_refs.update(cur_refs)
         if page not in _switches_cache:
             _switches_cache[page] = _build_page_switches(page)
-        return jsonify({"switches": _switches_cache[page]}), 200
+        return jsonify(_switches_cache[page]), 200
 
     @app.route("/api/macro/execute", methods=["POST"])
     def api_macro_execute():
