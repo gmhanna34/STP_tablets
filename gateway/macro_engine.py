@@ -1224,7 +1224,7 @@ def _check_module_connected(ctx, target: str) -> bool:
     """Check if a device module reports as connected/healthy."""
     try:
         if target == "x32" and ctx.x32:
-            status, _code = ctx.x32.get_status()
+            status = ctx.x32.get_status()
             return status.get("healthy", False) if isinstance(status, dict) else False
         elif target == "obs" and ctx.obs:
             status, _code = ctx.obs.get_status()
