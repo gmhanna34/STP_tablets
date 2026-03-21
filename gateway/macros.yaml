@@ -125,7 +125,7 @@ macros:
           - type: wait_until
             target: x32
             condition: connected
-            timeout: 120
+            timeout: 300
             poll_interval: 3
             on_fail: skip
             message: "Waiting for X32 mixer to come online"
