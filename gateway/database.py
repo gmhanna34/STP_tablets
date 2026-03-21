@@ -62,8 +62,26 @@ class Database:
                 updated_at TEXT DEFAULT (datetime('now')),
                 PRIMARY KEY (event_key, field)
             );
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT DEFAULT (datetime('now')),
+                label TEXT NOT NULL,
+                type TEXT NOT NULL DEFAULT 'info',
+                message TEXT NOT NULL DEFAULT '',
+                details TEXT,
+                source TEXT DEFAULT '',
+                macro_key TEXT,
+                expires_at TEXT
+            );
             CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(timestamp);
             CREATE INDEX IF NOT EXISTS idx_audit_tablet ON audit_log(tablet_id);
+            CREATE TABLE IF NOT EXISTS notification_dismissals (
+                notification_id INTEGER NOT NULL,
+                tablet_id TEXT NOT NULL,
+                dismissed_at TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (notification_id, tablet_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_notif_expires ON notifications(expires_at);
         """)
         conn.commit()
         # Migrate existing databases before creating actor index
@@ -238,3 +256,66 @@ class Database:
         conn = self._get_conn()
         conn.execute("DELETE FROM event_overrides WHERE event_key=?", (event_key,))
         conn.commit()
+
+    # --- Notifications ---
+
+    def add_notification(self, label: str, ntype: str, message: str,
+                         details: str = "", source: str = "",
+                         macro_key: str = "", retention_hours: int = 12) -> int:
+        """Insert a notification and return its ID."""
+        conn = self._get_conn()
+        cur = conn.execute(
+            "INSERT INTO notifications (label, type, message, details, source, macro_key, expires_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?))",
+            (label, ntype, message, details or None, source, macro_key or None,
+             f"+{retention_hours} hours"),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+    def get_notifications(self, tablet_id: str, limit: int = 50) -> list:
+        """Return active (non-expired) notifications not dismissed by this tablet."""
+        conn = self._get_conn()
+        rows = conn.execute(
+            "SELECT n.* FROM notifications n "
+            "WHERE n.expires_at > datetime('now') "
+            "AND n.id NOT IN ("
+            "  SELECT notification_id FROM notification_dismissals WHERE tablet_id = ?"
+            ") "
+            "ORDER BY n.id DESC LIMIT ?",
+            (tablet_id, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def dismiss_notification(self, notification_id: int, tablet_id: str):
+        """Dismiss a notification for a specific tablet."""
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT OR IGNORE INTO notification_dismissals (notification_id, tablet_id) "
+            "VALUES (?, ?)",
+            (notification_id, tablet_id),
+        )
+        conn.commit()
+
+    def dismiss_all_notifications(self, tablet_id: str):
+        """Dismiss all current notifications for a specific tablet."""
+        conn = self._get_conn()
+        conn.execute(
+            "INSERT OR IGNORE INTO notification_dismissals (notification_id, tablet_id) "
+            "SELECT id, ? FROM notifications WHERE expires_at > datetime('now')",
+            (tablet_id,),
+        )
+        conn.commit()
+
+    def cleanup_expired_notifications(self):
+        """Delete expired notifications and their dismissals."""
+        try:
+            conn = self._get_conn()
+            conn.execute(
+                "DELETE FROM notification_dismissals WHERE notification_id IN "
+                "(SELECT id FROM notifications WHERE expires_at <= datetime('now'))"
+            )
+            conn.execute("DELETE FROM notifications WHERE expires_at <= datetime('now')")
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"Notification cleanup failed: {e}")

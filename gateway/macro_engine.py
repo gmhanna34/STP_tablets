@@ -437,6 +437,10 @@ def execute_macro(ctx, macro_key: str, tablet: str, depth: int = 0,
                 "error": error_msg,
             })
 
+            if depth == 0 and hasattr(ctx, "create_notification"):
+                ctx.create_notification(label, "error", error_msg,
+                                        source=tablet, macro_key=macro_key)
+
             db.log_action(tablet, "macro:execute", macro_key,
                           json.dumps({"label": label, "steps": len(steps)}),
                           f"FAILED at step {i+1}: {error_msg}", overall_ms)
@@ -478,6 +482,18 @@ def execute_macro(ctx, macro_key: str, tablet: str, depth: int = 0,
         progress_data["issues"] = issues
         progress_data["issue_count"] = len(issues)
     socketio.emit("macro:progress", progress_data)
+
+    if depth == 0 and hasattr(ctx, "create_notification"):
+        if issues:
+            ctx.create_notification(
+                label, "warning",
+                f"{len(issues)} issue{'s' if len(issues) != 1 else ''}",
+                details="\n".join(issues), source=tablet)
+        else:
+            ctx.create_notification(
+                label, "success",
+                f"Completed ({completed}/{len(steps)} steps)",
+                source=tablet)
 
     db.log_action(tablet, "macro:execute", macro_key,
                   json.dumps({"label": label, "steps": len(steps)}),

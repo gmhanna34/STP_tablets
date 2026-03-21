@@ -3182,10 +3182,37 @@ body {
   font-size: 13px;
   color: var(--text);
 }
+.notif-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
 .notif-time {
   font-size: 11px;
   color: var(--text-secondary);
   white-space: nowrap;
+}
+.notif-source {
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.notif-dismiss-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.notif-dismiss-btn:hover {
+  opacity: 1;
 }
 .notif-message {
   font-size: 12px;

@@ -1190,6 +1190,7 @@ event_automation:
       preflight_checks: ["x32_module", "moip_module"]
 database:
   path: stp_gateway.db
+notification_retention_hours: 12
 anthropic:
   api_key: ''
   model: claude-haiku-4-5-20251001

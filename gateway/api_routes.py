@@ -46,6 +46,23 @@ def register_api_routes(ctx):
     mw_cfg = cfg.get("middleware", {})
     config_path = ctx.config_path
     timeouts = cfg.get("timeouts", {})
+    _notif_retention = int(cfg.get("notification_retention_hours", 12))
+
+    def _create_notification(label: str, ntype: str, message: str,
+                             details: str = "", source: str = "",
+                             macro_key: str = ""):
+        """Create a persistent notification and broadcast to all tablets."""
+        nid = db.add_notification(label, ntype, message, details, source,
+                                  macro_key, _notif_retention)
+        item = {
+            "id": nid, "label": label, "type": ntype, "message": message,
+            "details": details, "source": source, "macro_key": macro_key,
+        }
+        socketio.emit("notification:new", item)
+        return nid
+
+    # Expose to other modules (macro_engine, etc.)
+    ctx.create_notification = _create_notification
 
     # ---- Static file serving ----
 
@@ -757,8 +774,11 @@ def register_api_routes(ctx):
             return jsonify({"success": True, "mock": True}), 200
         tx = data.get("transmitter", "")
         rx = data.get("receiver", "")
+        tablet = get_tablet_id()
         result, status = ctx.moip.switch(str(tx), str(rx))
         if status < 400:
+            _create_notification("Video Switch", "success",
+                                 f"TX {tx} → RX {rx}", source=tablet)
             try:
                 fresh, fresh_status = ctx.moip.get_receivers()
                 if fresh_status < 400 and fresh:
@@ -793,8 +813,11 @@ def register_api_routes(ctx):
         if mock_mode:
             return jsonify({"success": True, "mock": True}), 200
         scene = data.get("scene", "")
+        tablet = get_tablet_id()
         result, status = ctx.moip.activate_scene(str(scene))
         if status < 400:
+            _create_notification("Video Scene", "success",
+                                 f"Scene: {scene}", source=tablet)
             socketio.emit("state:moip", {"event": "scene", "data": data}, room="moip")
         return jsonify(result), status
 
@@ -1357,6 +1380,11 @@ def register_api_routes(ctx):
             socketio.emit("state:projectors", {
                 "event": "power", "projector": projector_key, "state": state
             }, room="projectors")
+            proj_label = proj.get("label", projector_key)
+            _create_notification(
+                proj_label, "success",
+                f"Projector {'on' if state == 'on' else 'off'}",
+                source=tablet)
             return jsonify({
                 "success": resp.status_code == 200, "projector": projector_key,
                 "state": state, "latency_ms": round(latency, 1),
@@ -1491,6 +1519,9 @@ def register_api_routes(ctx):
                           json.dumps({"device": device_key, "action": action}),
                           f"status={status}", latency)
             logger.info(f"WattBox {action} -> {device_key} status={status} latency={latency:.0f}ms [{tablet}]")
+            if status < 400:
+                _create_notification(device_key, "success",
+                                     f"Outlet {action}", source=tablet)
             if isinstance(result, dict):
                 result["latency_ms"] = round(latency, 1)
             return jsonify(result), status
@@ -1515,6 +1546,9 @@ def register_api_routes(ctx):
                           f"outlet={dev['outlet']} ({dev['label']})",
                           f"status={resp.status_code}", latency)
             logger.info(f"WattBox {action} -> {dev['label']} (HTTP fallback) [{tablet}]")
+            if resp.status_code == 200:
+                _create_notification(dev.get("label", device_key), "success",
+                                     f"Outlet {action}", source=tablet)
             return jsonify({
                 "success": resp.status_code == 200, "device": device_key,
                 "action": action, "latency_ms": round(latency, 1),
@@ -1634,13 +1668,16 @@ def register_api_routes(ctx):
                 # Final failure — log and notify
                 db.log_action(tablet, f"ha:{domain}/{service}", "home_assistant",
                               json.dumps(data)[:500], f"FAILED status={resp.status_code}", latency)
+                fail_msg = f"{entity_hint}: HA returned {resp.status_code}"
                 socketio.emit("ha:call_failed", {
                     "entity": entity_hint,
                     "domain": domain,
                     "service": service,
                     "status": resp.status_code,
-                    "message": f"{entity_hint}: HA returned {resp.status_code}",
+                    "message": fail_msg,
                 })
+                _create_notification(entity_hint or "Home Assistant", "error",
+                                     fail_msg, source=tablet)
                 try:
                     body = resp.json() if resp.content else {"success": False}
                 except ValueError:
@@ -1654,13 +1691,16 @@ def register_api_routes(ctx):
                 latency = (time.time() - start) * 1000
                 db.log_action(tablet, f"ha:{domain}/{service}", "home_assistant",
                               json.dumps(data)[:500], f"FAILED: {e}", latency)
+                conn_fail_msg = f"{entity_hint}: {e}"
                 socketio.emit("ha:call_failed", {
                     "entity": entity_hint,
                     "domain": domain,
                     "service": service,
                     "status": 503,
-                    "message": f"{entity_hint}: {e}",
+                    "message": conn_fail_msg,
                 })
+                _create_notification(entity_hint or "Home Assistant", "error",
+                                     conn_fail_msg, source=tablet)
                 return jsonify({"error": str(e)}), 503
 
     # ---- Home Assistant Automations ----
@@ -2346,6 +2386,29 @@ def register_api_routes(ctx):
             return jsonify({"error": "Event automation not available"}), 503
         events, ok = ea.fetch_calendar()
         return jsonify({"success": ok, "event_count": len(events)}), 200
+
+    # ---- Notifications ----
+
+    @app.route("/api/notifications")
+    def api_notifications():
+        """Return active notifications for this tablet (excludes dismissed & expired)."""
+        tablet = get_tablet_id()
+        items = db.get_notifications(tablet, limit=50)
+        return jsonify(items), 200
+
+    @app.route("/api/notifications/dismiss", methods=["POST"])
+    def api_notification_dismiss():
+        """Dismiss a notification for this tablet only."""
+        data = request.get_json(silent=True) or {}
+        nid = data.get("id")
+        tablet = get_tablet_id()
+        if nid == "all":
+            db.dismiss_all_notifications(tablet)
+        elif nid:
+            db.dismiss_notification(int(nid), tablet)
+        else:
+            return jsonify({"error": "id required"}), 400
+        return jsonify({"success": True}), 200
 
     # ---- Schedules ----
 

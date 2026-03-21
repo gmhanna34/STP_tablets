@@ -34,7 +34,8 @@ def start_scheduler(ctx):
                 if current_hm == "03:00" and _last_cleanup_date != today_str:
                     _last_cleanup_date = today_str
                     db.cleanup_old_logs(30)
-                    logger.info("Audit log cleanup complete (>30 days deleted)")
+                    db.cleanup_expired_notifications()
+                    logger.info("Audit log + notification cleanup complete")
                     # Clean stale Socket.IO session entries (>24h old)
                     stale_cutoff = time.time() - 86400
                     with ctx.sid_lock:

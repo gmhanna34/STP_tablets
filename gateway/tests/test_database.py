@@ -141,6 +141,85 @@ class TestSchedules:
         assert schedules[0]["enabled"] == 0
 
 
+class TestNotifications:
+    def test_add_notification(self, db):
+        nid = db.add_notification("Chapel Audio", "success", "Completed (3/3 steps)",
+                                  source="chapel")
+        assert nid is not None
+        items = db.get_notifications("chapel")
+        assert len(items) == 1
+        assert items[0]["label"] == "Chapel Audio"
+        assert items[0]["type"] == "success"
+        assert items[0]["source"] == "chapel"
+
+    def test_get_notifications_excludes_dismissed(self, db):
+        nid = db.add_notification("Test", "info", "msg")
+        db.dismiss_notification(nid, "chapel")
+        items = db.get_notifications("chapel")
+        assert len(items) == 0
+        # Other tablets still see it
+        items2 = db.get_notifications("main")
+        assert len(items2) == 1
+
+    def test_dismiss_all(self, db):
+        db.add_notification("A", "info", "msg1")
+        db.add_notification("B", "info", "msg2")
+        db.dismiss_all_notifications("chapel")
+        assert len(db.get_notifications("chapel")) == 0
+        assert len(db.get_notifications("main")) == 2
+
+    def test_expired_notifications_not_returned(self, db):
+        conn = db._get_conn()
+        conn.execute(
+            "INSERT INTO notifications (label, type, message, expires_at) "
+            "VALUES ('Old', 'info', 'msg', datetime('now', '-1 hours'))"
+        )
+        conn.commit()
+        items = db.get_notifications("chapel")
+        assert len(items) == 0
+
+    def test_cleanup_expired_notifications(self, db):
+        conn = db._get_conn()
+        # Insert an expired notification
+        conn.execute(
+            "INSERT INTO notifications (label, type, message, expires_at) "
+            "VALUES ('Expired', 'info', 'msg', datetime('now', '-1 hours'))"
+        )
+        # Insert a dismissal for it
+        expired_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        conn.execute(
+            "INSERT INTO notification_dismissals (notification_id, tablet_id) VALUES (?, 'chapel')",
+            (expired_id,)
+        )
+        conn.commit()
+        db.cleanup_expired_notifications()
+        # Both the notification and its dismissal should be gone
+        rows = conn.execute("SELECT COUNT(*) FROM notifications").fetchone()[0]
+        assert rows == 0
+        dismiss_rows = conn.execute("SELECT COUNT(*) FROM notification_dismissals").fetchone()[0]
+        assert dismiss_rows == 0
+
+    def test_notification_with_macro_key(self, db):
+        nid = db.add_notification("Macro", "error", "Failed",
+                                  macro_key="chapel_tv_on", source="user:george")
+        items = db.get_notifications("chapel")
+        assert items[0]["macro_key"] == "chapel_tv_on"
+        assert items[0]["source"] == "user:george"
+
+    def test_notifications_ordered_newest_first(self, db):
+        db.add_notification("First", "info", "msg1")
+        db.add_notification("Second", "info", "msg2")
+        items = db.get_notifications("chapel")
+        assert items[0]["label"] == "Second"
+        assert items[1]["label"] == "First"
+
+    def test_notifications_respects_limit(self, db):
+        for i in range(10):
+            db.add_notification(f"N{i}", "info", f"msg{i}")
+        items = db.get_notifications("chapel", limit=5)
+        assert len(items) == 5
+
+
 class TestFlush:
     def test_flush_does_not_raise(self, db):
         db.log_action("tablet", "action", "target")
