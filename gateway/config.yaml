@@ -641,62 +641,47 @@ healthdash:
     alert:
       enabled: false
   - id: wattbox_ha_3
-    name: WattBox 3 (AV Floor Switch 2) Outlet Check - 63
+    name: WattBox 3 (AV Floor Switch 2) Telnet - 63
     group: Power
-    type: http_json
-    url: ''
-    timeout_seconds: 5
+    type: wattbox
+    pdu_id: wb_003_av_floorswitch2
     poll_interval_seconds: 300
-    ok_json_path: state
-    bearer_token: ''
     show_standalone: false
     alert:
       enabled: false
   - id: wattbox_ha_5
-    name: WattBox 5 (Chapel Ceiling Rack) Outlet Check - 65
+    name: WattBox 5 (Chapel Ceiling Rack) Telnet - 65
     group: Power
-    type: http_json
-    url: ''
-    timeout_seconds: 5
+    type: wattbox
+    pdu_id: wb_005_chapel_ceilingrack
     poll_interval_seconds: 300
-    ok_json_path: state
-    bearer_token: ''
     show_standalone: false
     alert:
       enabled: false
   - id: wattbox_ha_4
-    name: WattBox 4 (AV Audio Rack 1) Outlet Check - 64
+    name: WattBox 4 (AV Audio Rack 1) Telnet - 64
     group: Power
-    type: http_json
-    url: ''
-    timeout_seconds: 5
+    type: wattbox
+    pdu_id: wb_004_av_audiorack1
     poll_interval_seconds: 300
-    ok_json_path: state
-    bearer_token: ''
     show_standalone: false
     alert:
       enabled: false
   - id: wattbox_ha_8
-    name: WattBox 8 (AV Audio Rack 2) Outlet Check - 68
+    name: WattBox 8 (AV Audio Rack 2) Telnet - 68
     group: Power
-    type: http_json
-    url: ''
-    timeout_seconds: 5
+    type: wattbox
+    pdu_id: wb_008_av_audiorack2
     poll_interval_seconds: 300
-    ok_json_path: state
-    bearer_token: ''
     show_standalone: false
     alert:
       enabled: false
   - id: wattbox_ha_9
-    name: WattBox 9 (AV Floor Switch 1) Outlet Check - 69
+    name: WattBox 9 (AV Floor Switch 1) Telnet - 69
     group: Power
-    type: http_json
-    url: ''
-    timeout_seconds: 5
+    type: wattbox
+    pdu_id: wb_009_av_floorswitch1
     poll_interval_seconds: 300
-    ok_json_path: state
-    bearer_token: ''
     show_standalone: false
     alert:
       enabled: false

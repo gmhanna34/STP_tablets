@@ -7,8 +7,8 @@ Replaces the standalone Flask+Waitress health dashboard that ran on port 20855.
 Key design:
 - Background checker_loop thread polls all configured services on their own intervals.
 - Two-pass approach: atomic checks first, then composite aggregations.
-- Supports 9 check types: http, http_json, tcp, process, process_and_tcp,
-  obs_rpc, ffprobe_rtsp, composite, heartbeat_group.
+- Supports 10 check types: http, http_json, tcp, process, process_and_tcp,
+  obs_rpc, ffprobe_rtsp, wattbox, composite, heartbeat_group.
 - Home Assistant webhook alerts with debounced thresholds.
 - Recovery actions via HA service calls.
 - Log tailing from local files or remote URLs.
@@ -98,6 +98,7 @@ class HealthModule:
         self._next_due: Dict[str, float] = {}
         self._force_check = threading.Event()
         self._on_summary_change = None  # Optional callback(summary_dict)
+        self._wattbox = None  # Set by gateway_app after init
 
         self._running = False
 
@@ -354,6 +355,8 @@ class HealthModule:
                 return self._check_obs_rpc(svc)
             elif stype == "ffprobe_rtsp":
                 return self._check_ffprobe_rtsp(svc)
+            elif stype == "wattbox":
+                return self._check_wattbox(svc)
             else:
                 return ServiceResult(
                     id=svc["id"], name=svc.get("name", svc["id"]),
@@ -889,6 +892,62 @@ class HealthModule:
                 message=f"ffprobe error: {e}",
                 checked_at=_now_iso(),
                 last_ok_at=prev.last_ok_at if prev else None,
+            )
+
+    # -------------------------------------------------------------------------
+    # WATTBOX (direct Telnet connection check)
+    # -------------------------------------------------------------------------
+
+    def _check_wattbox(self, svc: dict) -> ServiceResult:
+        """Check WattBox PDU connectivity via the WattBox module's live state."""
+        sid = svc["id"]
+        name = svc.get("name", sid)
+        pdu_id = svc.get("pdu_id", "")
+        prev = self._results.get(sid)
+        start = time.time()
+
+        if not self._wattbox:
+            return ServiceResult(
+                id=sid, name=name,
+                status=_level_label("down"),
+                message="WattBox module not loaded",
+                checked_at=_now_iso(),
+                last_ok_at=prev.last_ok_at if prev else None,
+            )
+
+        device = self._wattbox._devices.get(pdu_id)
+        if not device:
+            return ServiceResult(
+                id=sid, name=name,
+                status=_level_label("down"),
+                message=f"PDU '{pdu_id}' not configured",
+                checked_at=_now_iso(),
+                last_ok_at=prev.last_ok_at if prev else None,
+            )
+
+        latency_ms = round((time.time() - start) * 1000, 1)
+
+        if device.connected:
+            states = device.get_all_states()
+            outlets = states.get("outlets", {})
+            on_count = sum(1 for o in outlets.values() if o.get("state") == "on")
+            total = len(outlets)
+            return ServiceResult(
+                id=sid, name=name,
+                status=_level_label("healthy"),
+                message=f"Connected — {on_count}/{total} outlets on",
+                checked_at=_now_iso(),
+                last_ok_at=_now_iso(),
+                latency_ms=latency_ms,
+            )
+        else:
+            return ServiceResult(
+                id=sid, name=name,
+                status=_level_label("down"),
+                message="Telnet disconnected",
+                checked_at=_now_iso(),
+                last_ok_at=prev.last_ok_at if prev else None,
+                latency_ms=latency_ms,
             )
 
     # -------------------------------------------------------------------------

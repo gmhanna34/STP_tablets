@@ -128,23 +128,7 @@ def _apply_env_overrides(cfg: dict):
             ba = svc.get("basic_auth")
             if ba and not ba.get("password"):
                 ba["password"] = _env("WATTBOX_PASSWORD", "")
-        if svc.get("id", "").startswith("wattbox_ha_") and svc.get("type") == "http_json":
-            if not svc.get("url") and ha_url:
-                wattbox_ha_entity_map = {
-                    "wattbox_ha_1": "switch.wb_001_audiowallrack_outlet_1",
-                    "wattbox_ha_2": "switch.wb_002_videowallrack_outlet_1",
-                    "wattbox_ha_3": "switch.wb_003_av_floorswitch2_outlet_1",
-                    "wattbox_ha_4": "switch.wb_004_av_audiorack1_outlet_1",
-                    "wattbox_ha_5": "switch.wb_005_chapel_ceilingrack_outlet_1",
-                    "wattbox_ha_6": "switch.wb_006_outlet_1",
-                    "wattbox_ha_7": "switch.wb_007_outlet_1",
-                    "wattbox_ha_8": "switch.wb_008_av_audiorack2_outlet_1",
-                    "wattbox_ha_9": "switch.wb_009_av_floorswitch1_outlet_1",
-                }
-                entity = wattbox_ha_entity_map.get(svc["id"], "")
-                if entity:
-                    svc["url"] = f"{ha_url}/api/states/{entity}"
-                    svc["bearer_token"] = ha_token
+        # wattbox_ha_* checks now use type: wattbox (direct Telnet) — no HA entity mapping needed
         if svc.get("id", "").startswith("ecobee_") and svc.get("type") == "http_json":
             if not svc.get("url") and ha_url:
                 ecobee_entity_map = {
@@ -358,6 +342,7 @@ def create_app(cfg: dict, mock_mode: bool = False, config_path: str = "config.ya
             state_cache.set("health", summary)
             socketio.emit("state:health", summary, room="health")
         health._on_summary_change = _broadcast_health
+        health._wattbox = wattbox
 
     from occupancy_module import OccupancyModule
     occupancy = None if mock_mode else OccupancyModule(cfg, logger, db=db)

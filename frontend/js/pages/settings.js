@@ -833,7 +833,7 @@ const SettingsPage = {
   _openWattBoxDeviceBrowser() {
     const self = this;
     self._wbPanelData = {};
-    self._wbExpanded = new Set();
+    if (!self._wbExpanded) self._wbExpanded = new Set();
 
     App.showPanel('WattBox Power Distribution', async (body) => {
       body.innerHTML = '<div style="text-align:center;padding:40px;opacity:0.5;">Loading WattBox devices...</div>';
@@ -960,8 +960,14 @@ const SettingsPage = {
     } else {
       this._wbExpanded.add(pduId);
     }
-    // Re-open panel with current data (panel remembers state via _wbExpanded)
-    this._openWattBoxDeviceBrowser();
+    // Toggle outlet list visibility and chevron icon in-place (no panel re-create)
+    const card = document.getElementById(`wb-panel-card-${pduId}`);
+    if (card) {
+      const outletList = card.querySelector('.wb-outlet-list');
+      const icon = card.querySelector('.wb-expand-icon');
+      if (outletList) outletList.classList.toggle('hidden');
+      if (icon) icon.textContent = this._wbExpanded.has(pduId) ? 'expand_less' : 'expand_more';
+    }
   },
 
   async _wbToggleOutlet(btn, outletId, action) {
