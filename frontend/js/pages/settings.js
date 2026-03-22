@@ -545,7 +545,22 @@ const SettingsPage = {
     document.getElementById('settings-help-btn')?.addEventListener('click', () => this._showHelp());
 
     // ── Tab switching ──────────────────────────────────────────────
-    this._activeTab = 'admin';
+    // Restore last active tab (PIN-protected tabs need re-auth)
+    const savedTab = sessionStorage.getItem('settings_active_tab');
+    const pinTabs = ['config', 'users'];
+    if (savedTab && savedTab !== 'admin' && pinTabs.includes(savedTab)) {
+      this._activeTab = 'admin';
+      App.showSecurePINEntry((success) => {
+        if (success) {
+          this._switchTab(savedTab);
+        }
+      });
+    } else if (savedTab && savedTab !== 'admin') {
+      this._activeTab = savedTab;
+      this._switchTab(savedTab);
+    } else {
+      this._activeTab = 'admin';
+    }
     document.querySelectorAll('[data-settings-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = btn.dataset.settingsTab;
@@ -687,6 +702,7 @@ const SettingsPage = {
 
   _switchTab(tab) {
     this._activeTab = tab;
+    sessionStorage.setItem('settings_active_tab', tab);
 
     // Update tab button states
     document.querySelectorAll('[data-settings-tab]').forEach(btn => {
