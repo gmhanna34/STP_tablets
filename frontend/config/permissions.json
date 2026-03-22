@@ -13,6 +13,7 @@
         "source": true,
         "security": true,
         "wattbox": true,
+        "macrobuilder": true,
         "settings": true
       }
     },
@@ -28,6 +29,7 @@
         "stream": true,
         "source": true,
         "security": false,
+        "macrobuilder": false,
         "settings": true
       }
     },
@@ -43,6 +45,7 @@
         "stream": true,
         "source": true,
         "security": false,
+        "macrobuilder": false,
         "settings": true
       }
     },
@@ -58,6 +61,7 @@
         "stream": false,
         "source": true,
         "security": false,
+        "macrobuilder": false,
         "settings": true
       }
     },
@@ -73,6 +77,7 @@
         "stream": false,
         "source": true,
         "security": false,
+        "macrobuilder": false,
         "settings": true
       }
     },
@@ -88,6 +93,7 @@
         "stream": false,
         "source": true,
         "security": false,
+        "macrobuilder": false,
         "settings": true
       }
     },
@@ -103,6 +109,7 @@
         "stream": false,
         "source": true,
         "security": true,
+        "macrobuilder": true,
         "settings": true
       }
     }
