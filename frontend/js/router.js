@@ -18,7 +18,8 @@ const Router = {
       security: SecurityPage,
       settings: SettingsPage,
       health: HealthPage,
-      occupancy: OccupancyPage
+      occupancy: OccupancyPage,
+      macrobuilder: MacroBuilderPage
     };
 
     // Setup nav click handlers

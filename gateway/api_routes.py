@@ -2271,6 +2271,220 @@ def register_api_routes(ctx):
             "camlytics": state_cache.get("camlytics"),
         }), 200
 
+    # ---- Macro Builder API ----
+
+    @app.route("/api/macro/builder/options")
+    def api_macro_builder_options():
+        """Return all dropdown options for the macro builder UI in one call."""
+        # WattBox outlets
+        wattbox_outlets = []
+        wattbox = ctx.wattbox
+        if wattbox:
+            all_devs, _ = wattbox.get_all_devices()
+            for pdu_id, pdu_data in all_devs.items():
+                pdu_label = pdu_data.get("label", pdu_id)
+                for outlet_key, outlet_info in pdu_data.get("outlets", {}).items():
+                    stable_id = f"{pdu_id}.{outlet_key}"
+                    name = outlet_info.get("name", outlet_key)
+                    wattbox_outlets.append({
+                        "id": stable_id,
+                        "label": f"{pdu_label} → {name}",
+                        "pdu": pdu_id,
+                    })
+        wattbox_outlets.sort(key=lambda x: x["id"])
+
+        # WattBox PDUs (for wattbox_reboot)
+        wattbox_pdus = []
+        wb_cfg = cfg.get("wattbox", {}).get("pdus", {})
+        for pdu_id, pdu_info in wb_cfg.items():
+            wattbox_pdus.append({"id": pdu_id, "label": pdu_info.get("label", pdu_id)})
+        wattbox_pdus.sort(key=lambda x: x["id"])
+
+        # MoIP transmitters & receivers from devices.json
+        devices_path = os.path.join(cfg.get("gateway", {}).get("static_dir", "../frontend"), "config", "devices.json")
+        moip_tx, moip_rx, ir_codes = [], [], []
+        try:
+            abs_devices = os.path.join(os.path.dirname(os.path.abspath(__file__)), devices_path)
+            with open(abs_devices, "r") as f:
+                devices_data = json.load(f)
+            moip_data = devices_data.get("moip", {})
+            moip_tx = [{"id": t["id"], "name": t.get("name", f"TX {t['id']}")}
+                       for t in moip_data.get("transmitters", [])]
+            moip_rx = [{"id": r["id"], "name": r.get("name", f"RX {r['id']}"),
+                        "location": r.get("location", "")}
+                       for r in moip_data.get("receivers", [])]
+            ir_codes = sorted(devices_data.get("moip", {}).get("irCodes", {}).keys())
+        except Exception as e:
+            logger.debug(f"Macro builder: could not load devices.json: {e}")
+
+        # PTZ cameras from config
+        cameras = [{"id": k, "name": v.get("name", k)}
+                   for k, v in cfg.get("ptz_cameras", {}).items()]
+        cameras.sort(key=lambda x: x["name"])
+
+        # Projectors from config
+        projectors = [{"id": k, "name": v.get("name", k)}
+                      for k, v in cfg.get("projectors", {}).items()]
+        projectors.sort(key=lambda x: x["name"])
+
+        # HA entities from cached state
+        ha_entities = []
+        ha_states = state_cache.get("ha") or {}
+        for eid, edata in ha_states.items():
+            ha_entities.append({"id": eid, "state": edata.get("state", "unknown")})
+        # Also collect from bulk HA entity cache if available
+        if not ha_entities and not mock_mode:
+            try:
+                all_ents, err = fetch_all_ha_entities(ctx)
+                if not err:
+                    for ent in all_ents:
+                        eid = ent.get("entity_id", "")
+                        if eid.startswith(("switch.", "light.", "input_boolean.", "lock.", "media_player.")):
+                            ha_entities.append({"id": eid, "state": ent.get("state", "unknown")})
+            except Exception:
+                pass
+        ha_entities.sort(key=lambda x: x["id"])
+
+        # TTS presets and sequences from announcements.yaml
+        tts_presets, tts_sequences = [], []
+        try:
+            ann_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "announcements.yaml")
+            with open(ann_path, "r") as f:
+                ann_cfg = yaml.safe_load(f) or {}
+            for k, v in ann_cfg.get("presets", {}).items():
+                tts_presets.append({"id": k, "label": v.get("label", k)})
+            for k, v in ann_cfg.get("sequences", {}).items():
+                tts_sequences.append({"id": k, "label": v.get("label", k)})
+        except Exception as e:
+            logger.debug(f"Macro builder: could not load announcements.yaml: {e}")
+
+        # Existing macro keys (for nesting)
+        macro_keys = [{"id": k, "label": v.get("label", k)}
+                      for k, v in ctx.macro_defs.items()]
+        macro_keys.sort(key=lambda x: x["label"])
+
+        return jsonify({
+            "wattbox_outlets": wattbox_outlets,
+            "wattbox_pdus": wattbox_pdus,
+            "moip_tx": moip_tx,
+            "moip_rx": moip_rx,
+            "ir_codes": ir_codes,
+            "cameras": cameras,
+            "projectors": projectors,
+            "ha_entities": ha_entities,
+            "tts_presets": tts_presets,
+            "tts_sequences": tts_sequences,
+            "macro_keys": macro_keys,
+        }), 200
+
+    @app.route("/api/macro/builder/save", methods=["POST"])
+    def api_macro_builder_save():
+        """Create or update a macro in macros.yaml and hot-reload."""
+        data = request.get_json(silent=True) or {}
+        macro_key = data.get("key", "").strip()
+        macro_def = data.get("definition")
+        if not macro_key or not macro_def:
+            return jsonify({"error": "key and definition required"}), 400
+        # Validate key format (alphanumeric + underscores)
+        import re
+        if not re.match(r'^[a-z][a-z0-9_]*$', macro_key):
+            return jsonify({"error": "Key must be lowercase alphanumeric with underscores, starting with a letter"}), 400
+        if not isinstance(macro_def.get("steps"), list):
+            return jsonify({"error": "definition.steps must be a list"}), 400
+
+        macros_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "macros.yaml")
+        tablet = get_tablet_id()
+        try:
+            with open(macros_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            macros_cfg = yaml.safe_load(content) or {}
+        except Exception as e:
+            return jsonify({"error": f"Failed to read macros.yaml: {e}"}), 500
+
+        if "macros" not in macros_cfg:
+            macros_cfg["macros"] = {}
+
+        is_new = macro_key not in macros_cfg["macros"]
+        macros_cfg["macros"][macro_key] = macro_def
+
+        # Write with backup
+        backup_path = macros_path + ".bak"
+        try:
+            shutil.copy2(macros_path, backup_path)
+            with open(macros_path, "w", encoding="utf-8") as f:
+                yaml.dump(macros_cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        except Exception as e:
+            return jsonify({"error": f"Failed to write macros.yaml: {e}"}), 500
+
+        # Hot-reload macros in memory
+        from macro_engine import load_macros
+        try:
+            new_cfg, new_macro_defs, new_button_defs, new_ha_entities = load_macros(cfg, logger)
+            ctx.macros_cfg = new_cfg
+            ctx.macro_defs = new_macro_defs
+            ctx.button_defs = new_button_defs
+            ctx.ha_state_entities = new_ha_entities
+        except Exception as e:
+            logger.warning(f"Macro reload after builder save failed: {e}")
+
+        action = "macro:create" if is_new else "macro:update"
+        db.log_action(tablet, action, macro_key,
+                      json.dumps({"steps": len(macro_def.get("steps", []))}),
+                      "OK", 0)
+        logger.info(f"[{tablet}] Macro builder {action}: {macro_key} "
+                    f"({len(macro_def.get('steps', []))} steps)")
+
+        return jsonify({"success": True, "key": macro_key, "action": action}), 200
+
+    @app.route("/api/macro/builder/<macro_key>", methods=["DELETE"])
+    def api_macro_builder_delete(macro_key: str):
+        """Delete a macro from macros.yaml and hot-reload."""
+        macros_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "macros.yaml")
+        tablet = get_tablet_id()
+        try:
+            with open(macros_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            macros_cfg = yaml.safe_load(content) or {}
+        except Exception as e:
+            return jsonify({"error": f"Failed to read macros.yaml: {e}"}), 500
+
+        if macro_key not in macros_cfg.get("macros", {}):
+            return jsonify({"error": f"Macro not found: {macro_key}"}), 404
+
+        del macros_cfg["macros"][macro_key]
+
+        # Write with backup
+        backup_path = macros_path + ".bak"
+        try:
+            shutil.copy2(macros_path, backup_path)
+            with open(macros_path, "w", encoding="utf-8") as f:
+                yaml.dump(macros_cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        except Exception as e:
+            return jsonify({"error": f"Failed to write macros.yaml: {e}"}), 500
+
+        # Hot-reload
+        from macro_engine import load_macros
+        try:
+            new_cfg, new_macro_defs, new_button_defs, new_ha_entities = load_macros(cfg, logger)
+            ctx.macros_cfg = new_cfg
+            ctx.macro_defs = new_macro_defs
+            ctx.button_defs = new_button_defs
+            ctx.ha_state_entities = new_ha_entities
+        except Exception as e:
+            logger.warning(f"Macro reload after builder delete failed: {e}")
+
+        db.log_action(tablet, "macro:delete", macro_key, "", "OK", 0)
+        logger.info(f"[{tablet}] Macro builder delete: {macro_key}")
+        return jsonify({"success": True, "key": macro_key}), 200
+
+    @app.route("/api/macro/builder/<macro_key>")
+    def api_macro_builder_get(macro_key: str):
+        """Get full macro definition for editing in the builder."""
+        macro = ctx.macro_defs.get(macro_key)
+        if not macro:
+            return jsonify({"error": f"Macro not found: {macro_key}"}), 404
+        return jsonify({"key": macro_key, "definition": macro}), 200
+
     # ---- Camlytics ----
 
     @app.route("/api/camlytics/state")
