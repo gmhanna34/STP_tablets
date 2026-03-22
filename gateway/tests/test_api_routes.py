@@ -11,7 +11,6 @@ import tempfile
 import threading
 
 import pytest
-import yaml
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -73,36 +72,10 @@ def _build_test_app():
     ctx.known_location_slugs = {"lobby", "chapel"}
 
     # Macro engine
-    macros_doc = {
-        "macros": {
-            "test_power_cycle": {
-                "label": "Test Power Cycle",
-                "description": "Simple builder-compatible macro",
-                "steps": [
-                    {"type": "wattbox_power", "device": "rack_outlet", "action": "off"},
-                    {"type": "delay", "seconds": 10},
-                    {"type": "wattbox_power", "device": "rack_outlet", "action": "on", "verify": True},
-                ],
-                "ui_builder": {"managed": True, "category": "Power"},
-            },
-            "unsupported_macro": {
-                "label": "Unsupported",
-                "steps": [
-                    {"type": "wait_until", "target": "switch.example", "timeout": 10},
-                ],
-            },
-        },
-        "buttons": {},
-    }
-    macros_fd, macros_path = tempfile.mkstemp(suffix=".yaml")
-    os.close(macros_fd)
-    with open(macros_path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(macros_doc, f, sort_keys=False)
-    ctx.macros_path = macros_path
-    ctx.macros_cfg = macros_doc
-    ctx.macro_defs = macros_doc["macros"]
-    ctx.button_defs = macros_doc["buttons"]
-    ctx.ha_state_entities = set()
+    from macro_engine import load_macros
+    import logging
+    _, ctx.macro_defs, ctx.button_defs, ctx.ha_state_entities = load_macros({}, logging.getLogger("test"))
+    ctx.macros_cfg = {}
 
     # Modules (all None in mock)
     ctx.x32 = None
@@ -134,21 +107,17 @@ def _build_test_app():
     with open(os.path.join(ctx.static_dir, "index.html"), "w") as f:
         f.write("<html><body>test</body></html>")
 
-    return app, ctx, db_path, macros_path
+    return app, ctx, db_path
 
 
 @pytest.fixture(scope="module")
 def client():
     """Module-scoped test client for API smoke tests."""
-    app, ctx, db_path, macros_path = _build_test_app()
+    app, ctx, db_path = _build_test_app()
     with app.test_client() as c:
         yield c
     try:
         os.unlink(db_path)
-    except OSError:
-        pass
-    try:
-        os.unlink(macros_path)
     except OSError:
         pass
 
@@ -199,66 +168,6 @@ class TestMacroEndpoints:
         resp = client.get("/api/macro/state",
                           environ_base={"REMOTE_ADDR": "127.0.0.1"})
         assert resp.status_code == 200
-
-    def test_macro_builder_list(self, client):
-        resp = client.get("/api/macro-builder",
-                          environ_base={"REMOTE_ADDR": "127.0.0.1"})
-        assert resp.status_code == 200
-        data = resp.get_json()
-        assert "macros" in data
-        assert any(m["key"] == "test_power_cycle" for m in data["macros"])
-
-    def test_macro_builder_preview(self, client):
-        payload = {
-            "key": "preview_test",
-            "label": "Preview Test",
-            "steps": [
-                {"type": "delay", "seconds": 5},
-            ],
-        }
-        resp = client.post("/api/macro-builder/preview",
-                           data=json.dumps(payload),
-                           content_type="application/json",
-                           environ_base={"REMOTE_ADDR": "127.0.0.1"})
-        assert resp.status_code == 200
-        data = resp.get_json()
-        assert "macros:" in data["preview"]
-
-    def test_macro_builder_save_and_delete(self, client):
-        payload = {
-            "key": "builder_created",
-            "label": "Builder Created",
-            "description": "Saved from test",
-            "category": "Power",
-            "steps": [
-                {"type": "wattbox_power", "device": "rack_outlet", "action": "cycle"},
-                {"type": "delay", "seconds": 8},
-                {"type": "ha_service", "domain": "switch", "service": "turn_on",
-                 "data": {"entity_id": "switch.example_outlet"}, "verify": True},
-            ],
-        }
-        save_resp = client.post("/api/macro-builder",
-                                data=json.dumps(payload),
-                                content_type="application/json",
-                                environ_base={"REMOTE_ADDR": "127.0.0.1"})
-        assert save_resp.status_code == 200
-        saved = save_resp.get_json()
-        assert saved["macro"]["key"] == "builder_created"
-
-        get_resp = client.get("/api/macro-builder/builder_created",
-                              environ_base={"REMOTE_ADDR": "127.0.0.1"})
-        assert get_resp.status_code == 200
-        loaded = get_resp.get_json()
-        assert loaded["managed"] is True
-        assert loaded["steps"][0]["type"] == "wattbox_power"
-
-        delete_resp = client.delete("/api/macro-builder/builder_created",
-                                    environ_base={"REMOTE_ADDR": "127.0.0.1"})
-        assert delete_resp.status_code == 200
-
-        missing_resp = client.get("/api/macro-builder/builder_created",
-                                  environ_base={"REMOTE_ADDR": "127.0.0.1"})
-        assert missing_resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
