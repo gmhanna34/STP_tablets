@@ -307,6 +307,22 @@ const SettingsPage = {
         <div class="page-grid" id="config-editor-grid">
           <div class="text-center" style="opacity:0.5;padding:30px;">Loading configuration...</div>
         </div>
+        <!-- Macro Builder -->
+        <div class="page-grid" style="margin-top:12px;">
+          <div class="control-section" style="grid-column:1/-1;">
+            <div class="section-title">
+              <span class="material-icons" style="font-size:18px;vertical-align:middle;margin-right:4px;">construction</span>
+              Macro Builder
+            </div>
+            <div class="info-text" style="margin:0 0 12px 0;font-size:14px;">
+              Visually create, edit, and test macros with smart dropdowns and drag-and-drop step ordering.
+            </div>
+            <button class="btn" id="btn-open-macro-builder">
+              <span class="material-icons">construction</span>
+              <span class="btn-label">Open Macro Builder</span>
+            </button>
+          </div>
+        </div>
         <!-- Entity Find & Replace -->
         <div class="page-grid" style="margin-top:12px;">
           <div class="control-section" style="grid-column:1/-1;">
@@ -589,6 +605,9 @@ const SettingsPage = {
     document.getElementById('btn-config-save')?.addEventListener('click', () => this._saveConfig());
     document.getElementById('btn-gateway-restart')?.addEventListener('click', () => this._restartGateway());
     document.getElementById('btn-gateway-update')?.addEventListener('click', () => this._updateGateway());
+
+    // Macro Builder
+    document.getElementById('btn-open-macro-builder')?.addEventListener('click', () => Router.navigate('macrobuilder'));
 
     // Entity find & replace panel
     document.getElementById('btn-open-entity-fr')?.addEventListener('click', () => this._openEntityFRPanel());
