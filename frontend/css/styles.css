@@ -5545,6 +5545,130 @@ body {
   resize: vertical;
 }
 
+/* System macro warning banner */
+.mb-system-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: 6px;
+  background: rgba(255, 152, 0, 0.12);
+  border: 1px solid rgba(255, 152, 0, 0.35);
+  color: #ffb74d;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.mb-system-warning .material-icons {
+  font-size: 20px;
+  color: #ff9800;
+  flex-shrink: 0;
+}
+
+.mb-system-warning.hidden { display: none; }
+
+/* Icon preview */
+.mb-icon-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mb-icon-preview {
+  font-size: 24px;
+  opacity: 0.7;
+  flex-shrink: 0;
+  width: 28px;
+  text-align: center;
+}
+
+/* Parallel group */
+.mb-parallel-group,
+.mb-condition-group {
+  padding: 4px 0;
+}
+
+.mb-substep {
+  margin-left: 16px;
+  border-left: 2px solid var(--primary);
+  padding-left: 10px;
+  margin-bottom: 6px;
+}
+
+.mb-substep-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+
+.mb-step-number-sub {
+  font-size: 10px;
+  width: 28px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--primary);
+  color: var(--primary);
+}
+
+.mb-substep-fields {
+  padding: 2px 0 4px 0;
+}
+
+.mb-substep-fields .mb-field-row {
+  margin-top: 4px;
+}
+
+.mb-add-substep {
+  margin-left: 16px;
+  margin-top: 4px;
+}
+
+/* Condition blocks */
+.mb-condition-section {
+  margin-bottom: 8px;
+}
+
+.mb-condition-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
+.mb-condition-if .mb-condition-label {
+  background: rgba(33, 150, 243, 0.15);
+  color: #64b5f6;
+}
+
+.mb-condition-then .mb-condition-label {
+  background: rgba(76, 175, 80, 0.15);
+  color: #81c784;
+}
+
+.mb-condition-else .mb-condition-label {
+  background: rgba(244, 67, 54, 0.15);
+  color: #e57373;
+}
+
+.mb-condition-content {
+  padding-left: 8px;
+}
+
+.mb-condition-then .mb-substep {
+  border-left-color: #4caf50;
+}
+
+.mb-condition-else .mb-substep {
+  border-left-color: #f44336;
+}
+
 /* Editor Actions */
 .mb-editor-actions {
   display: flex;

@@ -66,6 +66,10 @@ const MacroBuilderPage = {
               <p>Select a macro to edit or create a new one</p>
             </div>
             <div id="mb-editor-form" class="mb-editor-form hidden">
+              <div id="mb-system-warning" class="mb-system-warning hidden">
+                <span class="material-icons">warning</span>
+                <span>This is a system macro in macros.yaml. Edits here will modify the core configuration.</span>
+              </div>
               <div class="mb-editor-top">
                 <div class="mb-field-row">
                   <div class="mb-field">
@@ -76,14 +80,23 @@ const MacroBuilderPage = {
                     <label>Label</label>
                     <input type="text" id="mb-label" placeholder="My Macro" class="mb-input">
                   </div>
-                  <div class="mb-field">
+                  <div class="mb-field mb-icon-field">
                     <label>Icon</label>
-                    <input type="text" id="mb-icon" placeholder="power_settings_new" class="mb-input mb-input-sm">
+                    <div class="mb-icon-input-row">
+                      <input type="text" id="mb-icon" placeholder="power_settings_new" class="mb-input mb-input-sm">
+                      <span class="material-icons mb-icon-preview" id="mb-icon-preview">play_arrow</span>
+                    </div>
                   </div>
                 </div>
-                <div class="mb-field">
-                  <label>Description</label>
-                  <input type="text" id="mb-description" placeholder="What this macro does" class="mb-input mb-input-wide">
+                <div class="mb-field-row">
+                  <div class="mb-field" style="flex:2;">
+                    <label>Description</label>
+                    <input type="text" id="mb-description" placeholder="What this macro does" class="mb-input mb-input-wide">
+                  </div>
+                  <div class="mb-field" style="flex:1;">
+                    <label>Confirm Prompt</label>
+                    <input type="text" id="mb-confirm" placeholder="Are you sure?" class="mb-input mb-input-wide">
+                  </div>
                 </div>
               </div>
 
@@ -101,6 +114,10 @@ const MacroBuilderPage = {
                 <button class="btn btn-success" id="mb-save-btn">
                   <span class="material-icons">save</span>
                   <span class="btn-label">Save Macro</span>
+                </button>
+                <button class="btn" id="mb-test-btn" style="display:none;">
+                  <span class="material-icons">play_arrow</span>
+                  <span class="btn-label">Test Run</span>
                 </button>
                 <button class="btn btn-danger" id="mb-delete-btn" style="display:none;">
                   <span class="material-icons">delete</span>
@@ -153,6 +170,16 @@ const MacroBuilderPage = {
 
     document.getElementById('mb-delete-btn').addEventListener('click', () => {
       this._deleteMacro();
+    });
+
+    document.getElementById('mb-test-btn').addEventListener('click', () => {
+      this._testRunMacro();
+    });
+
+    // Icon preview: update as user types
+    document.getElementById('mb-icon').addEventListener('input', (e) => {
+      const preview = document.getElementById('mb-icon-preview');
+      preview.textContent = e.target.value.trim() || 'play_arrow';
     });
 
     // Drag-and-drop for step reordering
@@ -266,12 +293,16 @@ const MacroBuilderPage = {
 
     document.getElementById('mb-editor-placeholder').classList.add('hidden');
     document.getElementById('mb-editor-form').classList.remove('hidden');
+    document.getElementById('mb-system-warning').classList.add('hidden');
     document.getElementById('mb-key').value = '';
     document.getElementById('mb-key').readOnly = false;
     document.getElementById('mb-label').value = '';
     document.getElementById('mb-icon').value = '';
+    document.getElementById('mb-icon-preview').textContent = 'play_arrow';
     document.getElementById('mb-description').value = '';
+    document.getElementById('mb-confirm').value = '';
     document.getElementById('mb-delete-btn').style.display = 'none';
+    document.getElementById('mb-test-btn').style.display = 'none';
     this._renderSteps();
     this._renderMacroList(); // clear active highlight
   },
@@ -294,12 +325,17 @@ const MacroBuilderPage = {
 
       document.getElementById('mb-editor-placeholder').classList.add('hidden');
       document.getElementById('mb-editor-form').classList.remove('hidden');
+      // Show warning banner — all existing macros in macros.yaml are system macros
+      document.getElementById('mb-system-warning').classList.remove('hidden');
       document.getElementById('mb-key').value = key;
       document.getElementById('mb-key').readOnly = true;
       document.getElementById('mb-label').value = def.label || '';
       document.getElementById('mb-icon').value = def.icon || '';
+      document.getElementById('mb-icon-preview').textContent = def.icon || 'play_arrow';
       document.getElementById('mb-description').value = def.description || '';
+      document.getElementById('mb-confirm').value = def.confirm || '';
       document.getElementById('mb-delete-btn').style.display = '';
+      document.getElementById('mb-test-btn').style.display = '';
       this._renderSteps();
       this._renderMacroList();
     } catch (e) {
@@ -525,21 +561,10 @@ const MacroBuilderPage = {
         ]);
 
       case 'condition':
-        return `<div class="mb-field-hint">Condition steps have complex if/then/else structure.
-          Edit the JSON directly below or use simpler step types.</div>
-          <div class="mb-field">
-            <label>Condition JSON</label>
-            <textarea class="mb-input mb-input-wide mb-step-json" data-index="${index}" rows="6"
-              placeholder='{"if": {"type": "ha_check", ...}, "then": [...], "else": [...]}'>${this._escHtml(JSON.stringify(this._extractCondition(step), null, 2))}</textarea>
-          </div>`;
+        return this._renderConditionBlock(step, index);
 
       case 'parallel':
-        return `<div class="mb-field-hint">Parallel steps run sub-steps concurrently. Edit JSON below.</div>
-          <div class="mb-field">
-            <label>Sub-steps JSON</label>
-            <textarea class="mb-input mb-input-wide mb-step-json" data-index="${index}" rows="6"
-              placeholder='[{"type": "ha_service", ...}, ...]'>${this._escHtml(JSON.stringify(step.steps || [], null, 2))}</textarea>
-          </div>`;
+        return this._renderParallelBlock(step, index);
 
       default:
         return '';
@@ -676,23 +701,123 @@ const MacroBuilderPage = {
       });
     });
 
-    // JSON fields (condition, parallel)
-    container.querySelectorAll('.mb-step-json').forEach(ta => {
-      ta.addEventListener('input', (e) => {
-        const idx = parseInt(e.target.dataset.index, 10);
-        try {
-          const parsed = JSON.parse(e.target.value);
-          const step = this._steps[idx];
-          if (step.type === 'condition') {
-            Object.assign(step, parsed);
-          } else if (step.type === 'parallel') {
-            step.steps = parsed;
-          }
-          e.target.classList.remove('mb-input-error');
-          this._dirty = true;
-        } catch {
-          e.target.classList.add('mb-input-error');
+    // Parallel/Condition: add sub-step buttons
+    container.querySelectorAll('.mb-add-substep').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const parentIdx = parseInt(btn.dataset.parent, 10);
+        const branch = btn.dataset.branch; // undefined for parallel, 'then'/'else' for condition
+        const step = this._steps[parentIdx];
+        if (step.type === 'parallel') {
+          if (!step.steps) step.steps = [];
+          step.steps.push({ type: '' });
+        } else if (step.type === 'condition') {
+          if (branch === 'then') { if (!step.then) step.then = []; step.then.push({ type: '' }); }
+          if (branch === 'else') { if (!step.else) step.else = []; step.else.push({ type: '' }); }
         }
+        this._dirty = true;
+        this._renderSteps();
+      });
+    });
+
+    // Parallel/Condition: remove sub-step buttons
+    container.querySelectorAll('.mb-substep-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const parentIdx = parseInt(btn.dataset.parent, 10);
+        const subIdx = parseInt(btn.dataset.subindex, 10);
+        const branch = btn.dataset.branch;
+        const step = this._steps[parentIdx];
+        if (step.type === 'parallel' && step.steps) {
+          step.steps.splice(subIdx, 1);
+        } else if (step.type === 'condition') {
+          if (branch === 'then' && step.then) step.then.splice(subIdx, 1);
+          if (branch === 'else' && step.else) step.else.splice(subIdx, 1);
+        }
+        this._dirty = true;
+        this._renderSteps();
+      });
+    });
+
+    // Parallel/Condition: sub-step type change
+    container.querySelectorAll('.mb-substep-type').forEach(sel => {
+      sel.addEventListener('change', (e) => {
+        const parentIdx = parseInt(e.target.dataset.parent, 10);
+        const subIdx = parseInt(e.target.dataset.subindex, 10);
+        const branch = e.target.dataset.branch;
+        const step = this._steps[parentIdx];
+        let subStep;
+        if (step.type === 'parallel' && step.steps) {
+          subStep = step.steps[subIdx];
+        } else if (step.type === 'condition') {
+          if (branch === 'then' && step.then) subStep = step.then[subIdx];
+          if (branch === 'else' && step.else) subStep = step.else[subIdx];
+        }
+        if (subStep) {
+          const msg = subStep.message;
+          const onFail = subStep.on_fail;
+          Object.keys(subStep).forEach(k => delete subStep[k]);
+          subStep.type = e.target.value;
+          if (msg) subStep.message = msg;
+          if (onFail) subStep.on_fail = onFail;
+        }
+        this._dirty = true;
+        this._renderSteps();
+      });
+    });
+
+    // Condition: IF type change
+    container.querySelectorAll('.mb-cond-if-type').forEach(sel => {
+      sel.addEventListener('change', (e) => {
+        const parentIdx = parseInt(e.target.dataset.parent, 10);
+        const step = this._steps[parentIdx];
+        step.if = { type: e.target.value };
+        this._dirty = true;
+        this._renderSteps();
+      });
+    });
+
+    // Sub-step fields (parallel & condition)
+    container.querySelectorAll('.mb-substep-fields .mb-step-field').forEach(el => {
+      const event = el.type === 'checkbox' ? 'change' : 'input';
+      el.addEventListener(event, (e) => {
+        const prefix = e.target.dataset.index; // e.g. "par-2-0" or "cond-then-2-0" or "cond-if-2"
+        const field = e.target.dataset.field;
+        let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+
+        // Convert numeric and boolean values
+        if (typeof value === 'string' && /^\d+$/.test(value) && ['seconds', 'timeout', 'duration', 'preset', 'tx', 'rx', 'bus', 'channel'].includes(field)) {
+          value = parseInt(value, 10);
+        }
+        if (value === 'true') value = true;
+        if (value === 'false') value = false;
+
+        const parts = prefix.split('-');
+        if (parts[0] === 'par') {
+          // parallel sub-step: par-{parentIdx}-{subIdx}
+          const parentIdx = parseInt(parts[1], 10);
+          const subIdx = parseInt(parts[2], 10);
+          if (this._steps[parentIdx]?.steps?.[subIdx]) {
+            if (field === 'message_text') this._steps[parentIdx].steps[subIdx].message = value;
+            else this._steps[parentIdx].steps[subIdx][field] = value;
+          }
+        } else if (parts[0] === 'cond') {
+          if (parts[1] === 'if') {
+            // condition IF fields: cond-if-{parentIdx}
+            const parentIdx = parseInt(parts[2], 10);
+            if (this._steps[parentIdx]?.if) {
+              this._steps[parentIdx].if[field] = value;
+            }
+          } else {
+            // condition branch: cond-{then|else}-{parentIdx}-{subIdx}
+            const branch = parts[1];
+            const parentIdx = parseInt(parts[2], 10);
+            const subIdx = parseInt(parts[3], 10);
+            if (this._steps[parentIdx]?.[branch]?.[subIdx]) {
+              if (field === 'message_text') this._steps[parentIdx][branch][subIdx].message = value;
+              else this._steps[parentIdx][branch][subIdx][field] = value;
+            }
+          }
+        }
+        this._dirty = true;
       });
     });
 
@@ -724,6 +849,7 @@ const MacroBuilderPage = {
     const label = document.getElementById('mb-label').value.trim();
     const icon = document.getElementById('mb-icon').value.trim();
     const description = document.getElementById('mb-description').value.trim();
+    const confirm = document.getElementById('mb-confirm').value.trim();
 
     if (!key) {
       App.showToast('Macro key is required', 2000, 'error');
@@ -743,6 +869,7 @@ const MacroBuilderPage = {
     const definition = { label: label || key, steps: validSteps };
     if (icon) definition.icon = icon;
     if (description) definition.description = description;
+    if (confirm) definition.confirm = confirm;
 
     try {
       const resp = await fetch('/api/macro/builder/save', {
@@ -762,6 +889,8 @@ const MacroBuilderPage = {
       this._dirty = false;
       document.getElementById('mb-key').readOnly = true;
       document.getElementById('mb-delete-btn').style.display = '';
+      document.getElementById('mb-test-btn').style.display = '';
+      document.getElementById('mb-system-warning').classList.remove('hidden');
       await this._loadMacroList();
     } catch (e) {
       App.showToast(`Save failed: ${e.message}`, 3000, 'error');
@@ -792,6 +921,279 @@ const MacroBuilderPage = {
       await this._loadMacroList();
     } catch (e) {
       App.showToast(`Delete failed: ${e.message}`, 3000, 'error');
+    }
+  },
+
+  // --- Parallel & Condition Visual UI ---
+
+  _renderParallelBlock(step, index) {
+    const subSteps = step.steps || [];
+    const subHtml = subSteps.map((sub, si) => {
+      const subType = sub.type || '';
+      const subLabel = (this.STEP_TYPES.find(t => t.value === subType) || {}).label || subType || 'Select type...';
+      return `
+        <div class="mb-substep" data-parent="${index}" data-subindex="${si}">
+          <div class="mb-substep-header">
+            <span class="mb-substep-connector"></span>
+            <span class="mb-step-number mb-step-number-sub">${index + 1}${String.fromCharCode(97 + si)}</span>
+            <select class="mb-input mb-input-sm mb-substep-type" data-parent="${index}" data-subindex="${si}">
+              <option value="">-- Select --</option>
+              ${this.STEP_TYPES.filter(t => t.value !== 'parallel' && t.value !== 'condition').map(t => `<option value="${t.value}" ${t.value === subType ? 'selected' : ''}>${t.label}</option>`).join('')}
+            </select>
+            <button class="mb-step-btn mb-substep-remove" data-parent="${index}" data-subindex="${si}" title="Remove sub-step">
+              <span class="material-icons">close</span>
+            </button>
+          </div>
+          <div class="mb-substep-fields">
+            ${this._renderSubStepFields(sub, index, si)}
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="mb-parallel-group" data-parent="${index}">
+        <div class="mb-field-hint"><span class="material-icons" style="font-size:14px;vertical-align:middle;">bolt</span> These sub-steps run concurrently</div>
+        ${subHtml}
+        <button class="btn btn-sm mb-add-substep" data-parent="${index}">
+          <span class="material-icons">add</span>
+          <span class="btn-label">Add Sub-Step</span>
+        </button>
+      </div>`;
+  },
+
+  _renderConditionBlock(step, index) {
+    const ifStep = step.if || {};
+    const thenSteps = step.then || [];
+    const elseSteps = step.else || [];
+
+    const ifType = ifStep.type || '';
+
+    // IF block
+    const ifHtml = `
+      <div class="mb-condition-section mb-condition-if">
+        <div class="mb-condition-label">IF</div>
+        <div class="mb-condition-content">
+          <select class="mb-input mb-input-sm mb-cond-if-type" data-parent="${index}">
+            <option value="">-- Select Check --</option>
+            ${['ha_check', 'wattbox_check'].map(t => {
+              const label = (this.STEP_TYPES.find(st => st.value === t) || {}).label || t;
+              return `<option value="${t}" ${t === ifType ? 'selected' : ''}>${label}</option>`;
+            }).join('')}
+          </select>
+          <div class="mb-cond-if-fields">
+            ${this._renderConditionIfFields(ifStep, index)}
+          </div>
+        </div>
+      </div>`;
+
+    // THEN block
+    const thenHtml = thenSteps.map((sub, si) => {
+      const subType = sub.type || '';
+      return `
+        <div class="mb-substep" data-parent="${index}" data-branch="then" data-subindex="${si}">
+          <div class="mb-substep-header">
+            <span class="mb-substep-connector"></span>
+            <span class="mb-step-number mb-step-number-sub">${index + 1}t${si + 1}</span>
+            <select class="mb-input mb-input-sm mb-substep-type" data-parent="${index}" data-branch="then" data-subindex="${si}">
+              <option value="">-- Select --</option>
+              ${this.STEP_TYPES.filter(t => t.value !== 'condition').map(t => `<option value="${t.value}" ${t.value === subType ? 'selected' : ''}>${t.label}</option>`).join('')}
+            </select>
+            <button class="mb-step-btn mb-substep-remove" data-parent="${index}" data-branch="then" data-subindex="${si}" title="Remove">
+              <span class="material-icons">close</span>
+            </button>
+          </div>
+          <div class="mb-substep-fields">
+            ${this._renderSubStepFields(sub, index, si, 'then')}
+          </div>
+        </div>`;
+    }).join('');
+
+    // ELSE block
+    const elseHtml = elseSteps.map((sub, si) => {
+      const subType = sub.type || '';
+      return `
+        <div class="mb-substep" data-parent="${index}" data-branch="else" data-subindex="${si}">
+          <div class="mb-substep-header">
+            <span class="mb-substep-connector"></span>
+            <span class="mb-step-number mb-step-number-sub">${index + 1}e${si + 1}</span>
+            <select class="mb-input mb-input-sm mb-substep-type" data-parent="${index}" data-branch="else" data-subindex="${si}">
+              <option value="">-- Select --</option>
+              ${this.STEP_TYPES.filter(t => t.value !== 'condition').map(t => `<option value="${t.value}" ${t.value === subType ? 'selected' : ''}>${t.label}</option>`).join('')}
+            </select>
+            <button class="mb-step-btn mb-substep-remove" data-parent="${index}" data-branch="else" data-subindex="${si}" title="Remove">
+              <span class="material-icons">close</span>
+            </button>
+          </div>
+          <div class="mb-substep-fields">
+            ${this._renderSubStepFields(sub, index, si, 'else')}
+          </div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="mb-condition-group" data-parent="${index}">
+        ${ifHtml}
+        <div class="mb-condition-section mb-condition-then">
+          <div class="mb-condition-label">THEN</div>
+          <div class="mb-condition-content">
+            ${thenHtml}
+            <button class="btn btn-sm mb-add-substep" data-parent="${index}" data-branch="then">
+              <span class="material-icons">add</span>
+              <span class="btn-label">Add Then Step</span>
+            </button>
+          </div>
+        </div>
+        <div class="mb-condition-section mb-condition-else">
+          <div class="mb-condition-label">ELSE</div>
+          <div class="mb-condition-content">
+            ${elseHtml}
+            <button class="btn btn-sm mb-add-substep" data-parent="${index}" data-branch="else">
+              <span class="material-icons">add</span>
+              <span class="btn-label">Add Else Step</span>
+            </button>
+          </div>
+        </div>
+      </div>`;
+  },
+
+  _renderConditionIfFields(ifStep, index) {
+    const type = ifStep.type || '';
+    const opts = this._options || {};
+    switch (type) {
+      case 'ha_check':
+        return `<div class="mb-field-row mb-field-row-wrap">
+          ${this._selectField(`cond-if-${index}`, 'entity_id', 'Entity', (opts.ha_entities || []).map(e => ({ value: e.id, label: e.id })), ifStep.entity_id)}
+          ${this._textField(`cond-if-${index}`, 'state', 'Expected State', ifStep.state || '', 'on')}
+        </div>`;
+      case 'wattbox_check':
+        return `<div class="mb-field-row mb-field-row-wrap">
+          ${this._selectField(`cond-if-${index}`, 'device', 'Outlet', (opts.wattbox_outlets || []).map(o => ({ value: o.id, label: o.label })), ifStep.device)}
+          ${this._selectField(`cond-if-${index}`, 'state', 'Expected State', [{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }], ifStep.state || 'on')}
+        </div>`;
+      default:
+        return '';
+    }
+  },
+
+  _renderSubStepFields(sub, parentIndex, subIndex, branch) {
+    // Render the step-specific fields for a sub-step (parallel or condition branch)
+    const type = sub.type || '';
+    const opts = this._options || {};
+    const prefix = branch ? `cond-${branch}-${parentIndex}-${subIndex}` : `par-${parentIndex}-${subIndex}`;
+
+    // Reuse the same field rendering logic but with sub-step prefixed indices
+    switch (type) {
+      case 'ha_service':
+        return `<div class="mb-field-row mb-field-row-wrap">
+          ${this._selectField(prefix, 'entity_id', 'Entity', (opts.ha_entities || []).map(e => ({ value: e.id, label: e.id })), sub.entity_id)}
+          ${this._textField(prefix, 'domain', 'Domain', sub.domain || '', 'switch')}
+          ${this._textField(prefix, 'service', 'Service', sub.service || '', 'turn_on')}
+        </div>`;
+      case 'ha_check':
+        return `<div class="mb-field-row mb-field-row-wrap">
+          ${this._selectField(prefix, 'entity_id', 'Entity', (opts.ha_entities || []).map(e => ({ value: e.id, label: e.id })), sub.entity_id)}
+          ${this._textField(prefix, 'state', 'Expected', sub.state || '', 'on')}
+        </div>`;
+      case 'wattbox_power':
+        return `<div class="mb-field-row mb-field-row-wrap">
+          ${this._selectField(prefix, 'device', 'Outlet', (opts.wattbox_outlets || []).map(o => ({ value: o.id, label: o.label })), sub.device)}
+          ${this._selectField(prefix, 'action', 'Action', [{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }, { value: 'cycle', label: 'Cycle' }], sub.action || 'on')}
+        </div>`;
+      case 'wattbox_check':
+        return `<div class="mb-field-row mb-field-row-wrap">
+          ${this._selectField(prefix, 'device', 'Outlet', (opts.wattbox_outlets || []).map(o => ({ value: o.id, label: o.label })), sub.device)}
+          ${this._selectField(prefix, 'state', 'State', [{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }], sub.state || 'on')}
+        </div>`;
+      case 'wattbox_reboot':
+        return this._selectField(prefix, 'pdu', 'PDU', (opts.wattbox_pdus || []).map(p => ({ value: p.id, label: p.label })), sub.pdu);
+      case 'moip_switch':
+        return `<div class="mb-field-row mb-field-row-wrap">
+          ${this._selectField(prefix, 'tx', 'TX', (opts.moip_tx || []).map(t => ({ value: String(t.id), label: t.name })), String(sub.tx || ''))}
+          ${this._selectField(prefix, 'rx', 'RX', (opts.moip_rx || []).map(r => ({ value: String(r.id), label: r.name })), String(sub.rx || ''))}
+        </div>`;
+      case 'moip_ir':
+        return `<div class="mb-field-row mb-field-row-wrap">
+          ${this._selectField(prefix, 'rx', 'RX', (opts.moip_rx || []).map(r => ({ value: String(r.id), label: r.name })), String(sub.rx || ''))}
+          ${this._selectField(prefix, 'code', 'IR Code', (opts.ir_codes || []).map(c => ({ value: c, label: c })), sub.code || '')}
+        </div>`;
+      case 'epson_power':
+        return `<div class="mb-field-row mb-field-row-wrap">
+          ${this._selectField(prefix, 'projector', 'Projector', (opts.projectors || []).map(p => ({ value: p.id, label: p.name })), sub.projector)}
+          ${this._selectField(prefix, 'action', 'Action', [{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }], sub.action || 'on')}
+        </div>`;
+      case 'epson_all':
+        return this._selectField(prefix, 'action', 'Action', [{ value: 'on', label: 'On' }, { value: 'off', label: 'Off' }], sub.action || 'on');
+      case 'delay':
+        return this._textField(prefix, 'seconds', 'Seconds', sub.seconds || '', '1');
+      case 'notify':
+        return this._textField(prefix, 'message_text', 'Message', sub.message || '', '');
+      case 'macro':
+        return this._selectField(prefix, 'macro', 'Macro', (opts.macro_keys || []).map(m => ({ value: m.id, label: m.label })), sub.macro);
+      case 'obs_emit':
+        return `<div class="mb-field-row mb-field-row-wrap">
+          ${this._selectField(prefix, 'action', 'Action', [
+            { value: 'StartStream', label: 'Start Stream' }, { value: 'StopStream', label: 'Stop Stream' },
+            { value: 'StartRecording', label: 'Start Recording' }, { value: 'StopRecording', label: 'Stop Recording' },
+            { value: 'SetCurrentScene', label: 'Set Scene' },
+          ], sub.action || '')}
+          ${this._textField(prefix, 'scene', 'Scene', sub.scene || '', '')}
+        </div>`;
+      case 'ptz_preset':
+        return `<div class="mb-field-row mb-field-row-wrap">
+          ${this._selectField(prefix, 'camera', 'Camera', (opts.cameras || []).map(c => ({ value: c.id, label: c.name })), sub.camera)}
+          ${this._textField(prefix, 'preset', 'Preset', sub.preset || '', '1')}
+        </div>`;
+      case 'tts_announce':
+        return `<div class="mb-field-row mb-field-row-wrap">
+          ${this._selectField(prefix, 'preset', 'Preset', [{ value: '', label: '(none)' }, ...(opts.tts_presets || []).map(p => ({ value: p.id, label: p.label }))], sub.preset || '')}
+          ${this._textField(prefix, 'text', 'Text', sub.text || '', '')}
+        </div>`;
+      case 'x32_scene':
+        return this._textField(prefix, 'scene', 'Scene', sub.scene || '', 'Default');
+      case 'x32_mute':
+        return `<div class="mb-field-row mb-field-row-wrap">
+          ${this._textField(prefix, 'channel', 'Channel', sub.channel || '', '1')}
+          ${this._selectField(prefix, 'mute', 'Mute', [{ value: 'true', label: 'Mute' }, { value: 'false', label: 'Unmute' }], String(sub.mute ?? 'true'))}
+        </div>`;
+      case 'x32_aux_mute':
+        return `<div class="mb-field-row mb-field-row-wrap">
+          ${this._textField(prefix, 'bus', 'Bus', sub.bus || '', '1')}
+          ${this._selectField(prefix, 'mute', 'Mute', [{ value: 'true', label: 'Mute' }, { value: 'false', label: 'Unmute' }], String(sub.mute ?? 'true'))}
+        </div>`;
+      default:
+        return type ? `<div class="mb-field-hint">Fields for "${type}" in sub-steps</div>` : '';
+    }
+  },
+
+  async _testRunMacro() {
+    if (!this._editingKey) {
+      App.showToast('Save the macro before testing', 2000, 'error');
+      return;
+    }
+    if (this._dirty) {
+      const ok = await App.showConfirm('You have unsaved changes. Save first, then test?');
+      if (!ok) return;
+      await this._saveMacro();
+      if (this._dirty) return; // save failed
+    }
+    const ok = await App.showConfirm(`Execute macro "${this._editingKey}" now?`);
+    if (!ok) return;
+
+    try {
+      const resp = await fetch('/api/macro/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ macro: this._editingKey }),
+        signal: AbortSignal.timeout(30000),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        App.showToast(data.error || 'Execution failed', 3000, 'error');
+      } else {
+        App.showToast(`Macro executed: ${data.status || 'done'}`, 3000, 'success');
+      }
+    } catch (e) {
+      App.showToast(`Execution failed: ${e.message}`, 3000, 'error');
     }
   },
 
